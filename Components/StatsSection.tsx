@@ -16,7 +16,7 @@ const AnimatedNumber = ({ end, suffix }: { end: number; suffix: string }) => {
           setIsVisible(true);
         }
       },
-      { threshold: 0.5 } // Triggers when 50% of the element is visible
+      { threshold: 0.5 } 
     );
 
     if (ref.current) {
