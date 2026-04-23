@@ -3,7 +3,7 @@ import Image from 'next/image';
 
 export default function Header() {
   return (
-    /* Sticky header with full width background */
+  
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
 
       <div className="max-w-7xl mx-auto flex items-center justify-between px-8 py-4">
@@ -22,7 +22,7 @@ export default function Header() {
           </span>
         </div>
 
-        {/* Navigation Links & Login Button Wrapper */}
+        {/* Navigation Links & Auth Buttons Wrapper */}
         <div className="hidden md:flex items-center gap-8">
           
           <nav className="flex gap-8 text-sm font-medium">
@@ -43,12 +43,22 @@ export default function Header() {
             </Link>
           </nav>
 
-          {/* Login Button */}
-          <Link href="/login">
-            <button className="bg-black text-white px-6 py-2 text-sm font-medium rounded hover:bg-gray-800 transition duration-300">
-              Log In
-            </button>
-          </Link>
+          {/* Authentication Buttons (Log In & Sign Up) */}
+          <div className="flex items-center gap-4">
+            {/* Log In Button - Outlined style */}
+            <Link href="/login">
+              <button className="border border-gray-300 text-black px-6 py-2 text-sm font-medium rounded hover:bg-gray-50 transition duration-300">
+                Log In
+              </button>
+            </Link>
+            
+            {/* Sign Up Button - Solid black style */}
+            <Link href="/signup">
+              <button className="bg-black text-white px-6 py-2 text-sm font-medium rounded hover:bg-gray-800 transition duration-300">
+                Sign Up
+              </button>
+            </Link>
+          </div>
           
         </div>
 
