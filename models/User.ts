@@ -7,8 +7,13 @@ const userSchema = new Schema(
     password: { type: String, required: true }, // Added for Login & Registration
     role: { type: String, enum: ["student", "instructor", "admin"], default: "student" },
     
+    // Fields for Password Reset
     resetPasswordToken: { type: String, default: null },
-    resetPasswordExpire: { type: Date, default: null }
+    resetPasswordExpire: { type: Date, default: null },
+
+    // Fields for Account Activation added below
+    isActivated: { type: Boolean, default: false },
+    activationToken: { type: String, default: null }
   },
   {
     timestamps: true,
