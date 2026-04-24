@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image'; 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation'; 
 
 export default function LoginPage() {
+  // 2. Initialize the router
+  const router = useRouter(); 
+
   // States to hold form data and response messages
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +36,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        // If the API returns an error (e.g., Invalid email or password)
+        
         throw new Error(data.message || 'Login failed');
       }
 
@@ -40,6 +44,12 @@ export default function LoginPage() {
       setSuccess('Login successful!');
       setEmail('');
       setPassword('');
+
+      // 3. Redirect the user to the dashboard after a short 1-second delay 
+      // (The delay allows them to see the success message before page changes)
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1000);
 
     } catch (err: any) {
       setError(err.message); // Set the error message to display
@@ -84,7 +94,7 @@ export default function LoginPage() {
               <input 
                 type="text" 
                 value={email} // Bound to state
-                onChange={(e) => setEmail(e.target.value)} // Update state on typing
+                onChange={(e) => setEmail(e.target.value)} 
                 placeholder="Enter your email or ID"
                 className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition"
                 required
@@ -98,8 +108,8 @@ export default function LoginPage() {
               </label>
               <input 
                 type="password" 
-                value={password} // Bound to state
-                onChange={(e) => setPassword(e.target.value)} // Update state on typing
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
                 placeholder="Enter your password"
                 className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition"
                 required
@@ -120,7 +130,7 @@ export default function LoginPage() {
             {/* Login Button */}
             <button 
               type="submit" 
-              disabled={loading} // Disable button while checking credentials
+              disabled={loading} 
               className="w-full bg-black text-white py-3 rounded text-sm font-bold tracking-wide hover:bg-gray-800 transition duration-300 mt-4 disabled:opacity-70"
             >
               {loading ? 'LOGGING IN...' : 'LOG IN'}
