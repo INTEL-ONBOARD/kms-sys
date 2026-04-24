@@ -33,17 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // ---------------------------------------------------------
-    // 6. NEW: Check if the user's account has been activated
-    // ---------------------------------------------------------
-    if (!user.isActivated) {
-      return NextResponse.json(
-        { message: 'Please check your email and activate your account before logging in.' }, 
-        { status: 403 } // 403 Forbidden status indicates lack of permission
-      );
-    }
-
-    // 7. Generate a JWT Token using the secret key (Only proceeds if account is activated)
+    // 6. Generate a JWT Token using the secret key
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const alg = 'HS256';
 
@@ -57,7 +47,7 @@ export async function POST(req: Request) {
       .setExpirationTime('1d') // Token expires in 1 day
       .sign(secret);
 
-    // 8. Create the response object
+    // 7. Create the response object
     const response = NextResponse.json(
       { 
         message: 'Login successful!', 
@@ -66,7 +56,7 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // 9. Set the token as an HTTP-only cookie for secure session handling
+    // 8. Set the token as an HTTP-only cookie for secure session handling
     response.cookies.set({
       name: 'token',
       value: token,
@@ -77,7 +67,7 @@ export async function POST(req: Request) {
       path: '/', // Cookie is accessible across the entire site
     });
 
-    // 10. Return the response
+    // 9. Return the response
     return response;
 
   } catch (error) {

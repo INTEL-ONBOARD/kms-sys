@@ -4,14 +4,14 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { FiHome, FiBookOpen, FiFileText, FiBell, FiSearch, FiLogOut } from 'react-icons/fi';
-import { PiStudentFill } from "react-icons/pi";
+import { FiSearch, FiMail, FiBell, FiHelpCircle, FiChevronDown, FiBook, FiFileText, FiCalendar, FiBarChart2, FiUser, FiLogOut } from 'react-icons/fi';
+import { MdDashboard, MdOutlineAssignment, MdEventNote } from 'react-icons/md';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Handle the logout process (Logic untouched)
+  // Handle the logout process (Logic completely untouched)
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
@@ -27,212 +27,316 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] flex font-sans text-gray-800">
+    <div className="min-h-screen bg-[#F4F7FE] flex font-sans text-gray-800">
       
-      {/* Sidebar */}
-      <aside className="w-[280px] bg-white border-r border-gray-200 hidden md:flex flex-col shadow-sm z-10">
+    
+      {/* LEFT SIDEBAR */}
+      <aside className="w-64 bg-white border-r border-gray-100 hidden md:flex flex-col z-20">
         
-        {/* Logo Area */}
-        <div className="p-6 flex items-center mb-4">
+        {/* University Logo Area */}
+        <div className="p-8 flex flex-col items-center border-b border-gray-100 mb-6">
           <Image 
             src="/logo2.png" 
             alt="Wise East University Logo" 
-            width={40} 
-            height={40} 
-            className="object-contain mr-3"
+            width={50} 
+            height={50} 
+            className="object-contain mb-3"
           />
-          <div>
-            <h2 className="text-sm font-extrabold uppercase tracking-widest text-[#0F172A] leading-tight">Wise East</h2>
-            <h2 className="text-sm font-extrabold uppercase tracking-widest text-[#0F172A] leading-tight">University</h2>
-          </div>
+          <h2 className="text-sm font-extrabold uppercase tracking-widest text-black text-center">
+            Wise East<br/>University
+          </h2>
         </div>
         
-        {/* Navigation Links */}
-        <nav className="flex-1 px-4 space-y-1">
-          <Link href="/dashboard" className="flex items-center px-4 py-3 bg-[#EBF4FF] text-[#2563EB] rounded-xl font-semibold transition group">
-            <FiHome className="mr-3 text-lg" />
+        {/* Navigation Menu */}
+        <nav className="flex-1 px-4 space-y-2">
+          {/* Active Item */}
+          <Link href="/dashboard" className="flex items-center px-4 py-3 bg-[#2E68FF] text-white rounded-lg font-medium shadow-md shadow-blue-200 transition">
+            <MdDashboard className="mr-4 text-xl" />
             Dashboard
           </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl font-medium transition group">
-            <FiBookOpen className="mr-3 text-lg group-hover:text-blue-500 transition-colors" />
-            My Courses
+          
+          {/* Inactive Items */}
+          <Link href="./courses" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
+            <FiBook className="mr-4 text-xl" />
+            Courses
           </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl font-medium transition group">
-            <FiFileText className="mr-3 text-lg group-hover:text-blue-500 transition-colors" />
-            Grades & Results
+          <Link href="./assignments" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
+            <MdOutlineAssignment className="mr-4 text-xl" />
+            Assignments
           </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl font-medium transition group">
-            <FiBell className="mr-3 text-lg group-hover:text-blue-500 transition-colors" />
-            Announcements
+          <Link href="./calendar" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
+            <FiCalendar className="mr-4 text-xl" />
+            Calendar
+          </Link>
+          <Link href="./grades" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
+            <FiBarChart2 className="mr-4 text-xl" />
+            Grades
+          </Link>
+          <Link href="./profile" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
+            <FiUser className="mr-4 text-xl" />
+            Profile
           </Link>
         </nav>
 
-        {/* Info Banner at bottom of sidebar */}
-        <div className="p-4 m-4 bg-gray-50 rounded-xl border border-gray-100 flex items-start">
-            <div className="text-yellow-500 mr-2 mt-0.5">ℹ️</div>
-            <p className="text-xs text-gray-500 leading-relaxed">
-                If you encounter any issues with the dashboard, please contact IT support at <br/>
-                <span className="text-blue-600 font-medium">support@weu.edu</span>
-            </p>
+        {/* Log Out Button at the bottom of the sidebar */}
+        <div className="p-6 mt-auto border-t border-gray-100">
+          <button 
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex items-center px-4 py-2 text-gray-500 hover:text-red-500 font-medium transition w-full disabled:opacity-50"
+          >
+            <FiLogOut className="mr-4 text-xl" />
+            {loggingOut ? 'Logging Out...' : 'Log Out'}
+          </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
+  
+      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         
-        {/* Top Header */}
-        <header className="bg-white px-8 py-5 flex justify-between items-center z-10 border-b border-transparent shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
-          {/* Search Bar */}
-          <div className="relative w-96">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+        {/* Top Header Bar */}
+        <header className="bg-white m-4 mb-2 rounded-2xl px-6 py-4 flex justify-between items-center shadow-sm">
+          
+          {/* Left: Search Bar */}
+          <div className="relative w-full max-w-lg">
+            <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
             <input 
               type="text" 
-              placeholder="Search courses, grades, or resources..." 
-              className="w-full bg-[#F3F4F6] text-sm text-gray-700 rounded-full py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-100 transition"
+              placeholder="Search anything" 
+              className="w-full bg-[#F4F7FE] text-sm text-gray-700 rounded-full py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-200 transition placeholder-gray-400"
             />
           </div>
 
-          {/* Right Header Controls */}
-          <div className="flex items-center space-x-5">
-             <button className="relative text-gray-500 hover:text-gray-700 transition">
-                <FiBell className="text-xl" />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-             </button>
+          {/* Right: User Controls & Profile */}
+          <div className="flex items-center space-x-6">
+             {/* Icon Buttons */}
+             <div className="flex items-center space-x-4 text-gray-500">
+                <button className="hover:text-gray-800 transition"><FiMail className="text-xl" /></button>
+                <button className="relative hover:text-gray-800 transition">
+                  <FiBell className="text-xl" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+                <button className="hover:text-gray-800 transition"><FiHelpCircle className="text-xl" /></button>
+             </div>
 
-             {/* Logout Button */}
-             <button 
-                onClick={handleLogout}
-                disabled={loggingOut}
-                title="Log Out"
-                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-500 flex items-center justify-center transition disabled:opacity-50"
-             >
-                {loggingOut ? <span className="text-xs">...</span> : <FiLogOut className="text-lg" />}
-             </button>
-
-            {/* User Profile */}
-            <div className="flex items-center pl-4 border-l border-gray-200">
-                <div className="mr-3 text-right">
-                    <p className="text-sm font-bold text-gray-800">Annette Black</p>
-                    <p className="text-xs text-gray-500">Admin</p>
+            {/* Profile Dropdown Area */}
+            <div className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition">
+                {/* Profile Image Avatar */}
+                <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden mr-3">
+                  <img src="./propic.png" alt="User" className="w-full h-full object-cover" />
                 </div>
-                <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 overflow-hidden">
-                    {/* Placeholder for User Image */}
-                    <div className="w-full h-full flex items-center justify-center bg-[#EBF4FF] text-[#2563EB]">
-                        <PiStudentFill className="text-2xl" />
-                    </div>
+                <div className="mr-2 hidden md:block text-left">
+                    <p className="text-sm font-bold text-[#2B3674]">Aster Seawalker</p>
+                    <p className="text-xs text-gray-400">asterseawalker.022.wise@gmail.com</p>
                 </div>
+                <FiChevronDown className="text-gray-400" />
             </div>
           </div>
         </header>
 
-        {/* Dashboard Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+    
+        {/* DASHBOARD SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto px-6 pb-8 pt-4">
           
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Student Portal</h1>
-            <p className="text-sm text-gray-500">Welcome back to your dashboard</p>
+          {/* Page Title */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-[#2B3674]">Welcome, Aster!</h1>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-1">DASHBOARD</p>
           </div>
 
-          {/* Main Grid Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Layout Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             
-            {/* Left Column (Spans 2 cols on lg screens) */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* --- LEFT SECTION (Spans 2 columns on large screens) --- */}
+            <div className="xl:col-span-2 space-y-6">
                 
-                {/* Enrolled Courses Card */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-bold text-gray-800 text-lg">Enrolled Courses</h3>
-                        <Link href="#" className="text-sm text-blue-600 font-medium hover:underline">View All</Link>
+                {/* 1. Top Stats Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Stat Card 1 */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                        <div className="p-8 text-center flex-1 flex items-center justify-center">
+                            <span className="text-5xl font-bold text-[#2B3674]">3.8</span>
+                        </div>
+                        <div className="bg-[#2E68FF] py-2 text-center text-white text-sm font-medium">
+                            Current GPA
+                        </div>
                     </div>
 
-                    <div className="border border-gray-100 rounded-xl p-4 flex justify-between items-center hover:shadow-md transition">
-                        <div className="flex items-center">
-                            <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xl mr-4">
-                                💻
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-gray-800">Web Design</h4>
-                                <p className="text-xs text-gray-500 mt-1">Instructor: John Doe</p>
-                            </div>
+                    {/* Stat Card 2 */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                        <div className="p-8 text-center flex-1 flex items-center justify-center">
+                            <span className="text-5xl font-bold text-[#2B3674] mr-1">45</span>
+                            <span className="text-lg text-gray-500 font-medium mt-3">credits</span>
                         </div>
-                        <span className="px-3 py-1 bg-green-50 text-green-600 text-xs font-bold rounded-full border border-green-100">
-                            ACTIVE
-                        </span>
+                        <div className="bg-[#2E68FF] py-2 text-center text-white text-sm font-medium">
+                            Credits
+                        </div>
+                    </div>
+
+                    {/* Stat Card 3 */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                        <div className="p-8 text-center flex-1 flex items-center justify-center">
+                            <span className="text-5xl font-bold text-[#2B3674]">92 %</span>
+                        </div>
+                        <div className="bg-[#2E68FF] py-2 text-center text-white text-sm font-medium">
+                            Attendance
+                        </div>
                     </div>
                 </div>
 
-                {/* Bottom Row inside Left Column */}
+                {/* 2. Upcoming Events Panel */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-[#2E68FF] px-5 py-3 text-white font-medium">
+                        Upcoming Events
+                    </div>
+                    <div className="p-6 h-32">
+                        <p className="text-gray-400 text-sm">
+                            There are no upcoming events <br/>
+                            <Link href="#" className="underline hover:text-gray-600 transition">go to calendar....</Link>
+                        </p>
+                    </div>
+                </div>
+
+                {/* 3. Bottom Grid: My Courses & Class Schedule */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Ongoing Course Card */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
-                        <div>
-                            <h3 className="font-bold text-gray-800 text-lg mb-1">Ongoing Course</h3>
-                            <h2 className="text-2xl font-black text-gray-900 mt-4 mb-2">Python</h2>
-                            <p className="text-sm text-gray-500 leading-relaxed">
-                                Master Python programming from basics to advanced. Covers syntax, data structures, algorithms, and web development.
-                            </p>
+                    
+                    {/* My Courses */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-[#2E68FF] px-5 py-3 flex justify-between items-center text-white">
+                            <h3 className="font-medium text-sm">My Courses</h3>
+                            <Link href="#" className="text-xs underline hover:text-gray-200">View All</Link>
                         </div>
-                        <button className="mt-6 w-full py-2.5 bg-black text-white font-bold text-sm rounded-lg hover:bg-gray-800 transition">
-                            Continue Learning
-                        </button>
+                        <div className="p-4 space-y-4">
+                            {[1, 2, 3, 4].map((item) => (
+                                <div key={item} className="flex justify-between items-center">
+                                    <div className="flex items-center text-sm font-medium text-gray-700">
+                                        <MdEventNote className="text-gray-400 mr-3 text-lg" />
+                                        Animation Studies I (WISE-25.1F/CO)
+                                    </div>
+                                    <button className="bg-gray-400 hover:bg-gray-500 text-white text-xs px-4 py-1 rounded transition">
+                                        view
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Current GPA Card */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 relative overflow-hidden flex flex-col justify-center">
-                        <h3 className="font-bold text-gray-800 text-lg mb-4 relative z-10">Current GPA</h3>
-                        <div className="relative z-10 flex items-end">
-                            <span className="text-5xl font-black text-gray-900 tracking-tight">3.85</span>
-                            <span className="ml-3 mb-1 text-sm font-bold text-green-500 bg-green-50 px-2 py-0.5 rounded flex items-center">
-                                ↑ 0.05
-                            </span>
+                    {/* Class Scheduled Today */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-[#2E68FF] px-5 py-3 flex justify-between items-center text-white">
+                            <h3 className="font-medium text-sm">Class Scheduled Today</h3>
+                            <span className="text-xs">2026 feb 06</span>
                         </div>
-                        {/* Decorative Background Element */}
-                        <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-50 rounded-full opacity-50 z-0"></div>
+                        <div className="p-5">
+                            <div className="flex justify-between items-center text-sm font-medium text-[#2B3674] pb-4 border-b border-gray-100">
+                                <span>Animation Studies I - 9.00 am - 3.00pm</span>
+                                <span className="text-gray-400 font-normal">Hall no 13</span>
+                            </div>
+                            <div className="pb-4 mt-4 border-b border-gray-100"></div>
+                            <div className="pb-4 mt-4 border-b border-gray-100"></div>
+                        </div>
                     </div>
                 </div>
 
             </div>
 
-            {/* Right Column (Spans 1 col) */}
+            {/* --- RIGHT SECTION (Spans 1 column) --- */}
             <div className="space-y-6">
                 
-                {/* Upcoming Deadlines Card */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 text-lg mb-6">Upcoming Deadlines</h3>
+                {/* Upcoming Assignments Panel */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-[#2E68FF] px-5 py-3 flex justify-between items-center text-white">
+                        <h3 className="font-medium text-sm">Upcoming Assignments</h3>
+                        <Link href="#" className="text-xs underline hover:text-gray-200">View All</Link>
+                    </div>
                     
-                    <div className="space-y-4">
-                        <div className="flex items-start">
-                            <div className="w-2 h-2 mt-2 rounded-full bg-red-500 mr-3"></div>
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-800">Assignment 2</h4>
-                                <p className="text-xs text-gray-500 mt-1">Due: Oct 25, 11:59 PM</p>
+                    <div className="flex flex-col">
+                        {/* Assignment Items */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-medium text-[#D97706]">
+                                <span className="w-2 h-2 rounded-full bg-orange-400 mr-3 shadow-[0_0_8px_rgba(251,146,60,0.8)]"></span>
+                                Project Due in 2 Days ( 2026 - 02 - 09 )
                             </div>
+                            <span className="text-gray-400 group-hover:text-blue-500">{'>'}</span>
                         </div>
-                        <div className="flex items-start">
-                            <div className="w-2 h-2 mt-2 rounded-full bg-orange-500 mr-3"></div>
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-800">Final Quiz</h4>
-                                <p className="text-xs text-gray-500 mt-1">Due: Nov 2, 11:59 PM</p>
+
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-medium text-[#D97706]">
+                                <span className="w-2 h-2 rounded-full bg-orange-400 mr-3 shadow-[0_0_8px_rgba(251,146,60,0.8)]"></span>
+                                Quiz Tommorow ( 2026 - 02 - 07 )
                             </div>
+                            <span className="text-gray-400 group-hover:text-blue-500">{'>'}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-medium text-gray-700">
+                                <span className="w-2 h-2 rounded-full bg-gray-700 mr-3 shadow-[0_0_5px_rgba(55,65,81,0.5)]"></span>
+                                Essay Due in 4 Days ( 2026 - 02 - 11 )
+                            </div>
+                            <span className="text-gray-400 group-hover:text-blue-500">{'>'}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-medium text-gray-700">
+                                <span className="w-2 h-2 rounded-full bg-gray-700 mr-3 shadow-[0_0_5px_rgba(55,65,81,0.5)]"></span>
+                                Design Report Due in 6 Days ( 2026 - 02 - 13 )
+                            </div>
+                            <span className="text-gray-400 group-hover:text-blue-500">{'>'}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-medium text-gray-700">
+                                <span className="w-2 h-2 rounded-full bg-gray-700 mr-3 shadow-[0_0_5px_rgba(55,65,81,0.5)]"></span>
+                                Animation final project Due in 2 weeks ( 2026 - 02 - 20 )
+                            </div>
+                            <span className="text-gray-400 group-hover:text-blue-500">{'>'}</span>
+                        </div>
+
+                        {/* Overdue Section */}
+                        <div className="bg-red-50 px-4 py-2 flex justify-between items-center text-red-500 text-sm font-bold border-b border-gray-100">
+                            Overdue
+                            <Link href="#" className="text-xs font-normal underline hover:text-red-700">View All</Link>
+                        </div>
+                        <div className="flex items-center justify-between p-4 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-center text-sm font-bold text-red-500">
+                                <span className="w-2 h-2 rounded-full bg-red-500 mr-3 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                                Animation Report Overdue in 1 day ( 2026 - 02 - 06 )
+                            </div>
+                            <span className="text-red-400 group-hover:text-red-600">{'>'}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Quick Links Card */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 text-lg mb-4">Quick Links</h3>
+                {/* Announcements Panel */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-[#2E68FF] px-5 py-3 flex justify-between items-center text-white">
+                        <h3 className="font-medium text-sm">Announcements</h3>
+                        <Link href="#" className="text-xs underline hover:text-gray-200">View All</Link>
+                    </div>
                     
-                    <div className="space-y-2">
-                        <Link href="#" className="block px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-semibold text-gray-700 transition">
-                            📅 Class Schedule
-                        </Link>
-                        <Link href="#" className="block px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-semibold text-gray-700 transition">
-                            📚 Library Resources
-                        </Link>
-                        <Link href="#" className="block px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-semibold text-gray-700 transition">
-                            📌 Academic Calendar
-                        </Link>
+                    <div className="flex flex-col">
+                        <div className="flex items-start justify-between p-5 border-b border-gray-100 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-start">
+                                <div className="w-2 h-2 rounded-full bg-gray-700 mr-4 mt-1.5"></div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-[#2B3674]">Batch event update</h4>
+                                    <p className="text-xs text-gray-400 mt-1">1 hour ago</p>
+                                </div>
+                            </div>
+                            <span className="text-gray-400 group-hover:text-blue-500 mt-1">{'>'}</span>
+                        </div>
+
+                        <div className="flex items-start justify-between p-5 group cursor-pointer hover:bg-gray-50">
+                            <div className="flex items-start">
+                                <div className="w-2 h-2 rounded-full bg-gray-700 mr-4 mt-1.5"></div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-[#2B3674]">Exam Schedule Posted</h4>
+                                    <p className="text-xs text-gray-400 mt-1">3 days ago</p>
+                                </div>
+                            </div>
+                            <span className="text-gray-400 group-hover:text-blue-500 mt-1">{'>'}</span>
+                        </div>
                     </div>
                 </div>
 
