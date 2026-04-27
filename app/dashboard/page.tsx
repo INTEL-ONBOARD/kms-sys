@@ -68,7 +68,7 @@ export default function DashboardPage() {
           
           {/* Page Title */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-[#2D3748]">Dashboard</h1>
+            <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide"> Dashboard </h1>
           </div>
 
           {/* Main Layout Grid */}

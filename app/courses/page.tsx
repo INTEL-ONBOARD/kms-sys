@@ -132,9 +132,9 @@ export default function CoursesPage() {
           
           {/* Section Title - Updated styling to match theme */}
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-[#2D3748]">
+            <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide">
               Courses Overview
-            </h2>
+            </h1>
             <p className="text-sm text-[#A0AEC0] mt-1">Manage and view all your enrolled modules</p>
           </div>
 
