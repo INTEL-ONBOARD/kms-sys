@@ -1,28 +1,12 @@
 "use client";
 
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
-import { FiSearch, FiMail, FiBell, FiHelpCircle, FiChevronDown, FiBook, FiCalendar, FiBarChart2, FiUser, FiLogOut, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { MdDashboard, MdOutlineAssignment } from 'react-icons/md';
+import { FiSearch, FiChevronDown, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import Sidebar from '@/Components/Sidebar';
+import Header from '@/Components/DashHeader';
 
 export default function CoursesPage() {
-  const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  // Handle the logout process
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-      setLoggingOut(false);
-    }
-  };
-
+  
   // Course Data Array to map through the grid
   const coursesData = [
     {
@@ -131,155 +115,63 @@ export default function CoursesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex font-sans text-gray-800">
+    
+    <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
       
-
-      {/* LEFT SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-gray-100 hidden md:flex flex-col z-20">
-        
-        {/* University Logo Area */}
-        <div className="p-8 flex flex-col items-center border-b border-gray-100 mb-6">
-          <Image 
-            src="/logo2.png" 
-            alt="Wise East University Logo" 
-            width={50} 
-            height={50} 
-            className="object-contain mb-3"
-          />
-          <h2 className="text-sm font-extrabold uppercase tracking-widest text-black text-center">
-            Wise East<br/>University
-          </h2>
-        </div>
-        
-        {/* Navigation Menu */}
-        <nav className="flex-1 px-4 space-y-2">
-          {/* Dashboard - Inactive */}
-          <Link href="/dashboard" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
-            <MdDashboard className="mr-4 text-xl" />
-            Dashboard
-          </Link>
-          
-          {/* Courses - ACTIVE */}
-          <Link href="/courses" className="flex items-center px-4 py-3 bg-[#2E68FF] text-white rounded-lg font-medium shadow-md shadow-blue-200 transition">
-            <FiBook className="mr-4 text-xl" />
-            Courses
-          </Link>
-          
-          {/* Other Inactive Items */}
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
-            <MdOutlineAssignment className="mr-4 text-xl" />
-            Assignments
-          </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
-            <FiCalendar className="mr-4 text-xl" />
-            Calendar
-          </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
-            <FiBarChart2 className="mr-4 text-xl" />
-            Grades
-          </Link>
-          <Link href="#" className="flex items-center px-4 py-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition">
-            <FiUser className="mr-4 text-xl" />
-            Profile
-          </Link>
-        </nav>
-
-        {/* Log Out Button */}
-        <div className="p-6 mt-auto border-t border-gray-100">
-          <button 
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="flex items-center px-4 py-2 text-gray-500 hover:text-red-500 font-medium transition w-full disabled:opacity-50"
-          >
-            <FiLogOut className="mr-4 text-xl" />
-            {loggingOut ? 'Logging Out...' : 'Log Out'}
-          </button>
-        </div>
-      </aside>
-
+      {/* Rendering the separated Left Sidebar Component */}
+      <Sidebar />
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         
-        {/* Top Header Bar */}
-        <header className="bg-white m-4 mb-2 rounded-2xl px-6 py-4 flex justify-between items-center shadow-sm">
-          {/* Left: Search Bar */}
-          <div className="relative w-full max-w-lg">
-            <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-            <input 
-              type="text" 
-              placeholder="Search anything" 
-              className="w-full bg-[#F4F7FE] text-sm text-gray-700 rounded-full py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-200 transition placeholder-gray-400"
-            />
-          </div>
+        {/* Rendering the separated Top Header Component */}
+        <Header />
 
-          {/* Right: User Controls & Profile */}
-          <div className="flex items-center space-x-6">
-             <div className="flex items-center space-x-4 text-gray-500">
-                <button className="hover:text-gray-800 transition"><FiMail className="text-xl" /></button>
-                <button className="relative hover:text-gray-800 transition">
-                  <FiBell className="text-xl" />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
-                <button className="hover:text-gray-800 transition"><FiHelpCircle className="text-xl" /></button>
-             </div>
-
-            <div className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition">
-                <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden mr-3">
-                  {/* Using standard img tag to prevent unconfigured host error */}
-                  <img src="./propic.png" alt="User" className="w-full h-full object-cover" />
-                </div>
-                <div className="mr-2 hidden md:block text-left">
-                    <p className="text-sm font-bold text-[#2B3674]">Aster Seawalker</p>
-                    <p className="text-xs text-gray-400">asterseawalker.022.wise@gmail.com</p>
-                </div>
-                <FiChevronDown className="text-gray-400" />
-            </div>
-          </div>
-        </header>
-
-    
         {/* COURSES SCROLLABLE CONTENT */}
-        <div className="flex-1 overflow-y-auto px-6 pb-8 pt-4">
+        <div className="flex-1 overflow-y-auto px-8 pb-8 pt-6">
           
-          {/* Section Title */}
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">
-            Courses Overview
-          </h2>
+          {/* Section Title - Updated styling to match theme */}
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-[#2D3748]">
+              Courses Overview
+            </h2>
+            <p className="text-sm text-[#A0AEC0] mt-1">Manage and view all your enrolled modules</p>
+          </div>
 
           {/* Filters Row */}
-          <div className="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8 space-y-4 md:space-y-0">
+            
             {/* Specific Course Search */}
             <div className="relative w-full md:w-[400px]">
               <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input 
                 type="text" 
                 placeholder="Search Courses" 
-                className="w-full bg-white text-sm text-gray-700 rounded-full py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-200 border border-gray-100 shadow-sm"
+                className="w-full bg-white text-sm text-gray-700 rounded-lg py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-[#5A67D8] border border-gray-100 shadow-sm transition"
               />
             </div>
 
             {/* Dropdowns */}
-            <div className="flex space-x-3 w-full md:w-auto">
+            <div className="flex space-x-4 w-full md:w-auto">
               {/* All Dropdown */}
               <div className="relative">
-                <select className="appearance-none bg-white border border-gray-100 shadow-sm text-sm font-medium text-gray-700 py-2.5 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer">
+                <select className="appearance-none bg-white border border-gray-100 shadow-sm text-sm font-semibold text-[#4A5568] py-2.5 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5A67D8] cursor-pointer transition hover:bg-gray-50">
                   <option>All</option>
                   <option>Active</option>
                   <option>Completed</option>
                 </select>
-                <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" />
+                <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
 
               {/* Sort By Dropdown */}
               <div className="relative">
-                <select className="appearance-none bg-white border border-gray-100 shadow-sm text-sm font-medium text-gray-700 py-2.5 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer">
+                <select className="appearance-none bg-white border border-gray-100 shadow-sm text-sm font-semibold text-[#4A5568] py-2.5 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5A67D8] cursor-pointer transition hover:bg-gray-50">
                   <option>Sort by</option>
                   <option>Newest</option>
                   <option>Oldest</option>
                   <option>A-Z</option>
                 </select>
-                <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" />
+                <FiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -287,18 +179,19 @@ export default function CoursesPage() {
           {/* COURSES GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {coursesData.map((course) => (
-              <div key={course.id} className="bg-white rounded-[20px] overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer group">
-                {/* Course Banner (CSS Based instead of image) */}
-                <div className={`h-36 ${course.bannerBg} flex flex-col justify-center items-center p-4 relative overflow-hidden`}>
+              <div key={course.id} className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer group">
+                
+                {/* Course Banner */}
+                <div className={`h-40 ${course.bannerBg} flex flex-col justify-center items-center p-4 relative overflow-hidden`}>
                   {course.bannerText}
                 </div>
                 
-                {/* Course Details */}
-                <div className="p-5">
-                  <h3 className="text-[13px] font-bold text-[#2B3674] leading-snug group-hover:text-blue-600 transition">
+                {/* Course Details - Colors updated to theme */}
+                <div className="p-5 bg-white">
+                  <h3 className="text-sm font-bold text-[#2D3748] leading-snug group-hover:text-[#5A67D8] transition">
                     {course.title}
                   </h3>
-                  <p className="text-[11px] font-medium text-gray-400 mt-1">
+                  <p className="text-xs font-medium text-[#A0AEC0] mt-1.5">
                     {course.code}
                   </p>
                 </div>
@@ -306,12 +199,12 @@ export default function CoursesPage() {
             ))}
           </div>
 
-          {/* Pagination */}
-          <div className="flex justify-end mt-8 text-sm font-medium text-gray-500">
-             <div className="flex items-center space-x-3 bg-white px-4 py-2 rounded-lg border border-gray-100 shadow-sm">
-                <button className="hover:text-blue-600 transition"><FiChevronLeft className="text-lg" /></button>
-                <span className="text-blue-600 font-bold">1</span>
-                <button className="hover:text-blue-600 transition"><FiChevronRight className="text-lg" /></button>
+          {/* Pagination - Updated to theme colors */}
+          <div className="flex justify-end mt-8 text-sm font-medium text-[#A0AEC0]">
+             <div className="flex items-center space-x-4 bg-white px-4 py-2 rounded-lg border border-gray-100 shadow-sm">
+                <button className="hover:text-[#5A67D8] transition"><FiChevronLeft className="text-lg" /></button>
+                <span className="text-[#5A67D8] font-bold">1</span>
+                <button className="hover:text-[#5A67D8] transition"><FiChevronRight className="text-lg" /></button>
              </div>
           </div>
 
