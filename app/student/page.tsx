@@ -10,7 +10,7 @@ import Header from '@/Components/DashHeader';
 export default function DashboardPage() {
   
   // --- Real Calendar Logic States ---
-  // We use the current date to initialize the calendar
+ 
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const currentMonth = currentDate.getMonth();
@@ -110,7 +110,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* RIGHT PANEL: Upcoming Events */}
+                    {/* Upcoming Events */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
                         <h3 className="font-bold text-[#2D3748] mb-4">Upcoming Events</h3>
                         

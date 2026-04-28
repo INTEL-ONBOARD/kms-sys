@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -28,8 +28,10 @@
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

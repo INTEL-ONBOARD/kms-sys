@@ -54,8 +54,10 @@ function ResetPasswordForm() {
         router.push('/login');
       }, 3000);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      // Handled error without using 'any' type
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -125,7 +127,9 @@ function ResetPasswordForm() {
             </div>
           <h1 className="text-4xl font-bold mb-4 uppercase tracking-wider">Wise East University</h1>
           <p className="text-lg font-light text-gray-300">
-            Access your courses, grades, and campus resources. <br/> Education is not just preparation for life — it is life itself.
+            Access your courses, grades, and campus resources. <br/> 
+            {/* Replaced unescaped dash with &mdash; */}
+            Education is not just preparation for life &mdash; it is life itself.
           </p>
         </div>
       </div>

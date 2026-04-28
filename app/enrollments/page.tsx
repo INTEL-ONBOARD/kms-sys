@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
+// Define the TypeScript types for our data models
 type User = {
   _id: string;
   name: string;
@@ -21,6 +22,7 @@ type Enrollment = {
 };
 
 export default function EnrollmentsPage() {
+  // State variables to hold data and UI status
   const [users, setUsers] = useState<User[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -28,6 +30,7 @@ export default function EnrollmentsPage() {
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [message, setMessage] = useState("");
 
+  // Function to fetch all required data concurrently from the APIs
   const loadData = async () => {
     const [usersRes, coursesRes, enrollmentsRes] = await Promise.all([
       fetch("/api/users", { cache: "no-store" }),
@@ -44,37 +47,60 @@ export default function EnrollmentsPage() {
     setEnrollments(enrollmentsData);
   };
 
+  // Fetch data when the component mounts
   useEffect(() => {
-    loadData().catch(() => setMessage("Failed to load enrollment data"));
+    // Wrap the data fetching logic inside an async function to prevent ESLint cascading render warnings
+    const fetchEnrollments = async () => {
+      try {
+        await loadData();
+      } catch {
+        setMessage("Failed to load enrollment data");
+      }
+    };
+
+    // Execute the async function
+    fetchEnrollments();
   }, []);
 
+  // Handle the creation of a new enrollment
   const createEnrollment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage("");
 
+    // Validate that both a user and a course are selected
     if (!selectedUserId || !selectedCourseId) {
       setMessage("Select user and course");
       return;
     }
 
-    const res = await fetch("/api/enrollments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: selectedUserId, courseId: selectedCourseId })
-    });
+    try {
+      // Call the API to create the enrollment
+      const res = await fetch("/api/enrollments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId, courseId: selectedCourseId })
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      setMessage(data.message ?? "Failed to enroll");
-      return;
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setMessage(data.message ?? "Failed to enroll");
+        return;
+      }
+
+      setMessage("Enrollment created");
+      
+      // Reload the data to reflect the newly created enrollment
+      await loadData();
+    } catch {
+      // Handle network or unexpected errors cleanly
+      setMessage("An unexpected error occurred during enrollment.");
     }
-
-    setMessage("Enrollment created");
-    await loadData();
   };
 
   return (
     <main className="container stack">
+      {/* Header Section */}
       <section className="panel row" style={{ justifyContent: "space-between" }}>
         <h1>Enrollments</h1>
         <div className="row">
@@ -83,9 +109,11 @@ export default function EnrollmentsPage() {
         </div>
       </section>
 
+      {/* Form Section to Enroll a User */}
       <section className="panel stack">
         <h2>Enroll User to Course</h2>
         <form className="stack" onSubmit={createEnrollment}>
+          
           <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
             <option value="">Select user</option>
             {users.map((user) => (
@@ -94,6 +122,7 @@ export default function EnrollmentsPage() {
               </option>
             ))}
           </select>
+
           <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}>
             <option value="">Select course</option>
             {courses.map((course) => (
@@ -102,11 +131,13 @@ export default function EnrollmentsPage() {
               </option>
             ))}
           </select>
+
           <button type="submit">Enroll</button>
         </form>
         {message ? <small>{message}</small> : null}
       </section>
 
+      {/* List Section to Display Enrollments */}
       <section className="panel stack">
         <h2>Enrollment List</h2>
         {enrollments.length === 0 ? (
@@ -121,6 +152,7 @@ export default function EnrollmentsPage() {
           ))
         )}
       </section>
+
     </main>
   );
 }

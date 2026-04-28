@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { FiCalendar, FiCheck } from 'react-icons/fi';
 import Sidebar from '@/Components/Sidebar';
 import Header from '@/Components/DashHeader';
@@ -34,7 +35,7 @@ export default function ProfilePage() {
                 
                 {/* Profile Image */}
                 <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-[#F7FAFC] shadow-sm">
-                  <img src="./propic.png" alt="Aster Seawalker" className="w-full h-full object-cover" />
+                  <Image src="./propic.png" alt="Aster Seawalker" width={128} height={128} className="w-full h-full object-cover" />
                 </div>
                 
                 {/* Profile Details */}

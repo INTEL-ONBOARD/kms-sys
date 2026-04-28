@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose'; // Imported jose for JWT generation
+import { SignJWT } from 'jose'; 
 import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 
@@ -33,6 +33,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Invalid email or password.' }, { status: 401 });
     }
 
+    // 5.1 Check if the user account is active based on the LMS specification
+    if (user.status !== 'active') {
+      return NextResponse.json({ message: 'Your account is not active. Please contact support.' }, { status: 403 });
+    }
+
     // 6. Generate a JWT Token using the secret key
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const alg = 'HS256';
@@ -60,11 +65,11 @@ export async function POST(req: Request) {
     response.cookies.set({
       name: 'token',
       value: token,
-      httpOnly: true, // Prevents client-side JS from accessing the cookie (XSS protection)
-      secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
-      sameSite: 'strict', // CSRF protection
-      maxAge: 60 * 60 * 24, // 1 day in seconds
-      path: '/', // Cookie is accessible across the entire site
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict', 
+      maxAge: 60 * 60 * 24, 
+      path: '/', 
     });
 
     // 9. Return the response

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
+// Define the User type structure
 type User = {
   _id: string;
   name: string;
@@ -10,6 +11,7 @@ type User = {
   role: "student" | "instructor" | "admin";
 };
 
+// Initial state for the user creation form
 const initialForm = {
   name: "",
   email: "",
@@ -21,34 +23,53 @@ export default function UsersPage() {
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState("");
 
+  // Function to fetch users from the API
   const loadUsers = async () => {
     const res = await fetch("/api/users", { cache: "no-store" });
     const data = (await res.json()) as User[];
     setUsers(data);
   };
 
+  // Fetch users when the component mounts
   useEffect(() => {
-    loadUsers().catch(() => setMessage("Failed to load users"));
+    // Wrap the async call in a function to avoid ESLint cascading render warnings
+    const fetchUsers = async () => {
+      try {
+        await loadUsers();
+      } catch {
+        setMessage("Failed to load users");
+      }
+    };
+
+    // Execute the async function
+    fetchUsers();
   }, []);
 
+  // Handle the creation of a new user
   const createUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage("");
 
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
-    });
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      setMessage(data.message ?? "Failed to create user");
-      return;
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setMessage(data.message ?? "Failed to create user");
+        return;
+      }
+
+      // Reset form and reload user list upon success
+      setForm(initialForm);
+      await loadUsers();
+    } catch {
+      setMessage("An unexpected error occurred while creating the user.");
     }
-
-    setForm(initialForm);
-    await loadUsers();
   };
 
   return (

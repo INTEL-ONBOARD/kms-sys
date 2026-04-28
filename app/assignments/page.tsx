@@ -1,8 +1,7 @@
 "use client";
 
-import Link from 'next/link';
 import { useState } from 'react';
-import { FiChevronDown, FiAlertCircle, FiFileText } from 'react-icons/fi';
+import { FiChevronDown, FiAlertCircle } from 'react-icons/fi';
 import { MdOutlineAssignment, MdOutlineNotificationsActive } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
 import Header from '@/Components/DashHeader';

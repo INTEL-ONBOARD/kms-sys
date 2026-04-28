@@ -4,7 +4,7 @@ export default function QuoteSection() {
     <section className="py-24 px-8 bg-[#232f3e] text-center text-white">
       <div className="max-w-4xl mx-auto">
         <p className="text-xl md:text-2xl font-medium tracking-wide">
-          "Education is not just preparation for life — it is life itself."
+          &quot;Education is not just preparation for life — it is life itself.&quot;
         </p>
       </div>
     </section>

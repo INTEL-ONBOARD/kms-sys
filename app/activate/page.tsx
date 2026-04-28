@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-
 function ActivationContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token'); // Extract the token from the URL
@@ -16,13 +15,15 @@ function ActivationContent() {
 
   // Automatically call the API when the component mounts
   useEffect(() => {
-    if (!token) {
-      setStatus('error');
-      setMessage('Invalid activation link. No token found in the URL.');
-      return;
-    }
+    // Wrap all logic inside an async function to avoid synchronous state updates in the effect body
+    const initializeActivation = async () => {
+      
+      if (!token) {
+        setStatus('error');
+        setMessage('Invalid activation link. No token found in the URL.');
+        return;
+      }
 
-    const activateAccount = async () => {
       try {
         // Call our new activation API
         const res = await fetch('/api/auth/activate', {
@@ -37,18 +38,21 @@ function ActivationContent() {
           throw new Error(data.message || 'Activation failed');
         }
 
-        // On success, update the UI
+        
         setStatus('success');
         setMessage('Your account has been successfully activated! You can now log in.');
 
-      } catch (error: any) {
+      } catch (error) { 
+        
         setStatus('error');
-        setMessage(error.message);
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+        setMessage(errorMessage);
       }
     };
 
-    activateAccount();
-  }, [token]); // The effect depends on the token
+    
+    initializeActivation();
+  }, [token]); 
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 font-sans p-4">
@@ -108,7 +112,6 @@ function ActivationContent() {
     </div>
   );
 }
-
 
 export default function ActivatePage() {
   return (
