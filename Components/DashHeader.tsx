@@ -1,8 +1,9 @@
 "use client";
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect } from 'react'; // Imported useEffect
+import { useState, useEffect } from 'react'; 
 import { FiSearch, FiMail, FiBell, FiChevronDown, FiUser, FiLogOut } from 'react-icons/fi';
 
 export default function DashHeader() {
@@ -22,10 +23,10 @@ export default function DashHeader() {
         const response = await fetch('/api/user/me');
         if (response.ok) {
           const data = await response.json();
-          // Assuming your API returns an object like { user: { name: "Aster Seawalker", ... } }
+          
           setUserName(data.user.name); 
         } else {
-          setUserName("User"); // Fallback name if fetching fails
+          setUserName("User"); 
         }
       } catch (error) {
         console.error("Failed to fetch user data:", error);
@@ -79,7 +80,7 @@ export default function DashHeader() {
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
               >
                   <div className="w-9 h-9 rounded-full bg-gray-200 overflow-hidden mr-3">
-                    <img src="./propic.png" alt="User Profile Picture" className="w-full h-full object-cover" />
+                    <Image src="./propic.png" alt="User Profile Picture" width={36} height={36} className="w-full h-full object-cover" />
                   </div>
                   <div className="mr-2 hidden md:block text-left">
                       {/* Here we display the dynamically fetched user name */}

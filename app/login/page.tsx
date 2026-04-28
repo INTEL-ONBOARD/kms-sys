@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation'; 
 
 export default function LoginPage() {
-  // 2. Initialize the router
+  // Initialize the router for navigation
   const router = useRouter(); 
 
   // States to hold form data and response messages
@@ -36,7 +36,6 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        
         throw new Error(data.message || 'Login failed');
       }
 
@@ -45,14 +44,24 @@ export default function LoginPage() {
       setEmail('');
       setPassword('');
 
-      // 3. Redirect the user to the dashboard after a short 1-second delay 
-      // (The delay allows them to see the success message before page changes)
+      // Redirect the user based on their role after a short 1-second delay 
       setTimeout(() => {
-        router.push('/dashboard');
+        const userRole = data.user.role;
+        
+        // Role-Based Redirection
+        if (userRole === 'super_admin') {
+          router.push('/admin');
+        } else if (userRole === 'instructor') {
+          router.push('/instructor');
+        } else {
+          router.push('/student'); 
+        }
       }, 1000);
 
-    } catch (err: any) {
-      setError(err.message); // Set the error message to display
+    } catch (err) {
+      // Properly handle the error without using the 'any' type
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage); 
     } finally {
       setLoading(false);
     }
@@ -93,7 +102,7 @@ export default function LoginPage() {
               </label>
               <input 
                 type="text" 
-                value={email} // Bound to state
+                value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 placeholder="Enter your email or ID"
                 className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition"
@@ -139,7 +148,7 @@ export default function LoginPage() {
 
           {/* Navigation link to Sign Up page added below the form */}
           <div className="mt-8 text-center text-sm text-gray-600">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/signup" className="text-black font-bold hover:underline">
               Sign Up
             </Link>
@@ -152,20 +161,21 @@ export default function LoginPage() {
       <div className="hidden md:flex w-1/2 relative bg-slate-900 items-center justify-center flex-col text-center px-12">
         <div className="relative z-20 text-white flex flex-col items-center">
           
-          
-            <div className="mb-8">
-                <Image 
-                    src="/logo2.png" 
-                    alt="Wise East University Logo"
-                    width={100} 
-                    height={100}
-                    className="object-contain"
-                />
-            </div>
+          <div className="mb-8">
+              <Image 
+                  src="/logo2.png" 
+                  alt="Wise East University Logo"
+                  width={100} 
+                  height={100}
+                  className="object-contain"
+              />
+          </div>
 
           <h1 className="text-4xl font-bold mb-4 uppercase tracking-wider">Wise East University</h1>
           <p className="text-lg font-light text-gray-300">
-            Access your courses, grades, and campus resources. <br/> Education is not just preparation for life — it is life itself.
+            Access your courses, grades, and campus resources. <br/> 
+            {/* Replaced the unescaped dash with the proper HTML entity */}
+            Education is not just preparation for life &mdash; it is life itself.
           </p>
         </div>
       </div>

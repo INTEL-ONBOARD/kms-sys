@@ -10,6 +10,9 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Handle the password reset form submission
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
@@ -17,7 +20,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      // Call the API 
+      // Call the API to send a reset link
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: {
@@ -36,8 +39,10 @@ export default function ForgotPasswordPage() {
       setMessage(data.message);
       setEmail(''); // Clear the input
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      // Handle error without using 'any' type to satisfy TypeScript strict rules
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -46,18 +51,19 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex bg-gray-50 font-sans">
       
-      {/* Left Side - Forgot Password Form */}
+      {/* Left Side - Forgot Password Form Container */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-8">
         <div className="max-w-md w-full bg-white p-10 rounded-xl shadow-sm border border-gray-100">
           
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-black mb-2">Reset Password</h2>
             <p className="text-gray-500 text-sm">
-              Enter your email address and we'll send you a link to reset your password.
+              {/* Used &apos; instead of ' to avoid ESLint unescaped entity error */}
+              Enter your email address and we&apos;ll send you a link to reset your password.
             </p>
           </div>
 
-          {/* Show error or success messages */}
+          {/* Alert messages for status feedback */}
           {error && (
             <div className="mb-4 text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded border border-red-100">
               {error}
@@ -103,7 +109,7 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
 
-      {/* Right Side - Branding */}
+      {/* Right Side - University Branding Section */}
       <div className="hidden md:flex w-1/2 relative bg-slate-900 items-center justify-center flex-col text-center px-12">
         <div className="relative z-20 text-white flex flex-col items-center">
             <div className="mb-8">
@@ -117,7 +123,9 @@ export default function ForgotPasswordPage() {
             </div>
           <h1 className="text-4xl font-bold mb-4 uppercase tracking-wider">Wise East University</h1>
           <p className="text-lg font-light text-gray-300">
-            Access your courses, grades, and campus resources. <br/> Education is not just preparation for life — it is life itself.
+            Access your courses, grades, and campus resources. <br/> 
+            {/* Used &mdash; for the dash to keep the markup clean and professional */}
+            Education is not just preparation for life &mdash; it is life itself.
           </p>
         </div>
       </div>

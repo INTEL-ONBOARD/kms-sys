@@ -1,6 +1,5 @@
 "use client";
 
-import Link from 'next/link';
 import { FiSearch, FiChevronDown, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import Sidebar from '@/Components/Sidebar';
 import Header from '@/Components/DashHeader';

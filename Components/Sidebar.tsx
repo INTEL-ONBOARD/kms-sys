@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiBook, FiCalendar, FiBarChart2, FiUser } from 'react-icons/fi';
+import { FiBook, FiCalendar, FiBarChart2 } from 'react-icons/fi';
 import { MdDashboard, MdOutlineAssignment } from 'react-icons/md';
 
 export default function Sidebar() {
@@ -32,9 +32,9 @@ export default function Sidebar() {
         
         {/* Dashboard Link */}
         <Link 
-          href="/dashboard" 
+          href="/student" 
           className={`flex items-center px-4 py-3 rounded-xl transition ${
-            pathname === '/dashboard' 
+            pathname === '/student' 
               ? 'bg-[#EEF2FF] text-[#5A67D8] font-bold' // Active Styles
               : 'text-[#A0AEC0] hover:text-[#5A67D8] hover:bg-[#F7FAFC] font-medium' // Inactive Styles
           }`}

@@ -16,7 +16,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Handle input changes
+  // Handle input changes dynamically
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -59,8 +59,9 @@ export default function SignupPage() {
       setSuccess('Account created successfully! You can now log in.');
       setFormData({ fullName: '', email: '', password: '', confirmPassword: '' });
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -171,7 +172,8 @@ export default function SignupPage() {
           </div>
           <h1 className="text-4xl font-bold mb-4 uppercase tracking-wider">Wise East University</h1>
           <p className="text-lg font-light text-gray-300">
-            Access your courses, grades, and campus resources. <br/> Education is not just preparation for life — it is life itself.
+            Access your courses, grades, and campus resources. <br/> 
+            Education is not just preparation for life &mdash; it is life itself.
           </p>
         </div>
       </div>
