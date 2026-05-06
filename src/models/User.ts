@@ -9,7 +9,7 @@ const userSchema = new Schema(
     lastName: { type: String, trim: true },
     phone: { type: String, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password: { type: String, required: true }, 
+    password: { type: String, required: false }, 
     
     // --- Role-Based Access Control (RBAC) ---
     // Added 'lecturer' to support the new Stepper UI role selection
