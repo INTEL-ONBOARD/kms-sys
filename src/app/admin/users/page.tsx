@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import DashHeader from '@/Components/DashHeader'; 
 import AdminSidebar from '@/Components/AdminSidebar';
-import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX } from 'react-icons/fi';
+import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail } from 'react-icons/fi';
 
 interface UserData {
   _id: string;
@@ -22,19 +22,33 @@ export default function UserAdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
 
-  // --- Pagination States ---
+  // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // How many items to show per page
+  const itemsPerPage = 5; 
 
-  // --- Modal States ---
+  // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
-  // Form States for Add/Edit
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'student', status: 'active' });
+  // Form States for Add/Edit (Added Demo Password here)
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    password: 'Demo@1234', // Default Demo Password
+    role: 'student', 
+    status: 'active' 
+  });
+
+  const [inviteFormData, setInviteFormData] = useState({
+    name: '',
+    email: '',
+    role: 'student',
+  });
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // Fetch Users Function
   const fetchUsers = async () => {
@@ -56,7 +70,7 @@ export default function UserAdminPage() {
     fetchUsers();
   }, []);
 
-  // --- Search & Filter Logic ---
+  // Search & Filter Logic
   const filteredUsers = users.filter((user) => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -64,10 +78,9 @@ export default function UserAdminPage() {
     return matchesSearch && matchesRole;
   });
 
-  // --- Pagination Logic ---
+  // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  // Get only the users for the current page
   const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
 
@@ -79,11 +92,9 @@ export default function UserAdminPage() {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
-  // Reset to page 1 when searching or filtering
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, roleFilter]);
-
 
   // --- Action Handlers ---
   
@@ -96,15 +107,49 @@ export default function UserAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
+      
+      const data = await res.json(); // Read backend response
+
       if (res.ok) {
         setIsAddModalOpen(false);
-        setFormData({ name: '', email: '', password: '', role: 'student', status: 'active' });
-        fetchUsers(); // Refresh the table
+        // Reset form data and re-apply Demo Password
+        setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active' });
+        fetchUsers(); 
+        alert(`User successfully added!\nPlease remind them to log in with password: Demo@1234 and update their profile.`);
       } else {
-        alert("Failed to add user");
+        // Show exact error if user addition fails (e.g., Email already exists)
+        alert("Failed to add user: " + (data.message || "Unknown error occurred"));
       }
     } catch (error) {
       console.error(error);
+      alert("Network Error: Please check your terminal to see if the server crashed.");
+    }
+  };
+
+  // Handle Invite User Submit
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsInviteModalOpen(false);
+        setInviteFormData({ name: '', email: '', role: 'student' });
+        fetchUsers();
+        alert('Invitation sent successfully! The user will receive an email to activate their account.');
+      } else {
+        alert('Failed to send invitation: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Network Error: Please check your terminal to see if the server crashed.');
+    } finally {
+      setInviteLoading(false);
     }
   };
 
@@ -120,7 +165,7 @@ export default function UserAdminPage() {
       });
       if (res.ok) {
         setIsEditModalOpen(false);
-        fetchUsers(); // Refresh the table
+        fetchUsers(); 
       }
     } catch (error) {
       console.error(error);
@@ -136,14 +181,14 @@ export default function UserAdminPage() {
       });
       if (res.ok) {
         setIsDeleteModalOpen(false);
-        fetchUsers(); // Refresh the table
+        fetchUsers(); 
       }
     } catch (error) {
       console.error(error);
     }
   };
 
-  // --- Helper Functions ---
+  // Helper Functions
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toISOString().split('T')[0]; 
@@ -182,13 +227,23 @@ export default function UserAdminPage() {
               <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">User Administration</h1>
               <p className="text-[#A0AEC0] font-medium mt-1">Manage platform users, roles, and access</p>
             </div>
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="mt-4 md:mt-0 bg-[#5A67D8] hover:bg-[#434190] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
-            >
-              <FiUserPlus className="mr-2 text-lg" />
-              Add New User
-            </button>
+            {/* Main Add New User Button - Updated Color to match image */}
+            <div className="flex gap-3 mt-4 md:mt-0">
+              <button 
+                onClick={() => setIsInviteModalOpen(true)}
+                className="bg-white border border-[#5551FF] text-[#5551FF] hover:bg-[#5551FF]/5 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiMail className="mr-2 text-lg" />
+                Invite User
+              </button>
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-[#5551FF] hover:bg-[#423ee0] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiUserPlus className="mr-2 text-lg" />
+                Add New User
+              </button>
+            </div>
           </div>
 
           <div className="bg-white p-4 rounded-t-xl border border-gray-200 border-b-0 flex flex-col sm:flex-row justify-between gap-4">
@@ -206,7 +261,7 @@ export default function UserAdminPage() {
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <FiFilter className="text-gray-400" />
               <select 
-                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none"
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
@@ -237,7 +292,6 @@ export default function UserAdminPage() {
                   ) : currentUsers.length === 0 ? (
                     <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
                   ) : (
-                    // Notice we map over currentUsers, not filteredUsers
                     currentUsers.map((user) => (
                       <tr key={user._id} className="hover:bg-gray-50 transition duration-150">
                         <td className="px-6 py-4">
@@ -265,7 +319,6 @@ export default function UserAdminPage() {
                         <td className="px-6 py-4 text-gray-500">{formatDate(user.createdAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end space-x-2">
-                            {/* Edit Button */}
                             <button 
                               onClick={() => {
                                 setSelectedUser(user);
@@ -276,7 +329,6 @@ export default function UserAdminPage() {
                             >
                               <FiEdit2 className="text-base" />
                             </button>
-                            {/* Delete Button */}
                             <button 
                               onClick={() => {
                                 setSelectedUser(user);
@@ -285,9 +337,6 @@ export default function UserAdminPage() {
                               className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                             >
                               <FiTrash2 className="text-base" />
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition">
-                              <FiMoreVertical className="text-base" />
                             </button>
                           </div>
                         </td>
@@ -298,27 +347,12 @@ export default function UserAdminPage() {
               </table>
             </div>
 
-            {/* Pagination Controls */}
             <div className="p-4 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
-              <span>Showing {filteredUsers.length === 0 ? 0 : indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries</span>
+              <span>Showing {currentUsers.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries</span>
               <div className="flex space-x-1">
-                <button 
-                  onClick={handlePrevPage} 
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Prev
-                </button>
-                <button className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md font-medium">
-                  {currentPage}
-                </button>
-                <button 
-                  onClick={handleNextPage} 
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
+                <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50">Prev</button>
+                <button className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md font-medium">{currentPage}</button>
+                <button onClick={handleNextPage} disabled={currentPage === totalPages || totalPages === 0} className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50">Next</button>
               </div>
             </div>
 
@@ -345,19 +379,58 @@ export default function UserAdminPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
+              
+              {/* Password Field: Auto-filled with Demo Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input required type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password (Demo)</label>
+                <input required type="text" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full border rounded-lg p-2 bg-gray-50 text-gray-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <p className="text-xs text-orange-600 mt-1 font-medium">* Instruct user to change this from their profile after first login.</p>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="super_admin">Admin</option>
                 </select>
               </div>
-              <button type="submit" className="w-full bg-indigo-600 text-white rounded-lg p-2.5 font-bold hover:bg-indigo-700 transition">Create User</button>
+              
+              {/* Modal Button - Updated Color to match image */}
+              <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Create User</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite User Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Invite User</h2>
+              <button onClick={() => setIsInviteModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input required type="text" value={inviteFormData.name} onChange={(e) => setInviteFormData({...inviteFormData, name: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input required type="email" value={inviteFormData.email} onChange={(e) => setInviteFormData({...inviteFormData, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select value={inviteFormData.role} onChange={(e) => setInviteFormData({...inviteFormData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                  <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
+                  <option value="super_admin">Admin</option>
+                </select>
+              </div>
+              <button type="submit" disabled={inviteLoading} className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
+                {inviteLoading ? 'Sending...' : 'Send Invitation'}
+              </button>
             </form>
           </div>
         </div>
@@ -374,7 +447,7 @@ export default function UserAdminPage() {
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="super_admin">Admin</option>
@@ -382,13 +455,13 @@ export default function UserAdminPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="active">Active</option>
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
-              <button type="submit" className="w-full bg-indigo-600 text-white rounded-lg p-2.5 font-bold hover:bg-indigo-700 transition">Save Changes</button>
+              <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Save Changes</button>
             </form>
           </div>
         </div>
@@ -402,7 +475,7 @@ export default function UserAdminPage() {
             <p className="text-gray-500 mb-6 text-sm">Are you sure you want to delete <b>{selectedUser.name}</b>? This action cannot be undone.</p>
             <div className="flex space-x-3 justify-center">
               <button onClick={() => setIsDeleteModalOpen(false)} className="px-5 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 font-medium">Cancel</button>
-              <button onClick={handleDeleteConfirm} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Delete</button>
+              <button onClick={handleDeleteConfirm} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition">Delete</button>
             </div>
           </div>
         </div>

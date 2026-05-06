@@ -30,6 +30,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         // 4. Compare the entered password with the hashed password in the database
+        if (!user.password) {
+          throw new Error("Please activate your account and set a password first.");
+        }
+
         const isPasswordMatch = await bcrypt.compare(credentials.password, user.password);
 
         if (!isPasswordMatch) {
@@ -47,11 +51,13 @@ export const authOptions: NextAuthOptions = {
         }
 
         // 7. Return user object (this will be saved in the NextAuth JWT token)
+        // Thanks to next-auth.d.ts, TypeScript knows 'role' and 'status' are valid here
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          role: user.role, // Passing role to session for role-based access
+          role: user.role,     // Passing role to token
+          status: user.status, // Passing status to token
         };
       }
     })
@@ -59,18 +65,23 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     // This callback is called whenever a JWT is created or updated
     async jwt({ token, user }) {
+      // If the user object exists (e.g., immediately after logging in)
       if (user) {
+        // We no longer need 'as any' because we defined these types globally
         token.id = user.id;
-        // Using 'as any' to avoid the TypeScript error you encountered
-        token.role = (user as any).role;
+        token.role = user.role;
+        token.status = user.status;
       }
       return token;
     },
     // This callback is called whenever a session is checked on the client side
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
+      // Pass the token values to the session user object
+      if (token && session.user) {
+        // We no longer need 'as any' because we defined these types globally
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+        session.user.status = token.status as string;
       }
       return session;
     }
