@@ -100,11 +100,8 @@ export default function SignupPage() {
         throw new Error(data.message || 'Registration failed');
       }
       
-      // Show success message and instruct the user to check their email
-      setSuccess('Account created successfully! Please check your email to activate.');
-      
-      // Optional: You can clear the form data here if you want
-      // setFormData({ ... });
+      // Show success message returned by backend API
+      setSuccess(data.message || 'Account created successfully!');
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -135,7 +132,16 @@ export default function SignupPage() {
 
           {/* Alert Messages */}
           {error && <div className="mb-4 text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded border border-red-100">{error}</div>}
-          {success && <div className="mb-4 text-green-600 text-sm text-center font-medium bg-green-50 p-3 rounded border border-green-100">{success}</div>}
+          {success && (
+            <div className="mb-6 text-center space-y-4">
+              <div className="text-green-700 text-sm font-medium bg-green-50 p-4 rounded-lg border border-green-200">
+                {success}
+              </div>
+              <Link href="/login" className="inline-block w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition">
+                Go to Login
+              </Link>
+            </div>
+          )}
 
           {/* ================= STEP 1: ROLE SELECTION ================= */}
           {step === 1 && (
