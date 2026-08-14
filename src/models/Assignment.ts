@@ -12,6 +12,9 @@ const assignmentSchema = new Schema(
       enum: ["open", "closed", "graded"],
       default: "open",
     },
+    category: { type: String, default: "Homework", trim: true },
+    submissionsCount: { type: Number, default: 0 },
+    gradedCount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
