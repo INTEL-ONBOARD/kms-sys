@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
+import Course from "@/models/Course";
 import Assignment from "@/models/Assignment";
 import Exam from "@/models/Exam";
 import LiveClass from "@/models/LiveClass";
@@ -19,6 +20,25 @@ export async function GET(request: NextRequest) {
 
     await connectToDatabase();
     const userId = token.sub;
+
+    // Auto-enroll student in all published courses so new courses appear automatically
+    const publishedCourses = await Course.find({ published: true }).lean();
+    let currentEnrollments = await Enrollment.find({ userId }).lean();
+    const enrolledCourseIds = new Set(currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
+
+    for (const pCourse of publishedCourses) {
+      if (!enrolledCourseIds.has(pCourse._id.toString())) {
+        try {
+          await Enrollment.create({
+            userId,
+            courseId: pCourse._id,
+            progress: 0,
+          });
+        } catch (e) {
+          // Ignore duplicate enrollment error if concurrent
+        }
+      }
+    }
 
     // 1. Get enrolled courses with progress
     const enrollments = await Enrollment.find({ userId })
