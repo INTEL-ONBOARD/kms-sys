@@ -22,12 +22,14 @@ export async function GET(req: Request) {
       .populate('courseId')
       .lean();
 
-    // Format the data to send to the frontend
-    const myCourses = enrollments.map(enrollment => ({
-      ...enrollment.courseId, // Course details (title, description, etc.)
-      progress: enrollment.progress, // Student's specific progress
-      enrollmentId: enrollment._id
-    }));
+    // Format the data to send to the frontend, ignoring enrollments where the course was deleted
+    const myCourses = enrollments
+      .filter((enrollment: any) => enrollment.courseId)
+      .map((enrollment: any) => ({
+        ...enrollment.courseId, // Course details (title, description, etc.)
+        progress: enrollment.progress, // Student's specific progress
+        enrollmentId: enrollment._id
+      }));
 
     return NextResponse.json({ courses: myCourses }, { status: 200 });
   } catch (error) {

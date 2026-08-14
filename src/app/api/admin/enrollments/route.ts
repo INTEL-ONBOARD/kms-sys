@@ -65,10 +65,15 @@ export async function POST(request: NextRequest) {
 
     // 3. Connect to DB and Create Enrollment
     await connectToDatabase();
+    
+    console.log(`[Enrollment API] Attempting to enroll userId: ${payload.userId} into courseId: ${payload.courseId}`);
+    
     const enrollment = await Enrollment.create({
       userId: payload.userId,
       courseId: payload.courseId
     });
+
+    console.log(`[Enrollment API] Successfully created enrollment:`, enrollment._id.toString());
 
     // 🔥 TASK #500 IN ACTION: Log the course assignment securely!
     await logAuditAction({

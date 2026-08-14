@@ -4,6 +4,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
+const hiddenRoutes = [
+  // Dashboard / protected routes
+  '/student', '/admin', '/lecturer', '/profile',
+  '/courses', '/grades', '/assignments', '/calendar', '/enrollments',
+  // Authentication routes
+  '/login', '/signup', '/forgot-password', '/reset-password', '/activate',
+];
+
 const navLinks = [
   { href: '/',          label: 'Home'      },
   { href: '/about',     label: 'About'     },
@@ -14,6 +22,9 @@ const navLinks = [
 
 export default function Header() {
   const pathname = usePathname();
+
+  // Hide the public header on all dashboard / protected routes
+  if (hiddenRoutes.some((route) => pathname.startsWith(route))) return null;
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
