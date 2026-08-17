@@ -237,40 +237,68 @@ export default function DashboardPage() {
                 {/* Live / Upcoming Classes */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center">
-                    <h3 className="font-bold text-[#2D3748]">Live Classes</h3>
-                    <span className="text-xs font-medium text-[#A0AEC0]">{new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    <h3 className="font-bold text-[#2D3748]">Live & Online Classes</h3>
+                    <Link href="/calendar" className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition">
+                      View Timetable & Recordings
+                    </Link>
                   </div>
                   <div className="p-6 space-y-4">
                     {loading ? (
                       <div className="text-sm text-gray-400">Loading classes...</div>
                     ) : liveClasses.length === 0 ? (
-                      <div className="text-sm text-gray-400">No upcoming live classes.</div>
+                      <div className="text-sm text-gray-400">No scheduled live classes.</div>
                     ) : (
-                      liveClasses.slice(0, 3).map((lc) => (
-                        <div key={lc._id} className="flex flex-col pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-bold text-[#2D3748]">{lc.title}</span>
-                            {lc.status === 'live' && (
-                              <span className="flex items-center text-[10px] font-bold text-red-500 uppercase">
-                                <span className="w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse" />
-                                Live
-                              </span>
-                            )}
-                            {lc.status === 'upcoming' && (
-                              <span className="text-[10px] font-bold text-[#5A67D8] uppercase bg-[#EEF2FF] px-2 py-0.5 rounded">Upcoming</span>
-                            )}
+                      liveClasses.slice(0, 3).map((lc) => {
+                        const isLive = lc.status === 'live';
+                        const isEnded = lc.status === 'ended';
+                        return (
+                          <div key={lc._id} className="flex flex-col pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold text-[#2D3748]">{lc.title}</span>
+                              {isLive && (
+                                <span className="flex items-center text-[10px] font-bold text-red-500 uppercase">
+                                  <span className="w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse" />
+                                  Live Now
+                                </span>
+                              )}
+                              {isEnded && (
+                                <span className="text-[10px] font-bold text-purple-600 uppercase bg-purple-50 px-2 py-0.5 rounded">
+                                  Ended / Recorded
+                                </span>
+                              )}
+                              {!isLive && !isEnded && (
+                                <span className="text-[10px] font-bold text-[#5A67D8] uppercase bg-[#EEF2FF] px-2 py-0.5 rounded">
+                                  Upcoming
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex justify-between text-xs text-[#A0AEC0] font-medium">
+                              <span className="flex items-center gap-1"><FiClock className="text-xs" /> {formatTime(lc.startTime)} - {formatTime(lc.endTime)}</span>
+                              <span className="flex items-center gap-1"><FiBookOpen className="text-xs" /> {lc.courseId?.title || 'General'}</span>
+                            </div>
+                            
+                            <div className="mt-2.5 flex items-center gap-3">
+                              {isEnded ? (
+                                <Link 
+                                  href="/calendar"
+                                  className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1"
+                                >
+                                  <FiVideo className="text-xs" /> Watch Recording & Notes
+                                </Link>
+                              ) : (
+                                <a 
+                                  href={lc.meetingLink || "/calendar"} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center gap-1.5"
+                                >
+                                  <FiVideo className="text-xs" /> Join Live Classroom
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs text-[#A0AEC0] font-medium">
-                            <span className="flex items-center gap-1"><FiClock className="text-xs" /> {formatTime(lc.startTime)} - {formatTime(lc.endTime)}</span>
-                            <span className="flex items-center gap-1"><FiBookOpen className="text-xs" /> {lc.courseId?.title || 'General'}</span>
-                          </div>
-                          {lc.meetingLink && (
-                            <a href={lc.meetingLink} target="_blank" rel="noopener noreferrer" className="mt-2 text-xs font-semibold text-[#5A67D8] hover:underline flex items-center gap-1">
-                              <FiVideo className="text-xs" /> Join Meeting
-                            </a>
-                          )}
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -295,17 +323,24 @@ export default function DashboardPage() {
                       {assignments.map((a) => {
                         const overdue = isOverdue(a.dueDate);
                         return (
-                          <div key={a._id} className={`flex items-center justify-between p-4 hover:bg-[#F7FAFC] rounded-lg cursor-pointer transition ${overdue ? 'bg-red-50' : ''}`}>
+                          <Link 
+                            key={a._id} 
+                            href={`/assignments?briefId=${a._id}`}
+                            className={`flex items-center justify-between p-3.5 hover:bg-[#EEF2FF]/60 rounded-xl transition ${overdue ? 'bg-red-50' : 'hover:bg-gray-50'}`}
+                          >
                             <div className="flex flex-col">
-                              <div className={`flex items-center text-sm font-semibold ${overdue ? 'text-red-600' : 'text-[#2D3748]'}`}>
-                                <span className={`w-2 h-2 rounded-full mr-3 ${overdue ? 'bg-red-500' : 'bg-[#ED8936]'}`} />
-                                {a.title}
+                              <div className={`flex items-center text-xs font-bold ${overdue ? 'text-red-600' : 'text-[#2D3748]'}`}>
+                                <span className={`w-2 h-2 rounded-full mr-2.5 flex-shrink-0 ${overdue ? 'bg-red-500' : 'bg-[#5A67D8]'}`} />
+                                <span className="truncate max-w-[170px]">{a.title}</span>
                               </div>
-                              <span className={`text-xs ml-5 mt-0.5 ${overdue ? 'text-red-400' : 'text-[#A0AEC0]'}`}>
+                              <span className={`text-[11px] ml-4 mt-0.5 ${overdue ? 'text-red-400 font-semibold' : 'text-[#A0AEC0]'}`}>
                                 {overdue ? 'Overdue' : daysUntil(a.dueDate)} ({formatDate(a.dueDate)})
                               </span>
                             </div>
-                          </div>
+                            <span className="text-[10px] font-bold text-[#5A67D8] bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm">
+                              Brief &rarr;
+                            </span>
+                          </Link>
                         );
                       })}
                     </>
