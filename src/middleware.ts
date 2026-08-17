@@ -42,8 +42,15 @@ export async function middleware(req: NextRequest) {
     }
 
     // Protect Student routes
-    if (path.startsWith("/student") && token.role !== "student") {
-      const redirectUrl = token.role === 'super_admin' ? '/admin' : '/lecturer';
+    const isStudentSection = 
+      path.startsWith("/student") ||
+      path.startsWith("/courses") ||
+      path.startsWith("/assignments") ||
+      path.startsWith("/calendar") ||
+      path.startsWith("/grades");
+
+    if (isStudentSection && token.role !== "student" && token.role !== "super_admin") {
+      const redirectUrl = token.role === 'lecturer' ? '/lecturer' : '/admin';
       return NextResponse.redirect(new URL(redirectUrl, req.url));
     }
   }
@@ -58,6 +65,14 @@ export const config = {
     '/admin/:path*',
     '/lecturer/:path*',
     '/student/:path*',
+    '/courses/:path*',
+    '/courses',
+    '/assignments/:path*',
+    '/assignments',
+    '/calendar/:path*',
+    '/calendar',
+    '/grades/:path*',
+    '/grades',
     '/profile/:path*',
     '/login',
     '/signup',
