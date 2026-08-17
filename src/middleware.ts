@@ -37,9 +37,8 @@ export async function middleware(req: NextRequest) {
     }
     
     // Protect Lecturer routes
-    if (path.startsWith("/lecturer") && token.role !== "lecturer") {
-      const redirectUrl = token.role === 'super_admin' ? '/admin' : '/student';
-      return NextResponse.redirect(new URL(redirectUrl, req.url));
+    if (path.startsWith("/lecturer") && token.role !== "lecturer" && token.role !== "super_admin") {
+      return NextResponse.redirect(new URL('/student', req.url));
     }
 
     // Protect Student routes

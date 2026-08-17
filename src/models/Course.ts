@@ -5,6 +5,7 @@ const courseSchema = new Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     instructor: { type: String, required: true, trim: true },
+    instructorId: { type: Schema.Types.ObjectId, ref: "User", required: false, index: true },
     category: { type: String, required: true, trim: true },
     price: { type: String, required: true, trim: true }, 
     status: { type: String, default: "draft" }, 
