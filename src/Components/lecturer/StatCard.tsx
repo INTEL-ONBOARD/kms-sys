@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { IconType } from "react-icons";
+import Link from "next/link";
 
 interface StatCardProps {
   icon: IconType;
@@ -9,9 +10,11 @@ interface StatCardProps {
   value: number;
   color: "blue" | "green" | "amber" | "purple";
   trend?: string;
+  href?: string;
+  onClick?: () => void;
 }
 
-export default function StatCard({ icon: Icon, label, value, color, trend }: StatCardProps) {
+export default function StatCard({ icon: Icon, label, value, color, trend, href, onClick }: StatCardProps) {
   const [displayValue, setDisplayValue] = useState(0);
 
   // Count-up animation over 1.5s
@@ -43,29 +46,30 @@ export default function StatCard({ icon: Icon, label, value, color, trend }: Sta
 
   const colorStyles = {
     blue: {
-      circleBg: "bg-blue-50 text-[#2563EB]",
-      border: "border-gray-100/50",
+      circleBg: "bg-blue-50 text-[#2563EB] group-hover:bg-blue-100",
+      border: "border-gray-100/60 hover:border-blue-200",
     },
     green: {
-      circleBg: "bg-green-50 text-[#16A34A]",
-      border: "border-gray-100/50",
+      circleBg: "bg-green-50 text-[#16A34A] group-hover:bg-green-100",
+      border: "border-gray-100/60 hover:border-green-200",
     },
     amber: {
-      circleBg: "bg-amber-50 text-[#D97706]",
-      border: "border-gray-100/50",
+      circleBg: "bg-amber-50 text-[#D97706] group-hover:bg-amber-100",
+      border: "border-gray-100/60 hover:border-amber-200",
     },
     purple: {
-      circleBg: "bg-purple-50 text-purple-600",
-      border: "border-gray-100/50",
+      circleBg: "bg-purple-50 text-purple-600 group-hover:bg-purple-100",
+      border: "border-gray-100/60 hover:border-purple-200",
     },
   };
 
   const style = colorStyles[color];
+  const isClickable = Boolean(href || onClick);
 
-  return (
-    <div className={`bg-white rounded-2xl p-5 sm:p-6 shadow-sm border ${style.border} transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between`}>
+  const content = (
+    <>
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-2xl ${style.circleBg} flex items-center justify-center text-xl`}>
+        <div className={`w-12 h-12 rounded-2xl ${style.circleBg} flex items-center justify-center text-xl transition-colors`}>
           <Icon />
         </div>
         {trend && (
@@ -79,6 +83,33 @@ export default function StatCard({ icon: Icon, label, value, color, trend }: Sta
         <h3 className="text-3xl font-extrabold text-[#111827] tracking-tight">{displayValue}</h3>
         <p className="text-xs font-semibold text-gray-500 mt-1">{label}</p>
       </div>
+    </>
+  );
+
+  const containerClasses = `group bg-white rounded-2xl p-5 sm:p-6 shadow-sm border ${style.border} transition-all duration-200 ease-out flex flex-col justify-between ${
+    isClickable ? "cursor-pointer hover:-translate-y-1 hover:shadow-md" : "hover:-translate-y-0.5 hover:shadow-md"
+  }`;
+
+  if (href) {
+    return (
+      <Link href={href} className={containerClasses}>
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <div onClick={onClick} role="button" tabIndex={0} className={containerClasses}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className={containerClasses}>
+      {content}
     </div>
   );
 }
+

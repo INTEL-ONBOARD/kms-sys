@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   FiBell,
   FiFileText,
@@ -9,6 +10,8 @@ import {
   FiChevronRight,
   FiVideo,
   FiBookOpen,
+  FiBook,
+  FiUsers,
   FiClock,
   FiPlus,
   FiCheckCircle
@@ -18,6 +21,7 @@ import QuickActionModal from "@/Components/lecturer/QuickActionModal";
 import AnnouncementComposer from "@/Components/lecturer/AnnouncementComposer";
 import MiniBarChart from "@/Components/lecturer/MiniBarChart";
 import MiniDonutChart from "@/Components/lecturer/MiniDonutChart";
+import StatCard from "@/Components/lecturer/StatCard";
 
 interface Course {
   _id: string;
@@ -49,6 +53,7 @@ interface QueueItemData {
 }
 
 export default function LecturerDashboardPage() {
+  const { data: session } = useSession();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -70,6 +75,15 @@ export default function LecturerDashboardPage() {
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 18) return "Good Afternoon";
+    return "Good Evening";
+  };
+
+  const userName = session?.user?.name || "Lecturer";
+
   const fetchDashboard = async () => {
     try {
       const res = await fetch("/api/lecturer/dashboard");
@@ -88,6 +102,11 @@ export default function LecturerDashboardPage() {
     fetchDashboard();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(fetchDashboard, 60000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, []);
+
   const stats = dashboardData?.stats || {
     activeCourses: 0,
     totalStudents: 0,
@@ -104,6 +123,18 @@ export default function LecturerDashboardPage() {
     lineChart: [],
     donutChart: { A: 0, B: 0, C: 0, D: 0, F: 0 },
   };
+
+  const scheduleDaySet = new Set(
+    schedule
+      .map((s) => new Date(s.startTime))
+      .filter(
+        (d) =>
+          !isNaN(d.getTime()) &&
+          d.getMonth() === currentMonth &&
+          d.getFullYear() === currentYear
+      )
+      .map((d) => d.getDate())
+  );
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -127,18 +158,60 @@ export default function LecturerDashboardPage() {
         .animate-breathe-fast { animation: breathe 3.5s ease-in-out infinite 1s; }
       `}</style>
 
-      {/* Page Title */}
-      <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide">
-          Lecturer Dashboard
-        </h1>
+      {/* Header & Welcome Greeting */}
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#2D3748]">
+            {getGreeting()},{" "}
+            <span className="bg-gradient-to-r from-[#5A67D8] to-[#9F7AEA] bg-clip-text text-transparent">
+              {userName}
+            </span>{" "}
+            👋
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1 font-medium">
+            Here&apos;s what&apos;s happening in your classes today.
+          </p>
+        </div>
         <button
           onClick={() => setModalType("class")}
-          className="flex items-center gap-2 px-4 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] shadow-sm transition"
+          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition"
         >
           <FiPlus className="text-sm" /> Schedule Class
         </button>
       </div>
+
+      {/* Stat Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <StatCard
+          label="Active Courses"
+          color="purple"
+          icon={FiBook}
+          value={stats.activeCourses}
+          href="/lecturer/courses"
+        />
+        <StatCard
+          label="Total Students"
+          color="blue"
+          icon={FiUsers}
+          value={stats.totalStudents}
+          href="/lecturer/students"
+        />
+        <StatCard
+          label="Pending Grades"
+          color="amber"
+          icon={FiFileText}
+          value={stats.pendingGrades}
+          href="/lecturer/grades"
+        />
+        <StatCard
+          label="Today's Classes"
+          color="green"
+          icon={FiVideo}
+          value={stats.todaysClasses}
+          href="/lecturer/live-classes"
+        />
+      </div>
+
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* LEFT SECTION */}
@@ -200,16 +273,21 @@ export default function LecturerDashboardPage() {
                   {Array.from({ length: daysInMonth }).map((_, index) => {
                     const day = index + 1;
                     const isCurrentDay = isToday(day);
+                    const hasEvent = scheduleDaySet.has(day);
                     return (
-                      <div
-                        key={day}
-                        className={`flex items-center justify-center mx-auto w-7 h-7 transition ${
-                          isCurrentDay
-                            ? "bg-[#5A67D8] text-white rounded-full shadow-md font-bold"
-                            : "hover:bg-[#EEF2FF] hover:text-[#5A67D8] cursor-pointer rounded-full"
-                        }`}
-                      >
-                        {day}
+                      <div key={day} className="flex flex-col items-center justify-center">
+                        <div
+                          className={`flex items-center justify-center mx-auto w-7 h-7 transition ${
+                            isCurrentDay
+                              ? "bg-[#5A67D8] text-white rounded-full shadow-md font-bold"
+                              : "hover:bg-[#EEF2FF] hover:text-[#5A67D8] cursor-pointer rounded-full"
+                          }`}
+                        >
+                          {day}
+                        </div>
+                        {hasEvent && (
+                          <span className="w-1 h-1 rounded-full bg-[#5A67D8] mt-0.5" />
+                        )}
                       </div>
                     );
                   })}
@@ -241,7 +319,23 @@ export default function LecturerDashboardPage() {
               </div>
               <div className="p-2">
                 {loading ? (
-                  <div className="p-4 text-sm text-gray-400">Loading courses...</div>
+                  <div className="p-4 space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="animate-pulse flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full" />
+                          <div className="space-y-1.5">
+                            <div className="h-3.5 bg-gray-200 rounded w-28" />
+                            <div className="h-2.5 bg-gray-200 rounded w-16" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-2 bg-gray-200 rounded-full" />
+                          <div className="w-6 h-2.5 bg-gray-200 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : courses.length === 0 ? (
                   <div className="p-4 text-sm text-gray-400">No teaching courses assigned yet.</div>
                 ) : (
@@ -288,7 +382,20 @@ export default function LecturerDashboardPage() {
               </div>
               <div className="p-6 space-y-4">
                 {loading ? (
-                  <div className="text-sm text-gray-400">Loading schedule...</div>
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="animate-pulse pb-4 border-b border-gray-50 last:border-0 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="h-4 bg-gray-200 rounded w-32" />
+                          <div className="h-4 bg-gray-200 rounded w-12" />
+                        </div>
+                        <div className="flex justify-between">
+                          <div className="h-3 bg-gray-200 rounded w-24" />
+                          <div className="h-3 bg-gray-200 rounded w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : schedule.length === 0 ? (
                   <div className="text-sm text-gray-400">No classes scheduled for today.</div>
                 ) : (
@@ -352,7 +459,20 @@ export default function LecturerDashboardPage() {
             </div>
             <div className="flex flex-col p-2">
               {loading ? (
-                <div className="p-4 text-sm text-gray-400">Loading queue...</div>
+                <div className="p-4 space-y-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="animate-pulse flex items-center justify-between">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-gray-200" />
+                          <div className="h-3.5 bg-gray-200 rounded w-32" />
+                        </div>
+                        <div className="h-2.5 bg-gray-200 rounded w-24 ml-4" />
+                      </div>
+                      <div className="h-3 bg-gray-200 rounded w-12" />
+                    </div>
+                  ))}
+                </div>
               ) : queue.length === 0 ? (
                 <div className="p-4 text-sm text-gray-400">All caught up! No pending submissions.</div>
               ) : (
