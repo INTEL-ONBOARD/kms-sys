@@ -20,6 +20,7 @@ const courseSchema = new Schema(
     title:       { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     instructor:  { type: String, required: true, trim: true },
+    instructorId: { type: Schema.Types.ObjectId, ref: "User", required: false, index: true },
     category:    { type: String, required: true, trim: true },
     price:       { type: String, required: true, trim: true },
     status:      { type: String, default: "draft" },
@@ -50,4 +51,4 @@ export type CourseDoc = InferSchemaType<typeof courseSchema> & { _id: mongoose.T
 
 const Course: Model<CourseDoc> = models.Course || mongoose.model<CourseDoc>("Course", courseSchema);
 
-export default Course;
+export default Course;

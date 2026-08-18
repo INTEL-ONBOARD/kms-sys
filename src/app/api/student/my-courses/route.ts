@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from '@/lib/db';
 import Enrollment from '@/models/Enrollment';
-import Course from '@/models/Course'; // Needed to populate course details
+import Course from '@/models/Course';
 
 export async function GET(req: Request) {
   try {
@@ -17,18 +17,37 @@ export async function GET(req: Request) {
 
     await connectToDatabase();
 
-    // Find all enrollments for this specific student and populate the Course data
-    const enrollments = await Enrollment.find({ userId: session.user.id })
+    // Auto-enroll student in all published courses so new courses appear automatically
+    const publishedCourses = await Course.find({ published: true }).lean();
+    let enrollments = await Enrollment.find({ userId: session.user.id }).lean();
+    const enrolledCourseIds = new Set(enrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
+
+    for (const pCourse of publishedCourses) {
+      if (!enrolledCourseIds.has(pCourse._id.toString())) {
+        try {
+          await Enrollment.create({
+            userId: session.user.id,
+            courseId: pCourse._id,
+            progress: 0,
+          });
+        } catch (e) {
+          // Ignore duplicate enrollment error if concurrent
+        }
+      }
+    }
+
+    // Re-fetch populated enrollments for this specific student
+    const updatedEnrollments = await Enrollment.find({ userId: session.user.id })
       .populate('courseId')
       .lean();
 
     // Format the data to send to the frontend, ignoring enrollments where the course was deleted
-    const myCourses = enrollments
-      .filter((enrollment: any) => enrollment.courseId)
+    const myCourses = updatedEnrollments
+      .filter((enrollment: any) => enrollment.courseId) // Ensure course doc exists
       .map((enrollment: any) => ({
         ...enrollment.courseId, // Course details (title, description, etc.)
-        progress: enrollment.progress, // Student's specific progress
-        enrollmentId: enrollment._id
+        progress: enrollment.progress || 0, // Student's specific progress
+        enrollmentId: enrollment._id,
       }));
 
     return NextResponse.json({ courses: myCourses }, { status: 200 });
