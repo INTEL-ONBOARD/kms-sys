@@ -238,8 +238,8 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center">
                     <h3 className="font-bold text-[#2D3748]">Live & Online Classes</h3>
-                    <Link href="/calendar" className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition">
-                      View Timetable & Recordings
+                    <Link href="/live-classes" className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition">
+                      View All Live Sessions
                     </Link>
                   </div>
                   <div className="p-6 space-y-4">
@@ -280,14 +280,14 @@ export default function DashboardPage() {
                             <div className="mt-2.5 flex items-center gap-3">
                               {isEnded ? (
                                 <Link 
-                                  href="/calendar"
+                                  href="/recordings"
                                   className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1"
                                 >
                                   <FiVideo className="text-xs" /> Watch Recording & Notes
                                 </Link>
                               ) : (
                                 <a 
-                                  href={lc.meetingLink || "/calendar"} 
+                                  href={lc.meetingLink || "/live-classes"} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
                                   className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center gap-1.5"
