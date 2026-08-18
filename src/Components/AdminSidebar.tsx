@@ -58,13 +58,13 @@ export default function AdminSidebar() {
               : pathname.startsWith(link.href);
             
             return (
-              <Link 
-                key={link.name} 
+              <Link
+                key={link.name}
                 href={link.href}
-                className={`flex items-center px-4 py-3 rounded-xl transition ${
-                  isActive 
-                    ? 'bg-[#EEF2FF] text-[#5A67D8] font-bold' // Active Styles
-                    : 'text-[#A0AEC0] hover:text-[#5A67D8] hover:bg-[#F7FAFC] font-medium' // Inactive Styles
+                className={`flex items-center px-4 py-3 rounded-r-xl transition border-l-4 ${
+                  isActive
+                    ? 'border-[#5A67D8] bg-[#EEF2FF] text-[#5A67D8] font-bold'
+                    : 'border-transparent text-[#A0AEC0] hover:text-[#5A67D8] hover:bg-[#F7FAFC] font-medium'
                 }`}
               >
                 {link.icon}
