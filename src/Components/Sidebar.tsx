@@ -3,8 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiBook, FiCalendar, FiBarChart2 } from 'react-icons/fi';
-import { MdDashboard, MdOutlineAssignment } from 'react-icons/md';
+import { FiBook, FiCalendar, FiBarChart2, FiVideo } from 'react-icons/fi';
+import { MdDashboard, MdOutlineAssignment, MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 
 export default function Sidebar() {
   // Get the current route path
@@ -69,7 +69,33 @@ export default function Sidebar() {
           Assignments
         </Link>
 
-        {/* Calendar Link */}
+        {/* Live & Upcoming Classes Link */}
+        <Link 
+          href="/live-classes" 
+          className={`flex items-center px-4 py-3 rounded-xl transition ${
+            pathname === '/live-classes' 
+              ? 'bg-[#EEF2FF] text-[#5A67D8] font-bold' // Active Styles
+              : 'text-[#A0AEC0] hover:text-[#5A67D8] hover:bg-[#F7FAFC] font-medium' // Inactive Styles
+          }`}
+        >
+          <MdOutlineLiveTv className="mr-4 text-xl" />
+          Live Classes
+        </Link>
+
+        {/* Missed Sessions & Playback Link */}
+        <Link 
+          href="/recordings" 
+          className={`flex items-center px-4 py-3 rounded-xl transition ${
+            pathname === '/recordings' 
+              ? 'bg-[#EEF2FF] text-[#5A67D8] font-bold' // Active Styles
+              : 'text-[#A0AEC0] hover:text-[#5A67D8] hover:bg-[#F7FAFC] font-medium' // Inactive Styles
+          }`}
+        >
+          <MdVideoLibrary className="mr-4 text-xl" />
+          Recordings & Playback
+        </Link>
+
+        {/* Timetable Calendar Link */}
         <Link 
           href="/calendar" 
           className={`flex items-center px-4 py-3 rounded-xl transition ${
@@ -79,7 +105,7 @@ export default function Sidebar() {
           }`}
         >
           <FiCalendar className="mr-4 text-xl" />
-          Calendar
+          Timetable Calendar
         </Link>
 
         {/* Grades Link */}
@@ -97,7 +123,7 @@ export default function Sidebar() {
 
       </nav>
 
-      {/* Log out is now moved to Header Dropdown */}
+      {/* Log out is in Header Dropdown */}
       <div className="p-6 mt-auto"></div>
     </aside>
   );

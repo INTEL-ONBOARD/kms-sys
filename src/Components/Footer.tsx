@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 const hiddenRoutes = [
   // Dashboard / protected routes
   '/student', '/admin', '/lecturer', '/profile',
-  '/courses', '/grades', '/assignments', '/calendar', '/enrollments',
+  '/courses', '/grades', '/assignments', '/calendar', '/live-classes', '/recordings', '/enrollments',
   // Authentication routes
   '/login', '/signup', '/forgot-password', '/reset-password', '/activate',
 ];

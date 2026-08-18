@@ -1,18 +1,15 @@
 import mongoose from "mongoose";
 import { getEnv } from "./env";
 
-// Define the type for the mongoose cache to prevent multiple database connections
 type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
 };
 
-// Declare the global mongoose cache variable
 declare global {
   var mongooseCache: MongooseCache | undefined;
 }
 
-// Initialize the cache from the global object or create an empty one
 const cache: MongooseCache = global.mongooseCache ?? { conn: null, promise: null };
 
 if (!global.mongooseCache) {
@@ -20,24 +17,43 @@ if (!global.mongooseCache) {
 }
 
 export async function connectToDatabase(): Promise<typeof mongoose> {
-  // Return the existing connection if it is already established
-  if (cache.conn) {
-    return cache.conn;
+  // If already connected and ready, return existing connection
+  if (mongoose.connection.readyState === 1) {
+    cache.conn = mongoose;
+    return mongoose;
   }
 
-  // If a connection process is not already started, initialize a new connection
-  if (!cache.promise) {
-    // Retrieve validated environment variables at runtime, preventing build-time crashes
+  // If a connection attempt is in progress, await it
+  if (!cache.promise || mongoose.connection.readyState === 0) {
     const env = getEnv();
 
-    // Establish the mongoose connection using the validated URI
-    cache.promise = mongoose.connect(env.MONGODB_URI, {
-      dbName: process.env.MONGODB_DB ?? "lms_db",
-      bufferCommands: false
-    });
+    cache.promise = mongoose
+      .connect(env.MONGODB_URI, {
+        dbName: process.env.MONGODB_DB ?? "app_db",
+        bufferCommands: false,
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10,
+      })
+      .then((m) => {
+        cache.conn = m;
+        return m;
+      })
+      .catch((err) => {
+        cache.promise = null;
+        cache.conn = null;
+        throw err;
+      });
   }
 
-  // Wait for the connection promise to resolve and store it in the cache
-  cache.conn = await cache.promise;
+  try {
+    cache.conn = await cache.promise;
+  } catch (e) {
+    cache.promise = null;
+    cache.conn = null;
+    throw e;
+  }
+
   return cache.conn;
 }

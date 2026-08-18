@@ -123,11 +123,13 @@ export async function POST(req: NextRequest) {
     // Notify enrolled students
     const enrollments = await Enrollment.find({ courseId: targetCourseId }).lean();
     if (enrollments.length > 0) {
+      const course = await Course.findById(targetCourseId).lean();
+      const courseTitle = course?.title || "Course";
       const notifications = enrollments.map((e) => ({
         userId: e.userId,
-        type: "system",
-        message: `New Exam Scheduled: "${title}" on ${examDate.toLocaleDateString()}`,
-        link: "/student",
+        type: "exam",
+        message: `New Exam Scheduled: "${title}" in ${courseTitle} on ${examDate.toLocaleDateString()}`,
+        link: "/calendar",
       }));
       await Notification.insertMany(notifications);
     }

@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { FiClock, FiVideo, FiUsers, FiBookOpen, FiAlertCircle } from "react-icons/fi";
+import { FiClock, FiVideo, FiUsers, FiBookOpen, FiAlertCircle, FiUploadCloud, FiX, FiCheck } from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
 
 interface ScheduleItemProps {
   item: {
     _id: string;
     title: string;
+    description?: string;
     courseId?: { title: string };
     startTime: string;
     endTime: string;
     meetingLink?: string;
+    recordingUrl?: string;
+    resources?: string[];
     status: string;
   };
 }
@@ -20,7 +23,13 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
   const toast = useToast();
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [statusState, setStatusState] = useState(item.status);
+  
+  // Recording Form
+  const [recordingUrl, setRecordingUrl] = useState(item.recordingUrl || "");
+  const [summaryNotes, setSummaryNotes] = useState(item.description || "");
+  const [isSubmittingRecording, setIsSubmittingRecording] = useState(false);
 
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString("en-US", {
@@ -31,11 +40,55 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
 
   const handleEndEarly = async () => {
     try {
-      setStatusState("ended");
-      setShowEndModal(false);
-      toast.success("Class marked as ended");
+      const res = await fetch("/api/lecturer/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId: item._id, status: "ended" }),
+      });
+      if (res.ok) {
+        setStatusState("ended");
+        setShowEndModal(false);
+        toast.success("Class marked as ended. You can now upload lecture recordings.");
+      } else {
+        toast.error("Failed to end class");
+      }
     } catch (err) {
       toast.error("Failed to end class");
+    }
+  };
+
+  const handleSaveRecording = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordingUrl.trim()) {
+      toast.warning("Please provide a lecture recording URL");
+      return;
+    }
+
+    setIsSubmittingRecording(true);
+    try {
+      const res = await fetch("/api/lecturer/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: item._id,
+          recordingUrl: recordingUrl.trim(),
+          description: summaryNotes.trim(),
+          status: "ended",
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Lecture recording uploaded! Missed students notified.");
+        setShowRecordingModal(false);
+        setStatusState("ended");
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Failed to upload recording");
+      }
+    } catch (err) {
+      toast.error("Error saving recording");
+    } finally {
+      setIsSubmittingRecording(false);
     }
   };
 
@@ -55,8 +108,8 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
           </span>
         )}
         {statusState === "ended" && (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-gray-100 text-gray-600 uppercase">
-            Ended
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-700 uppercase">
+            {recordingUrl ? "Recorded" : "Ended"}
           </span>
         )}
       </div>
@@ -115,9 +168,87 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
             >
               Notify Students
             </button>
+            <button
+              onClick={() => setShowRecordingModal(true)}
+              className="px-3 py-1 bg-purple-50 text-purple-700 text-xs font-semibold rounded-lg hover:bg-purple-100 transition ml-auto flex items-center gap-1"
+            >
+              <FiUploadCloud /> Upload Recording
+            </button>
           </>
         )}
+
+        {statusState === "ended" && (
+          <button
+            onClick={() => setShowRecordingModal(true)}
+            className="w-full px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            <FiUploadCloud /> {recordingUrl ? "Update Recording" : "Upload Missed Lecture Recording"}
+          </button>
+        )}
       </div>
+
+      {/* Upload Recording Modal */}
+      {showRecordingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-extrabold text-[#111827]">Upload Lecture Recording</h3>
+              <button
+                onClick={() => setShowRecordingModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FiX className="text-xl" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveRecording} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Video Recording URL / Cloud Link <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={recordingUrl}
+                  onChange={(e) => setRecordingUrl(e.target.value)}
+                  placeholder="https://youtu.be/... or Google Drive / Zoom link"
+                  className="w-full bg-[#F7FAFC] border border-gray-200 text-gray-800 text-xs rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Summary / Discussion Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={summaryNotes}
+                  onChange={(e) => setSummaryNotes(e.target.value)}
+                  placeholder="Lecture notes for missed students..."
+                  className="w-full bg-[#F7FAFC] border border-gray-200 text-gray-800 text-xs rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-purple-600 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowRecordingModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 font-bold text-xs rounded-xl hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRecording}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center gap-1.5"
+                >
+                  <FiUploadCloud /> {isSubmittingRecording ? "Saving..." : "Publish Recording"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Attendance Modal */}
       {showAttendanceModal && (

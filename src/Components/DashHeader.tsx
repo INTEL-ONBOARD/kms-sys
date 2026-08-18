@@ -3,10 +3,32 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState } from 'react'; 
-import { FiSearch, FiMail, FiBell, FiChevronDown, FiUser, FiLogOut } from 'react-icons/fi';
-// 1. Import NextAuth hooks for session management and logout
+import { useState, useEffect, useRef } from 'react'; 
+import { 
+  FiSearch, 
+  FiMail, 
+  FiBell, 
+  FiChevronDown, 
+  FiUser, 
+  FiLogOut, 
+  FiCheck, 
+  FiCalendar, 
+  FiVideo, 
+  FiAward, 
+  FiBook, 
+  FiInfo 
+} from 'react-icons/fi';
+import { MdOutlineAssignment } from 'react-icons/md';
 import { useSession, signOut } from 'next-auth/react';
+
+interface NotificationItem {
+  _id: string;
+  type: string;
+  message: string;
+  read: boolean;
+  link: string;
+  createdAt: string;
+}
 
 export default function DashHeader() {
   const router = useRouter();
@@ -14,18 +36,91 @@ export default function DashHeader() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
-  // 2. Fetch the logged-in user's data directly from NextAuth session
+  // Notification states
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
   const { data: session, status } = useSession();
+  const userName = status === "loading" ? "Loading..." : session?.user?.name || "Student";
 
-  // 3. Determine the display name based on session status
-  const userName = status === "loading" ? "Loading..." : session?.user?.name || "User";
+  // Fetch real notifications
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
+    }
+  };
 
-  // 4. Handle logout using NextAuth's signOut function
+  // Live polling every 8 seconds
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotificationMenuOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Mark all notifications as read
+  const handleMarkAllAsRead = async () => {
+    try {
+      await fetch('/api/notifications', { method: 'PATCH' });
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (err) {
+      console.error("Failed to mark notifications read:", err);
+    }
+  };
+
+  // Click on single notification
+  const handleNotificationClick = async (notif: NotificationItem) => {
+    try {
+      if (!notif.read) {
+        await fetch('/api/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notificationId: notif._id }),
+        });
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notif._id ? { ...n, read: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+    } catch (err) {
+      console.error("Error marking single notification read:", err);
+    }
+
+    setNotificationMenuOpen(false);
+    if (notif.link) {
+      router.push(notif.link);
+    }
+  };
+
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      // signOut automatically clears the NextAuth session cookies 
-      // and redirects the user to the specified callbackUrl
       await signOut({ callbackUrl: '/login' });
     } catch (error) {
       console.error('Logout process failed:', error);
@@ -34,70 +129,169 @@ export default function DashHeader() {
     }
   };
 
+  const formatTimeAgo = (dateStr: string) => {
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "exam":
+        return <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0 text-sm"><FiCalendar /></div>;
+      case "class":
+        return <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 text-sm"><FiVideo /></div>;
+      case "grading":
+        return <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0 text-sm"><FiAward /></div>;
+      case "assignment":
+        return <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0 text-sm"><MdOutlineAssignment /></div>;
+      case "announcement":
+        return <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0 text-sm"><FiBook /></div>;
+      default:
+        return <div className="w-8 h-8 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center flex-shrink-0 text-sm"><FiInfo /></div>;
+    }
+  };
+
   return (
     <>
-      <header className="bg-white px-8 py-4 flex justify-between items-center border-b border-gray-100 shadow-md relative z-10">
+      <header className="bg-white px-8 py-4 flex justify-between items-center border-b border-gray-100 shadow-md relative z-30 font-sans">
         
         {/* Search Input Area */}
         <div className="relative w-full max-w-md">
           <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
           <input 
             type="text" 
-            placeholder="Search" 
-            className="w-full bg-[#F7FAFC] text-sm text-gray-700 rounded-full py-2.5 pl-12 pr-4 outline-none focus:ring-1 focus:ring-[#5A67D8] transition placeholder-gray-400"
+            placeholder="Search courses, exams, assignments..." 
+            className="w-full bg-[#F7FAFC] text-xs text-gray-700 rounded-full py-2.5 pl-12 pr-4 outline-none focus:ring-1 focus:ring-[#5A67D8] transition placeholder-gray-400"
           />
         </div>
 
-        {/* User Controls and Notification Area */}
+        {/* User Controls and Live Notifications */}
         <div className="flex items-center space-x-6">
-           <div className="flex items-center space-x-5 text-gray-400">
-              <button className="hover:text-gray-600 transition"><FiMail className="text-xl" /></button>
-              <button className="relative hover:text-gray-600 transition">
+          <div className="flex items-center space-x-4 text-gray-400">
+            <button className="hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-50">
+              <FiMail className="text-xl" />
+            </button>
+
+            {/* Notification Bell Dropdown */}
+            <div className="relative" ref={notifRef}>
+              <button 
+                onClick={() => setNotificationMenuOpen(!notificationMenuOpen)}
+                className="relative hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-50"
+                title="Notifications"
+              >
                 <FiBell className="text-xl" />
-                <span className="absolute 0 -right-0.5 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 min-w-4 px-1 items-center justify-center bg-red-500 text-white font-bold text-[9px] rounded-full border-2 border-white animate-pulse">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </button>
-           </div>
+
+              {/* Dropdown Menu */}
+              {notificationMenuOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in duration-150">
+                  {/* Header */}
+                  <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-[#F7FAFC]">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-[#111827] text-xs uppercase tracking-wider">
+                        Notifications
+                      </h4>
+                      {unreadCount > 0 && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[11px] font-bold text-[#5A67D8] hover:underline flex items-center gap-1"
+                      >
+                        <FiCheck /> Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  {/* List */}
+                  <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-gray-400">
+                        <FiBell className="text-2xl mx-auto mb-2 text-gray-300" />
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif._id}
+                          onClick={() => handleNotificationClick(notif)}
+                          className={`p-3.5 flex items-start gap-3 transition cursor-pointer hover:bg-[#F7FAFC] ${
+                            !notif.read ? 'bg-indigo-50/30' : ''
+                          }`}
+                        >
+                          {getNotificationIcon(notif.type)}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs leading-snug ${!notif.read ? 'font-bold text-[#111827]' : 'text-gray-600'}`}>
+                              {notif.message}
+                            </p>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                              {formatTimeAgo(notif.createdAt)}
+                            </span>
+                          </div>
+                          {!notif.read && (
+                            <span className="w-2 h-2 rounded-full bg-[#5A67D8] mt-1.5 flex-shrink-0" />
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* User Profile Dropdown Container */}
-          <div className="relative">
-              <div 
-                className="flex items-center cursor-pointer hover:bg-gray-50 p-1.5 rounded-lg transition border-l border-gray-100 pl-6"
-                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              >
-                  <div className="w-9 h-9 rounded-full bg-gray-200 overflow-hidden mr-3">
-                    <Image src="/propic.png" alt="User Profile Picture" width={36} height={36} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="mr-2 hidden md:block text-left">
-                      {/* Here we display the dynamically fetched user name from NextAuth */}
-                      <p className="text-sm font-semibold text-[#2D3748]">{userName}</p>
-                  </div>
-                  <FiChevronDown className={`text-gray-400 text-sm transition-transform duration-200 ${profileMenuOpen ? 'rotate-180' : ''}`} />
+          <div className="relative" ref={profileRef}>
+            <div 
+              className="flex items-center cursor-pointer hover:bg-gray-50 p-1.5 rounded-lg transition border-l border-gray-100 pl-6"
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+            >
+              <div className="w-9 h-9 rounded-full bg-gray-200 overflow-hidden mr-3">
+                <Image src="/propic.png" alt="User Profile Picture" width={36} height={36} className="w-full h-full object-cover" />
               </div>
+              <div className="mr-2 hidden md:block text-left">
+                <p className="text-sm font-semibold text-[#2D3748]">{userName}</p>
+              </div>
+              <FiChevronDown className={`text-gray-400 text-sm transition-transform duration-200 ${profileMenuOpen ? 'rotate-180' : ''}`} />
+            </div>
 
-              {/* Dropdown Menu Items */}
-              {profileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 p-2 z-50">
-                      <Link 
-                        href="/profile" 
-                        className="flex items-center px-4 py-2.5 text-sm font-medium text-[#4A5568] hover:bg-[#F7FAFC] hover:text-[#5A67D8] rounded-lg transition"
-                        onClick={() => setProfileMenuOpen(false)}
-                      >
-                          <FiUser className="mr-3 text-lg" />
-                          Profile
-                      </Link>
-                      
-                      <button 
-                          onClick={() => {
-                            setProfileMenuOpen(false);
-                            setShowLogoutModal(true);
-                          }}
-                          className="w-full flex items-center px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 rounded-lg transition mt-1"
-                      >
-                          <FiLogOut className="mr-3 text-lg" />
-                          Log Out
-                      </button>
-                  </div>
-              )}
+            {/* Dropdown Menu Items */}
+            {profileMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 p-2 z-50">
+                <Link 
+                  href="/profile" 
+                  className="flex items-center px-4 py-2.5 text-sm font-medium text-[#4A5568] hover:bg-[#F7FAFC] hover:text-[#5A67D8] rounded-lg transition"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  <FiUser className="mr-3 text-lg" />
+                  Profile
+                </Link>
+                
+                <button 
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    setShowLogoutModal(true);
+                  }}
+                  className="w-full flex items-center px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 rounded-lg transition mt-1"
+                >
+                  <FiLogOut className="mr-3 text-lg" />
+                  Log Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
