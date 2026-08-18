@@ -70,6 +70,43 @@ export async function GET() {
       });
     }
 
+    // 6. Daily Revenue: Last 7 days (sum of enrollment course prices per day)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    // Fetch enrollments from last 7 days with course price populated
+    const recentEnrollments = await Enrollment.find({
+      createdAt: { $gte: sevenDaysAgo }
+    }).populate({ path: 'courseId', model: Course, select: 'price' });
+
+    // Build a map of day -> revenue
+    const revenueMap: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      revenueMap[dayName] = 0;
+    }
+
+    recentEnrollments.forEach((enrollment: any) => {
+      const course = enrollment.courseId as any;
+      if (course && course.price) {
+        const priceNum = parseFloat(course.price.replace(/[^0-9.-]+/g, ''));
+        if (!isNaN(priceNum)) {
+          const dayName = new Date(enrollment.createdAt).toLocaleDateString('en-US', { weekday: 'short' });
+          if (dayName in revenueMap) {
+            revenueMap[dayName] += priceNum;
+          }
+        }
+      }
+    });
+
+    const dailyRevenue = Object.entries(revenueMap).map(([name, revenue]) => ({
+      name,
+      revenue: Math.round(revenue)
+    }));
+
     // 6. Top Courses (Donut Chart Data)
     const topCourses = await Enrollment.aggregate([
       {
@@ -116,7 +153,8 @@ export async function GET() {
       newRegistrations,
       totalRevenue,
       chartData,
-      topCourses
+      topCourses,
+      dailyRevenue
     }, { status: 200 });
 
   } catch (error) {

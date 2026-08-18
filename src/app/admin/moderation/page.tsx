@@ -112,10 +112,6 @@ export default function ModerationPage() {
   // ==========================================
   // MOCK DATA FOR EXISTING UI COMPONENTS
   // ==========================================
-  const pendingCourses = [
-    { id: 1, title: 'Advanced React Patterns', instructor: 'Michael Scott', date: '2026-04-27' },
-    { id: 2, title: 'UI/UX Fundamentals', instructor: 'Sarah Jenkins', date: '2026-04-26' },
-  ];
 
   const reportedPosts = [
     { id: 1, content: '"Can someone share the final exam answers here?"', course: 'Animation Studies I', author: 'Emma Watson', reason: 'Cheating/Academic Dishonesty (3 reports)' },
@@ -207,43 +203,6 @@ export default function ModerationPage() {
             </form>
           </div>
 
-          {/* ========================================= */}
-          {/* SECTION: PENDING COURSE APPROVALS */}
-          {/* ========================================= */}
-          <div className="mb-10">
-            <h2 className="text-lg font-bold text-[#2D3748] mb-4 flex items-center">
-              <span className="bg-[#EBF4FF] text-[#5551FF] p-1.5 rounded mr-2"><FiEye /></span>
-              Pending Course Approvals
-              <span className="ml-3 bg-[#EBF4FF] text-[#5551FF] text-xs font-bold px-2 py-0.5 rounded-full">2 Pending</span>
-            </h2>
-            
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <table className="w-full text-left text-sm text-gray-600">
-                <thead className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4">Course Title</th>
-                    <th className="px-6 py-4">Instructor</th>
-                    <th className="px-6 py-4">Submitted Date</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pendingCourses.map(course => (
-                    <tr key={course.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4 font-bold text-gray-800">{course.title}</td>
-                      <td className="px-6 py-4">{course.instructor}</td>
-                      <td className="px-6 py-4">{course.date}</td>
-                      <td className="px-6 py-4 text-right flex justify-end space-x-2">
-                        <button className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded transition" title="View"><FiEye /></button>
-                        <button className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded transition" title="Approve"><FiCheck /></button>
-                        <button className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded transition" title="Reject"><FiX /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           {/* ========================================= */}
           {/* SECTION: REPORTED FORUM POSTS */}

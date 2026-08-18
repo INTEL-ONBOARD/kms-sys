@@ -8,6 +8,9 @@ import Submission from "@/models/Submission";
 import Exam from "@/models/Exam";
 import { generateCSVReport } from "@/lib/reportGenerator";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({

@@ -58,7 +58,7 @@ export default function DashHeader() {
         setUnreadCount(data.unreadCount || 0);
       }
     } catch (err) {
-      console.error("Failed to load notifications:", err);
+      // Silently catch fetch errors to prevent terminal spam during the 8-second polling
     }
   };
 

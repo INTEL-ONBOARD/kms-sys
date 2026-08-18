@@ -18,9 +18,9 @@ export default function UserAdminPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +75,8 @@ export default function UserAdminPage() {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'All' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesStatus = statusFilter === 'All' || user.status?.toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   // Pagination Logic
@@ -94,7 +95,7 @@ export default function UserAdminPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, roleFilter]);
+  }, [searchTerm, roleFilter, statusFilter]);
 
   // --- Action Handlers ---
   
@@ -269,6 +270,17 @@ export default function UserAdminPage() {
                 <option value="student">Student</option>
                 <option value="lecturer">Lecturer</option>
                 <option value="super_admin">Admin</option>
+              </select>
+
+              <select 
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
               </select>
             </div>
           </div>
