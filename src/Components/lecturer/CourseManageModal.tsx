@@ -52,9 +52,10 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
     const fetchCourseDetails = async () => {
       setLoadingData(true);
       try {
-        const [assignRes, classRes] = await Promise.all([
+        const [assignRes, classRes, studentRes] = await Promise.all([
           fetch("/api/lecturer/assignments?limit=50"),
           fetch("/api/lecturer/schedule?all=true"),
+          fetch(`/api/lecturer/students?courseId=${course._id}`),
         ]);
 
         if (assignRes.ok) {
@@ -73,12 +74,10 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
           setLiveClasses(filteredClasses);
         }
 
-        // Mock enrolled students for this course
-        setStudents([
-          { id: "1", name: "Alex Johnson", email: "alex.johnson@student.edu", progress: 88 },
-          { id: "2", name: "Sarah Miller", email: "sarah.m@student.edu", progress: 94 },
-          { id: "3", name: "David Chen", email: "david.c@student.edu", progress: 76 },
-        ]);
+        if (studentRes.ok) {
+          const studentData = await studentRes.json();
+          setStudents(studentData.students || []);
+        }
       } catch (err) {
         console.error("Failed to load course detail data:", err);
       } finally {
@@ -291,16 +290,29 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
             {/* TAB 4: STUDENTS */}
             {activeTab === "students" && (
               <div className="space-y-3">
-                <h3 className="text-xs font-bold text-[#2D3748]">Enrolled Students Roster</h3>
-                {students.map((s) => (
-                  <div key={s.id} className="p-3 bg-[#F7FAFC] rounded-xl flex justify-between items-center text-xs">
-                    <div>
-                      <p className="font-bold text-[#2D3748]">{s.name}</p>
-                      <p className="text-[10px] text-[#A0AEC0]">{s.email}</p>
-                    </div>
-                    <span className="font-bold text-[#5A67D8]">{s.progress}% Progress</span>
+                <h3 className="text-xs font-bold text-[#2D3748]">
+                  Enrolled Students Roster ({students.length})
+                </h3>
+                {students.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-gray-400 bg-[#F7FAFC] rounded-xl">
+                    No students currently enrolled in this course.
                   </div>
-                ))}
+                ) : (
+                  students.map((s) => (
+                    <div
+                      key={s.id}
+                      className="p-3 bg-[#F7FAFC] rounded-xl flex justify-between items-center text-xs"
+                    >
+                      <div>
+                        <p className="font-bold text-[#2D3748]">{s.name}</p>
+                        <p className="text-[10px] text-[#A0AEC0]">{s.email}</p>
+                      </div>
+                      <span className="font-bold text-[#5A67D8]">
+                        {s.progress ?? 0}% Progress
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>

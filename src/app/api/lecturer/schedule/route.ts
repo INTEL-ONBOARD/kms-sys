@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     const dateParam = searchParams.get("date");
     const fetchAll = searchParams.get("all") === "true";
 
-    const userId = token.id;
+    const userId = (token.id || token.sub) as string;
     const userName = token.name || "";
 
     const courses = await Course.find({
@@ -34,9 +34,13 @@ export async function GET(req: NextRequest) {
       ]
     }).lean();
 
-    const courseIds = courses.map((c) => c._id);
+    let courseIds = courses.map((c) => c._id);
+    if (courseIds.length === 0) {
+      const allCourses = await Course.find().lean();
+      courseIds = allCourses.map((c) => c._id);
+    }
 
-    let query: any = { courseId: { $in: courseIds } };
+    let query: any = courseIds.length > 0 ? { courseId: { $in: courseIds } } : {};
 
     if (dateParam) {
       const queryDate = new Date(dateParam);
@@ -89,7 +93,7 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
 
-    const userId = token.id;
+    const userId = (token.id || token.sub) as string;
     const userName = token.name || "";
 
     // Find lecturer's courses
@@ -143,23 +147,31 @@ export async function POST(req: NextRequest) {
 
     const liveClass = await LiveClass.create({
       title,
+      description: body.description || "Interactive online lecture session.",
       courseId: targetCourseId,
+      instructor: userName || "Course Lecturer",
       startTime: startTimeDate,
       endTime: endTimeDate,
       meetingLink: meetingLink || "https://meet.google.com/demo-room",
       status: "upcoming",
     });
 
-    // Notify enrolled students
-    const enrollments = await Enrollment.find({ courseId: targetCourseId }).lean();
-    if (enrollments.length > 0) {
-      const notifications = enrollments.map((e) => ({
-        userId: e.userId,
-        type: "system",
-        message: `New Live Class scheduled: "${title}" at ${startTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-        link: "/student",
-      }));
-      await Notification.insertMany(notifications);
+    // Notify enrolled students safely
+    try {
+      const enrollments = await Enrollment.find({ courseId: targetCourseId }).lean();
+      if (enrollments.length > 0) {
+        const course = await Course.findById(targetCourseId).lean();
+        const courseTitle = course?.title || "Course";
+        const notifications = enrollments.map((e) => ({
+          userId: e.userId,
+          type: "class",
+          message: `Live Class Scheduled: "${title}" in ${courseTitle} at ${startTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+          link: "/calendar",
+        }));
+        await Notification.insertMany(notifications);
+      }
+    } catch (notifErr) {
+      console.warn("Could not dispatch notifications:", notifErr);
     }
 
     return NextResponse.json(
@@ -171,3 +183,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Internal Server Error", error: error.message }, { status: 500 });
   }
 }
+
+// PATCH: Upload/update missed lecture recording, summary notes, resources, or status
+export async function PATCH(req: NextRequest) {
+  try {
+    const token = await getToken({
+      req,
+      secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
+    });
+
+    if (!token || (token.role !== "lecturer" && token.role !== "super_admin")) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { classId, recordingUrl, description, resources, status } = body;
+
+    if (!classId) {
+      return NextResponse.json({ message: "classId is required" }, { status: 400 });
+    }
+
+    await connectToDatabase();
+
+    const liveClass = await LiveClass.findById(classId);
+    if (!liveClass) {
+      return NextResponse.json({ message: "Live class not found" }, { status: 404 });
+    }
+
+    if (recordingUrl !== undefined) liveClass.recordingUrl = recordingUrl;
+    if (description !== undefined) liveClass.description = description;
+    if (resources !== undefined) liveClass.resources = resources;
+    if (status !== undefined) liveClass.status = status;
+
+    await liveClass.save();
+
+    // If recording was uploaded/updated, notify enrolled students
+    if (recordingUrl) {
+      const course = await Course.findById(liveClass.courseId).lean();
+      const courseTitle = course?.title || "Course";
+      const enrollments = await Enrollment.find({ courseId: liveClass.courseId }).lean();
+      if (enrollments.length > 0) {
+        const notifications = enrollments.map((e) => ({
+          userId: e.userId,
+          type: "class",
+          message: `Lecture Recording Uploaded: Missed session recording for "${liveClass.title}" in ${courseTitle} is now available in Playback Mode`,
+          link: "/calendar",
+        }));
+        await Notification.insertMany(notifications);
+      }
+    }
+
+    return NextResponse.json({
+      message: "Lecture recording & session materials updated successfully",
+      liveClass,
+    });
+  } catch (error: any) {
+    console.error("Update Live Class Error:", error);
+    return NextResponse.json({ message: "Internal Server Error", error: error.message }, { status: 500 });
+  }
+}
+

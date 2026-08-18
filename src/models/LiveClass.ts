@@ -3,10 +3,14 @@ import mongoose, { InferSchemaType, Model, models, Schema } from "mongoose";
 const liveClassSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
+    description: { type: String, default: "" },
     courseId: { type: Schema.Types.ObjectId, ref: "Course", required: true, index: true },
+    instructor: { type: String, default: "Course Lecturer" },
     startTime: { type: Date, required: true },
     endTime: { type: Date, required: true },
     meetingLink: { type: String, default: "" },
+    recordingUrl: { type: String, default: "" },
+    resources: [{ type: String }],
     status: {
       type: String,
       enum: ["upcoming", "live", "ended", "cancelled"],

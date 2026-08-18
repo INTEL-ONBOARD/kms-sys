@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Anek_Odia } from "next/font/google";
 import "./globals.css";
 import Provider from "@/Components/Provider";
+import Header from "@/Components/Header";
+import Footer from "@/Components/Footer";
 
 // Importing the Anek Odia font
 const anekOdia = Anek_Odia({
@@ -26,7 +28,14 @@ export default function RootLayout({
       <body className={`${anekOdia.className} antialiased`}>
         {/* 2. Wrap the entire application with the Session Provider */}
         <Provider>
-          {children}
+          {/* Global Header — appears on every page */}
+          <Header />
+          {/* Page-specific content */}
+          <main>
+            {children}
+          </main>
+          {/* Global Footer — appears on every page */}
+          <Footer />
         </Provider>
       </body>
     </html>

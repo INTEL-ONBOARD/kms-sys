@@ -47,11 +47,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Create notification for student
+    const assignmentDoc = await Assignment.findById(existingSub.assignmentId).lean();
+    const assignmentTitle = assignmentDoc?.title || "Assignment";
     await Notification.create({
       userId: existingSub.studentId,
       type: "grading",
-      message: `Your submission has been graded: ${existingSub.grade}%`,
-      link: `/student`,
+      message: `Results Published: "${assignmentTitle}" graded (${existingSub.grade} pts)`,
+      link: `/assignments`,
     });
 
     return NextResponse.json({ message: "Submission graded successfully", submission: existingSub });

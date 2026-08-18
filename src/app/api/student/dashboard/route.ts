@@ -19,10 +19,19 @@ export async function GET(request: NextRequest) {
     }
 
     await connectToDatabase();
-    const userId = token.sub;
+    const userId = (token.id || token.sub) as string;
 
-    // Auto-enroll student in all published courses so new courses appear automatically
-    const publishedCourses = await Course.find({ published: true }).lean();
+    // Auto-enroll student in available courses so courses appear automatically
+    const activeCourses = await Course.find({
+      $or: [
+        { published: true },
+        { status: "active" },
+        { status: "published" },
+        { status: { $exists: false } },
+      ],
+    }).lean();
+
+    const publishedCourses = activeCourses.length > 0 ? activeCourses : await Course.find().lean();
     let currentEnrollments = await Enrollment.find({ userId }).lean();
     const enrolledCourseIds = new Set(currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
 

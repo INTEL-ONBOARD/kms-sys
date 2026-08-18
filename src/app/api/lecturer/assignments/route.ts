@@ -3,6 +3,8 @@ import { getToken } from "next-auth/jwt";
 import { connectToDatabase } from "@/lib/db";
 import Course from "@/models/Course";
 import Assignment from "@/models/Assignment";
+import Enrollment from "@/models/Enrollment";
+import Notification from "@/models/Notification";
 
 export async function GET(req: NextRequest) {
   try {
@@ -121,6 +123,20 @@ export async function POST(req: NextRequest) {
       category: category || "Homework",
       status: "open",
     });
+
+    // Notify enrolled students about the new assignment
+    const enrollments = await Enrollment.find({ courseId: targetCourseId }).lean();
+    if (enrollments.length > 0) {
+      const course = await Course.findById(targetCourseId).lean();
+      const courseTitle = course?.title || "Course";
+      const notifications = enrollments.map((e) => ({
+        userId: e.userId,
+        type: "assignment",
+        message: `New Assignment: "${title}" in ${courseTitle} (Due: ${assignmentDueDate.toLocaleDateString()})`,
+        link: "/assignments",
+      }));
+      await Notification.insertMany(notifications);
+    }
 
     return NextResponse.json(
       { message: "Assignment created successfully", assignment },

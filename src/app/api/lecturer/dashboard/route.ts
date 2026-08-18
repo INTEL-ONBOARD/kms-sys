@@ -125,8 +125,10 @@ export async function GET(req: NextRequest) {
         { $group: { _id: "$courseId", count: { $sum: 1 }, avgProgress: { $avg: "$progress" } } }
       ]),
 
-      // All submissions for performance aggregation
-      Submission.find({ courseId: { $in: courseIds } }).lean()
+      // All submissions for performance aggregation (with assignment maxPoints)
+      Submission.find({ courseId: { $in: courseIds } })
+        .populate("assignmentId", "title maxPoints")
+        .lean()
     ]);
 
     // Format Course cards with stats
@@ -217,11 +219,17 @@ export async function GET(req: NextRequest) {
     });
 
     allSubmissionsForPerf.forEach((sub: any) => {
-      if (sub.grade !== null && sub.grade !== undefined) {
-        const cId = sub.courseId.toString();
-        if (courseGradesMap.has(cId)) {
+      if (sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade))) {
+        const cId = sub.courseId?.toString();
+        if (cId && courseGradesMap.has(cId)) {
           const current = courseGradesMap.get(cId)!;
-          current.totalScore += Number(sub.grade);
+          const rawGrade = Number(sub.grade);
+          const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
+          let scorePct = rawGrade;
+          if (maxPts > 0 && maxPts !== 100 && rawGrade <= maxPts) {
+            scorePct = (rawGrade / maxPts) * 100;
+          }
+          current.totalScore += scorePct;
           current.count += 1;
         }
       }
@@ -244,24 +252,32 @@ export async function GET(req: NextRequest) {
     });
 
     allSubmissionsForPerf.forEach((sub: any) => {
-      const subDate = new Date(sub.submittedAt).toISOString().split("T")[0];
-      const foundDay = daysArr.find((d) => d.fullDate === subDate);
-      if (foundDay) {
-        foundDay.count += 1;
+      if (sub.submittedAt || sub.createdAt) {
+        const subDate = new Date(sub.submittedAt || sub.createdAt).toISOString().split("T")[0];
+        const foundDay = daysArr.find((d) => d.fullDate === subDate);
+        if (foundDay) {
+          foundDay.count += 1;
+        }
       }
     });
 
     const lineChartData = daysArr.map((d) => ({ label: d.dateStr, count: d.count }));
 
-    // 3. Donut Chart: Grade distribution buckets (A, B, C, D, F)
+    // 3. Donut Chart: Accurate grade distribution buckets (A: >=80%, B: 70-79%, C: 60-69%, D: 50-59%, F: <50%)
     const gradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
     allSubmissionsForPerf.forEach((sub: any) => {
-      if (sub.grade !== null && sub.grade !== undefined) {
-        const g = Number(sub.grade);
-        if (g >= 90) gradeBuckets.A += 1;
-        else if (g >= 80) gradeBuckets.B += 1;
-        else if (g >= 70) gradeBuckets.C += 1;
-        else if (g >= 60) gradeBuckets.D += 1;
+      if (sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade))) {
+        const rawGrade = Number(sub.grade);
+        const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
+        let percentage = rawGrade;
+        if (maxPts > 0 && maxPts !== 100 && rawGrade <= maxPts) {
+          percentage = (rawGrade / maxPts) * 100;
+        }
+
+        if (percentage >= 80) gradeBuckets.A += 1;
+        else if (percentage >= 70) gradeBuckets.B += 1;
+        else if (percentage >= 60) gradeBuckets.C += 1;
+        else if (percentage >= 50) gradeBuckets.D += 1;
         else gradeBuckets.F += 1;
       }
     });

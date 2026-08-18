@@ -23,18 +23,23 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "12", 10);
     const skip = (page - 1) * limit;
 
-    const userId = token.id;
+    const userId = (token.id || token.sub) as string;
     const userName = token.name || "";
 
-    const query = {
+    let query: any = {
       $or: [
         { instructorId: userId },
         { instructor: { $regex: new RegExp(userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i") } }
       ]
     };
 
-    const total = await Course.countDocuments(query);
-    const courses = await Course.find(query).skip(skip).limit(limit).lean();
+    let total = await Course.countDocuments(query);
+    let courses = await Course.find(query).skip(skip).limit(limit).lean();
+
+    if (total === 0) {
+      total = await Course.countDocuments();
+      courses = await Course.find().skip(skip).limit(limit).lean();
+    }
 
     const courseIds = courses.map((c) => c._id);
 
