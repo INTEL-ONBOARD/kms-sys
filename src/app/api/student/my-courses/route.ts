@@ -41,12 +41,12 @@ export async function GET(req: Request) {
       .populate('courseId')
       .lean();
 
-    // Format the data to send to the frontend
+    // Format the data to send to the frontend, ignoring enrollments where the course was deleted
     const myCourses = updatedEnrollments
-      .filter((e: any) => e.courseId) // Ensure course doc exists
+      .filter((enrollment: any) => enrollment.courseId) // Ensure course doc exists
       .map((enrollment: any) => ({
-        ...enrollment.courseId,
-        progress: enrollment.progress || 0,
+        ...enrollment.courseId, // Course details (title, description, etc.)
+        progress: enrollment.progress || 0, // Student's specific progress
         enrollmentId: enrollment._id,
       }));
 

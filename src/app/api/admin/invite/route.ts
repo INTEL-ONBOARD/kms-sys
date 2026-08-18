@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 
@@ -39,10 +39,18 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const activationUrl = `${baseUrl}/activate?token=${activationToken}`;
 
-    if (process.env.RESEND_API_KEY) {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      const { error } = await resend.emails.send({
-        from: 'onboarding@resend.dev',
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || 'noreply@wiseeastuniversity.edu',
         to: email,
         subject: 'You have been invited to Wise East University',
         html: `
@@ -60,17 +68,13 @@ export async function POST(req: Request) {
           </div>
         `,
       });
-
-      if (error) {
-        console.error('Resend API Error:', error);
-        await User.findByIdAndDelete(newUser._id);
-        return NextResponse.json(
-          { message: 'Failed to send invitation email.' },
-          { status: 500 }
-        );
-      }
-    } else {
-      console.log(`[INVITE] User invited: ${email}. Activation URL: ${activationUrl}`);
+    } catch (emailError) {
+      console.error('SMTP Email Error:', emailError);
+      await User.findByIdAndDelete(newUser._id);
+      return NextResponse.json(
+        { message: 'Failed to send invitation email. Please check SMTP configuration.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(

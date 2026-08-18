@@ -144,7 +144,7 @@ export default function CoursesPage() {
                         {course.title}
                       </h3>
                       <p className="text-xs font-medium text-[#A0AEC0] mt-1.5 uppercase tracking-widest">
-                        WISE-{course._id.substring(0, 4)} / {course.category || 'CO'}
+                        WISE-{course._id ? course._id.substring(0, 4) : 'XXXX'} / {course.category || 'CO'}
                       </p>
                     </div>
                   </div>
