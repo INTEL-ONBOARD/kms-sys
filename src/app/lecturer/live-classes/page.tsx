@@ -28,6 +28,8 @@ interface LiveClassItem {
   endTime: string;
   meetingLink?: string;
   recordingUrl?: string;
+  materialId?: { _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string };
+  materials?: Array<{ _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string }>;
   resources?: string[];
   status: string;
 }
@@ -270,6 +272,29 @@ export default function LecturerLiveClassesPage() {
                       <p className="text-xs text-gray-500 mt-1 line-clamp-1 italic">
                         &ldquo;{c.description}&rdquo;
                       </p>
+                    )}
+
+                    {/* Attached Course Material / Slides */}
+                    {(c.materialId || (c.materials && c.materials.length > 0)) && (
+                      <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                        {(() => {
+                          const mat = c.materialId || c.materials?.[0];
+                          if (!mat) return null;
+                          return (
+                            <a
+                              href={`/api/materials/${mat._id}/file?action=view`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px] border border-blue-100 transition shadow-xs"
+                              title="Read / view attached lecture notes"
+                            >
+                              <FiFileText className="text-xs" />
+                              <span className="truncate max-w-[200px]">{mat.title || mat.fileName || "Lecture Material"}</span>
+                              <FiExternalLink className="text-[10px]" />
+                            </a>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
                 </div>

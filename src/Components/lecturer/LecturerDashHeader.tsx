@@ -17,11 +17,14 @@ import {
   FiVideo,
   FiAward,
   FiBook,
-  FiInfo
+  FiInfo,
+  FiUploadCloud,
+  FiFilePlus
 } from "react-icons/fi";
 import { MdOutlineAssignment } from "react-icons/md";
 import { useSession, signOut } from "next-auth/react";
 import QuickActionModal from "./QuickActionModal";
+import MaterialUploadModal from "./MaterialUploadModal";
 
 interface NotificationItem {
   _id: string;
@@ -36,10 +39,12 @@ export default function LecturerDashHeader() {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Quick action modal state
-  const [modalType, setModalType] = useState<"assignment" | "class" | "material" | null>(null);
+  const [modalType, setModalType] = useState<"assignment" | "class" | null>(null);
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
 
   // Notification states
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
@@ -168,13 +173,53 @@ export default function LecturerDashHeader() {
 
         {/* User Controls and Notification Area */}
         <div className="flex items-center space-x-6">
-          {/* Quick Action Trigger */}
-          <button
-            onClick={() => setModalType("class")}
-            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-[#434190] transition"
-          >
-            <FiPlus className="text-sm" /> Quick Action
-          </button>
+          {/* Quick Action Trigger with Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setQuickMenuOpen(!quickMenuOpen)}
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-[#434190] transition"
+            >
+              <FiPlus className="text-sm" /> Quick Action
+              <FiChevronDown className={`text-xs transition-transform ${quickMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {quickMenuOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 animate-in fade-in">
+                <button
+                  onClick={() => {
+                    setQuickMenuOpen(false);
+                    setShowMaterialModal(true);
+                  }}
+                  className="w-full flex items-center px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition"
+                >
+                  <FiUploadCloud className="mr-2.5 text-base text-blue-600" />
+                  Upload Course Material
+                </button>
+
+                <button
+                  onClick={() => {
+                    setQuickMenuOpen(false);
+                    setModalType("assignment");
+                  }}
+                  className="w-full flex items-center px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-indigo-50 hover:text-[#5A67D8] rounded-lg transition"
+                >
+                  <FiFilePlus className="mr-2.5 text-base text-[#5A67D8]" />
+                  Create Assignment
+                </button>
+
+                <button
+                  onClick={() => {
+                    setQuickMenuOpen(false);
+                    setModalType("class");
+                  }}
+                  className="w-full flex items-center px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg transition"
+                >
+                  <FiCalendar className="mr-2.5 text-base text-purple-600" />
+                  Schedule Live Class
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center space-x-4 text-gray-400">
             <button className="hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-50">
@@ -321,6 +366,11 @@ export default function LecturerDashHeader() {
             fetchNotifications();
           }}
         />
+      )}
+
+      {/* Material Upload Modal */}
+      {showMaterialModal && (
+        <MaterialUploadModal onClose={() => setShowMaterialModal(false)} />
       )}
 
       {/* Logout Confirmation Modal Overlay */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   FiX,
   FiBookOpen,
@@ -9,10 +9,16 @@ import {
   FiVideo,
   FiEdit,
   FiCheckCircle,
-  FiPlus
+  FiPlus,
+  FiFileText,
+  FiUploadCloud,
+  FiDownload,
+  FiTrash2,
+  FiExternalLink
 } from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
 import QuickActionModal from "./QuickActionModal";
+import MaterialUploadModal from "./MaterialUploadModal";
 
 interface CourseManageModalProps {
   course: {
@@ -32,7 +38,7 @@ interface CourseManageModalProps {
 
 export default function CourseManageModal({ course, onClose, onUpdate }: CourseManageModalProps) {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "classes" | "students">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "materials" | "assignments" | "classes" | "students">("overview");
 
   // Form states
   const [description, setDescription] = useState(course.description || "Comprehensive course curriculum.");
@@ -40,6 +46,7 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
   const [saving, setSaving] = useState(false);
 
   // Data states
+  const [materials, setMaterials] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [liveClasses, setLiveClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -47,15 +54,17 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
 
   // Quick Action Modal state for course-specific action
   const [quickModalType, setQuickModalType] = useState<"assignment" | "class" | null>(null);
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
 
   useEffect(() => {
     const fetchCourseDetails = async () => {
       setLoadingData(true);
       try {
-        const [assignRes, classRes, studentRes] = await Promise.all([
+        const [assignRes, classRes, studentRes, matRes] = await Promise.all([
           fetch("/api/lecturer/assignments?limit=50"),
           fetch("/api/lecturer/schedule?all=true"),
           fetch(`/api/lecturer/students?courseId=${course._id}`),
+          fetch(`/api/materials?courseId=${course._id}`),
         ]);
 
         if (assignRes.ok) {
@@ -78,6 +87,11 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
           const studentData = await studentRes.json();
           setStudents(studentData.students || []);
         }
+
+        if (matRes.ok) {
+          const matData = await matRes.json();
+          setMaterials(matData.data || []);
+        }
       } catch (err) {
         console.error("Failed to load course detail data:", err);
       } finally {
@@ -87,6 +101,33 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
 
     fetchCourseDetails();
   }, [course._id]);
+
+  const refreshMaterials = async () => {
+    try {
+      const res = await fetch(`/api/materials?courseId=${course._id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMaterials(data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to reload materials:", err);
+    }
+  };
+
+  const handleDeleteMaterial = async (id: string, title: string) => {
+    if (!confirm(`Delete "${title}"? This will remove the file from Cloudflare R2 storage.`)) return;
+    try {
+      const res = await fetch(`/api/materials?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Material deleted");
+        setMaterials((prev) => prev.filter((m) => m._id !== id));
+      } else {
+        toast.error("Failed to delete material");
+      }
+    } catch {
+      toast.error("Error deleting material");
+    }
+  };
 
   const handleSaveChanges = async () => {
     setSaving(true);
@@ -128,10 +169,10 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-gray-100 px-6 bg-white text-xs font-bold text-gray-500 gap-6">
+          <div className="flex border-b border-gray-100 px-6 bg-white text-xs font-bold text-gray-500 gap-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
                 activeTab === "overview"
                   ? "border-[#5A67D8] text-[#5A67D8]"
                   : "border-transparent hover:text-gray-800"
@@ -140,8 +181,18 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
               <FiBookOpen /> Overview & Settings
             </button>
             <button
+              onClick={() => setActiveTab("materials")}
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
+                activeTab === "materials"
+                  ? "border-[#5A67D8] text-[#5A67D8]"
+                  : "border-transparent hover:text-gray-800"
+              }`}
+            >
+              <FiFileText /> Materials ({materials.length})
+            </button>
+            <button
               onClick={() => setActiveTab("assignments")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
                 activeTab === "assignments"
                   ? "border-[#5A67D8] text-[#5A67D8]"
                   : "border-transparent hover:text-gray-800"
@@ -151,7 +202,7 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
             </button>
             <button
               onClick={() => setActiveTab("classes")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
                 activeTab === "classes"
                   ? "border-[#5A67D8] text-[#5A67D8]"
                   : "border-transparent hover:text-gray-800"
@@ -161,7 +212,7 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
             </button>
             <button
               onClick={() => setActiveTab("students")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
                 activeTab === "students"
                   ? "border-[#5A67D8] text-[#5A67D8]"
                   : "border-transparent hover:text-gray-800"
@@ -219,7 +270,89 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
               </div>
             )}
 
-            {/* TAB 2: ASSIGNMENTS */}
+            {/* TAB 2: MATERIALS */}
+            {activeTab === "materials" && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#2D3748]">Course Learning Materials</h3>
+                    <p className="text-[10px] text-[#A0AEC0]">Directly hosted on Cloudflare R2 storage</p>
+                  </div>
+                  <button
+                    onClick={() => setShowMaterialModal(true)}
+                    className="px-3 py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 transition flex items-center gap-1 shadow-xs"
+                  >
+                    <FiUploadCloud /> Upload Material
+                  </button>
+                </div>
+
+                {materials.length === 0 ? (
+                  <div className="text-center py-10 bg-[#F7FAFC] rounded-2xl border border-dashed border-gray-200">
+                    <FiUploadCloud className="text-3xl text-gray-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-gray-700">No materials uploaded for this course yet.</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 mb-3">Upload lecture slides, notes, or assignment files.</p>
+                    <button
+                      onClick={() => setShowMaterialModal(true)}
+                      className="px-3 py-1 bg-blue-600 text-white font-semibold text-[11px] rounded-lg hover:bg-blue-700 transition"
+                    >
+                      Upload First Material
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {materials.map((m) => (
+                      <div
+                        key={m._id}
+                        className="p-3 bg-[#F7FAFC] hover:bg-white rounded-xl border border-gray-100 transition flex justify-between items-center text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                            <FiFileText className="text-sm" />
+                          </div>
+                          <div className="truncate">
+                            <p className="font-bold text-[#2D3748] truncate">{m.title}</p>
+                            <p className="text-[10px] text-[#A0AEC0]">
+                              {m.fileName} &middot; {((m.fileSize || 0) / (1024 * 1024)).toFixed(1)} MB &middot;{" "}
+                              <span className="capitalize font-semibold text-gray-600">{m.materialType || "notes"}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 ml-3">
+                          <a
+                            href={`/api/materials/${m._id}/file?action=view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="View / Open file"
+                          >
+                            <FiExternalLink className="text-sm" />
+                          </a>
+                          <a
+                            href={`/api/materials/${m._id}/file?action=download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                            title="Download file"
+                          >
+                            <FiDownload className="text-sm" />
+                          </a>
+                          <button
+                            onClick={() => handleDeleteMaterial(m._id, m.title)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="Delete"
+                          >
+                            <FiTrash2 className="text-sm" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: ASSIGNMENTS */}
             {activeTab === "assignments" && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -252,7 +385,7 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
               </div>
             )}
 
-            {/* TAB 3: LIVE CLASSES */}
+            {/* TAB 4: LIVE CLASSES */}
             {activeTab === "classes" && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -287,7 +420,7 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
               </div>
             )}
 
-            {/* TAB 4: STUDENTS */}
+            {/* TAB 5: STUDENTS */}
             {activeTab === "students" && (
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-[#2D3748]">
@@ -342,8 +475,18 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
           type={quickModalType}
           onClose={() => setQuickModalType(null)}
           onSuccess={() => {
-            // refresh data
             toast.success("Action completed!");
+          }}
+        />
+      )}
+
+      {/* Material Upload Modal */}
+      {showMaterialModal && (
+        <MaterialUploadModal
+          initialCourseId={course._id}
+          onClose={() => setShowMaterialModal(false)}
+          onSuccess={() => {
+            refreshMaterials();
           }}
         />
       )}

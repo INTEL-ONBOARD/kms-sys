@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
@@ -23,40 +24,15 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = (token.id || token.sub) as string;
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
 
     await connectToDatabase();
 
-    // 1. Get all courses the student is enrolled in
-    const activeCourses = await Course.find({
-      $or: [
-        { published: true },
-        { status: "active" },
-        { status: "published" },
-        { status: { $exists: false } },
-      ],
+    // 1. Get ONLY courses the student is explicitly enrolled in by Admin
+    const currentEnrollments = await Enrollment.find({
+      $or: [{ userId: userObjectId }, { userId: userId }]
     }).lean();
-
-    const allCourses = activeCourses.length > 0 ? activeCourses : await Course.find().lean();
-    const currentEnrollments = await Enrollment.find({ userId }).lean();
-    const enrolledCourseIds = new Set(currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
-
-    // Auto-enroll if missing
-    for (const pCourse of allCourses) {
-      if (!enrolledCourseIds.has(pCourse._id.toString())) {
-        try {
-          await Enrollment.create({
-            userId,
-            courseId: pCourse._id,
-            progress: 0,
-          });
-          enrolledCourseIds.add(pCourse._id.toString());
-        } catch (e) {
-          // ignore duplicate
-        }
-      }
-    }
-
-    const courseIds = Array.from(enrolledCourseIds);
+    const courseIds = currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean);
 
     // 2. Fetch all assignments for enrolled courses
     const assignments = await Assignment.find({ courseId: { $in: courseIds } })

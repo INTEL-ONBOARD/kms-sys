@@ -42,6 +42,16 @@ interface LiveClass {
   status: string;
 }
 
+interface MaterialItem {
+  _id: string;
+  title: string;
+  materialType: string;
+  fileName: string;
+  fileUrl: string;
+  courseId?: { title: string };
+  createdAt: string;
+}
+
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
@@ -49,6 +59,7 @@ export default function DashboardPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
 
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -80,6 +91,7 @@ export default function DashboardPage() {
           setAssignments(data.assignments || []);
           setExams(data.exams || []);
           setLiveClasses(data.liveClasses || []);
+          setMaterials(data.materials || []);
         }
       } catch (err) {
         console.error('Failed to load dashboard:', err);
@@ -344,6 +356,44 @@ export default function DashboardPage() {
                         );
                       })}
                     </>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Course Materials & Notes */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center">
+                  <h3 className="font-bold text-[#2D3748]">Lecture Notes & Materials</h3>
+                  <Link href="/courses" className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition">View in Courses</Link>
+                </div>
+                <div className="flex flex-col p-2">
+                  {loading ? (
+                    <div className="p-4 text-sm text-gray-400">Loading materials...</div>
+                  ) : materials.length === 0 ? (
+                    <div className="p-4 text-sm text-gray-400">No lecture materials uploaded yet.</div>
+                  ) : (
+                    materials.slice(0, 4).map((mat) => (
+                      <a
+                        key={mat._id}
+                        href={`/api/materials/${mat._id}/file?action=view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-3.5 hover:bg-[#EEF2FF]/60 rounded-xl transition group"
+                      >
+                        <div className="flex flex-col min-w-0 pr-2">
+                          <div className="flex items-center text-xs font-bold text-[#2D3748] group-hover:text-[#5A67D8] transition">
+                            <span className="w-2 h-2 rounded-full mr-2.5 flex-shrink-0 bg-emerald-500" />
+                            <span className="truncate max-w-[170px]">{mat.title}</span>
+                          </div>
+                          <span className="text-[11px] text-[#A0AEC0] ml-4 mt-0.5 truncate">
+                            {mat.courseId?.title || "Course Material"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-[#5A67D8] bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm flex-shrink-0">
+                          View &rarr;
+                        </span>
+                      </a>
+                    ))
                   )}
                 </div>
               </div>
