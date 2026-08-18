@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
@@ -7,6 +8,7 @@ import Assignment from "@/models/Assignment";
 import LiveClass from "@/models/LiveClass";
 import Exam from "@/models/Exam";
 import Announcement from "@/models/Announcement";
+import CourseMaterial from "@/models/CourseMaterial";
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,41 +30,11 @@ export async function GET(req: NextRequest) {
 
     await connectToDatabase();
 
-    // 1. Find all available courses (published, active, or all courses in database)
-    const activeCourses = await Course.find({
-      $or: [
-        { published: true },
-        { status: "active" },
-        { status: "published" },
-        { status: { $exists: false } },
-      ],
-    }).lean();
-
-    const allCourses = activeCourses.length > 0 ? activeCourses : await Course.find().lean();
-
-    // 2. Check current student enrollments
-    const currentEnrollments = await Enrollment.find({ userId }).lean();
-    const enrolledCourseIds = new Set(
-      currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean)
-    );
-
-    // 3. Auto-enroll student into available courses if not already enrolled
-    for (const pCourse of allCourses) {
-      if (!enrolledCourseIds.has(pCourse._id.toString())) {
-        try {
-          await Enrollment.create({
-            userId,
-            courseId: pCourse._id,
-            progress: 0,
-          });
-        } catch (e) {
-          // Ignore duplicate enrollment error if concurrent
-        }
-      }
-    }
-
-    // 4. Fetch all enrollments for this student populated with course details
-    const updatedEnrollments = await Enrollment.find({ userId })
+    // 1. Fetch only courses the student is explicitly enrolled in by Admin
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+    const enrollments = await Enrollment.find({
+      $or: [{ userId: userObjectId }, { userId: userId }]
+    })
       .populate({
         path: "courseId",
         model: Course,
@@ -70,27 +42,38 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const validCourses = updatedEnrollments
-      .filter((e: any) => e.courseId != null)
-      .map((e: any) => e.courseId);
-
+    const validEnrollments = enrollments.filter((e: any) => e.courseId != null);
+    const validCourses = validEnrollments.map((e: any) => e.courseId);
     const validCourseIds = validCourses.map((c: any) => c._id);
 
-    // 5. Query course assignments, live classes, exams, announcements in parallel
-    const [assignmentsList, liveClassesList, examsList, announcementsList] = await Promise.all([
+    // 5. Query course assignments, live classes, exams, announcements, materials in parallel
+    const [assignmentsList, liveClassesList, examsList, announcementsList, materialsList] = await Promise.all([
       Assignment.find({ courseId: { $in: validCourseIds } }).sort({ dueDate: 1 }).lean(),
       LiveClass.find({ courseId: { $in: validCourseIds } }).sort({ startTime: 1 }).lean(),
       Exam.find({ courseId: { $in: validCourseIds } }).sort({ date: 1 }).lean(),
       Announcement.find({ courseId: { $in: validCourseIds } }).sort({ createdAt: -1 }).lean(),
+      CourseMaterial.find({ courseId: { $in: validCourseIds }, isPublished: true }).sort({ createdAt: -1 }).lean(),
     ]);
 
     // 6. Format courses payload with syllabus modules and associated items
-    const myCourses = updatedEnrollments
-      .filter((e: any) => e.courseId != null)
-      .map((enrollment: any) => {
+    const myCourses = validEnrollments.map((enrollment: any) => {
         const course = enrollment.courseId;
         const cIdStr = course._id ? course._id.toString() : "";
         const progress = typeof enrollment.progress === "number" ? enrollment.progress : 0;
+
+        const courseMaterials = materialsList
+          .filter((m: any) => m.courseId?.toString() === cIdStr)
+          .map((m: any) => ({
+            _id: m._id.toString(),
+            title: m.title,
+            description: m.description || "",
+            materialType: m.materialType || "notes",
+            fileName: m.fileName,
+            fileUrl: m.fileUrl,
+            fileSize: m.fileSize || 0,
+            mimeType: m.mimeType || "application/octet-stream",
+            createdAt: m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
+          }));
 
         const courseAssignments = assignmentsList
           .filter((a: any) => a.courseId?.toString() === cIdStr)
@@ -129,7 +112,7 @@ export async function GET(req: NextRequest) {
           .map((an: any) => ({
             _id: an._id.toString(),
             message: an.message,
-            createdAt: an.createdAt ? new Date(an.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Recent",
+            createdAt: an.createdAt ? new Date(an.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recent",
           }));
 
         // Dynamic modules curriculum breakdown
@@ -210,6 +193,8 @@ export async function GET(req: NextRequest) {
           modules,
           assignments: courseAssignments,
           assignmentCount: courseAssignments.length,
+          materials: courseMaterials,
+          materialCount: courseMaterials.length,
           liveClasses: courseLiveClasses,
           liveClassCount: courseLiveClasses.length,
           exams: courseExams,

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 import Assignment from "@/models/Assignment";
 import Exam from "@/models/Exam";
 import LiveClass from "@/models/LiveClass";
+import CourseMaterial from "@/models/CourseMaterial";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,52 +16,28 @@ export async function GET(request: NextRequest) {
       secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
     });
 
-    if (!token || !token.sub) {
+    if (!token || (!token.sub && !token.id)) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     await connectToDatabase();
     const userId = (token.id || token.sub) as string;
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
 
-    // Auto-enroll student in available courses so courses appear automatically
-    const activeCourses = await Course.find({
-      $or: [
-        { published: true },
-        { status: "active" },
-        { status: "published" },
-        { status: { $exists: false } },
-      ],
-    }).lean();
-
-    const publishedCourses = activeCourses.length > 0 ? activeCourses : await Course.find().lean();
-    let currentEnrollments = await Enrollment.find({ userId }).lean();
-    const enrolledCourseIds = new Set(currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
-
-    for (const pCourse of publishedCourses) {
-      if (!enrolledCourseIds.has(pCourse._id.toString())) {
-        try {
-          await Enrollment.create({
-            userId,
-            courseId: pCourse._id,
-            progress: 0,
-          });
-        } catch (e) {
-          // Ignore duplicate enrollment error if concurrent
-        }
-      }
-    }
-
-    // 1. Get enrolled courses with progress
-    const enrollments = await Enrollment.find({ userId })
+    // 1. Get ONLY explicitly enrolled courses with progress
+    const enrollments = await Enrollment.find({
+      $or: [{ userId: userObjectId }, { userId: userId }]
+    })
       .populate("courseId", "title instructor category")
       .sort({ createdAt: -1 })
       .lean();
 
-    const courseIds = enrollments.map((e) => e.courseId?._id?.toString()).filter(Boolean);
+    const validEnrollments = enrollments.filter((e) => e.courseId != null);
+    const courseIds = validEnrollments.map((e) => e.courseId?._id?.toString()).filter(Boolean);
 
     // 2. Get upcoming assignments for enrolled courses
     const now = new Date();
-    const assignments = await Assignment.find({
+    const assignments = courseIds.length > 0 ? await Assignment.find({
       courseId: { $in: courseIds },
       dueDate: { $gte: now },
       status: "open",
@@ -67,10 +45,10 @@ export async function GET(request: NextRequest) {
       .populate("courseId", "title")
       .sort({ dueDate: 1 })
       .limit(10)
-      .lean();
+      .lean() : [];
 
     // 3. Get upcoming exams for enrolled courses
-    const exams = await Exam.find({
+    const exams = courseIds.length > 0 ? await Exam.find({
       courseId: { $in: courseIds },
       date: { $gte: now },
       status: { $in: ["scheduled", "ongoing"] },
@@ -78,10 +56,10 @@ export async function GET(request: NextRequest) {
       .populate("courseId", "title")
       .sort({ date: 1 })
       .limit(10)
-      .lean();
+      .lean() : [];
 
     // 4. Get live/upcoming classes for enrolled courses
-    const liveClasses = await LiveClass.find({
+    const liveClasses = courseIds.length > 0 ? await LiveClass.find({
       courseId: { $in: courseIds },
       endTime: { $gte: now },
       status: { $in: ["upcoming", "live"] },
@@ -89,21 +67,32 @@ export async function GET(request: NextRequest) {
       .populate("courseId", "title")
       .sort({ startTime: 1 })
       .limit(10)
-      .lean();
+      .lean() : [];
+
+    // 5. Get recent course materials for enrolled courses
+    const materials = courseIds.length > 0 ? await CourseMaterial.find({
+      courseId: { $in: courseIds },
+      isPublished: true,
+    })
+      .populate("courseId", "title")
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean() : [];
 
     return NextResponse.json(
       {
-        enrollments,
+        enrollments: validEnrollments,
         assignments,
         exams,
         liveClasses,
+        materials,
       },
       { status: 200 }
     );
-  } catch (error) {
-    console.error("Student Dashboard API Error:", error);
+  } catch (error: any) {
+    console.error("Dashboard Fetch Error:", error);
     return NextResponse.json(
-      { message: "Failed to fetch dashboard data", error: String(error) },
+      { message: "Failed to fetch dashboard data", error: error.message },
       { status: 500 }
     );
   }
