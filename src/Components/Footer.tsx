@@ -1,6 +1,22 @@
+"use client";
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+const hiddenRoutes = [
+  // Dashboard / protected routes
+  '/student', '/admin', '/lecturer', '/profile',
+  '/courses', '/grades', '/assignments', '/calendar', '/enrollments',
+  // Authentication routes
+  '/login', '/signup', '/forgot-password', '/reset-password', '/activate',
+];
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  // Hide the public footer on all dashboard / protected routes
+  if (hiddenRoutes.some((route) => pathname.startsWith(route))) return null;
+
   return (
     <footer className="bg-slate-900 text-gray-300 py-12 px-8 font-sans">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">

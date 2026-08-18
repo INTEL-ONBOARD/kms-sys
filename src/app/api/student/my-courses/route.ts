@@ -203,6 +203,7 @@ export async function GET(req: NextRequest) {
           status: course.status || "active",
           published: course.published ?? true,
           progress,
+          enrollmentId: enrollment._id?.toString() || enrollment._id,
           credits: 4,
           semester: "Semester 01",
           enrolledAt: enrollment.createdAt ? new Date(enrollment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Active",

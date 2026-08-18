@@ -11,6 +11,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     // Parse the request body to get the updated course details
     const body = await req.json();
     
+    // Filter out incomplete schedule slots if they exist
+    if (body.schedule && Array.isArray(body.schedule)) {
+      body.schedule = body.schedule.filter(
+        (s: any) => s.dayOfWeek && s.startTime && s.endTime
+      );
+    }
+
     // Connect to MongoDB
     await connectToDatabase();
     

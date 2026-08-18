@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
+import Settings from "@/models/Settings";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -50,7 +51,13 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Your account is not active. Please contact support.");
         }
 
-        // 7. Return user object (this will be saved in the NextAuth JWT token)
+        // 7. Check Maintenance Mode
+        const settings = await Settings.findOne({ _singleton: 'global' });
+        if (settings?.features?.maintenanceMode && !['super_admin', 'admin'].includes(user.role)) {
+          throw new Error("The system is currently undergoing maintenance. Please try again later.");
+        }
+
+        // 8. Return user object (this will be saved in the NextAuth JWT token)
         // Thanks to next-auth.d.ts, TypeScript knows 'role' and 'status' are valid here
         return {
           id: user._id.toString(),
