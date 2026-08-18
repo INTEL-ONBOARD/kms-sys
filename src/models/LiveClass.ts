@@ -11,6 +11,8 @@ const liveClassSchema = new Schema(
     meetingLink: { type: String, default: "" },
     recordingUrl: { type: String, default: "" },
     resources: [{ type: String }],
+    materialId: { type: Schema.Types.ObjectId, ref: "CourseMaterial" },
+    materials: [{ type: Schema.Types.ObjectId, ref: "CourseMaterial" }],
     status: {
       type: String,
       enum: ["upcoming", "live", "ended", "cancelled"],

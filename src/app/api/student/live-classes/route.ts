@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 import LiveClass from "@/models/LiveClass";
 import Exam from "@/models/Exam";
+import CourseMaterial from "@/models/CourseMaterial";
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,40 +24,15 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = (token.id || token.sub) as string;
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
 
     await connectToDatabase();
 
-    // 1. Get all active courses
-    const activeCourses = await Course.find({
-      $or: [
-        { published: true },
-        { status: "active" },
-        { status: "published" },
-        { status: { $exists: false } },
-      ],
+    // 1. Get ONLY courses the student is explicitly enrolled in by Admin
+    const currentEnrollments = await Enrollment.find({
+      $or: [{ userId: userObjectId }, { userId: userId }]
     }).lean();
-
-    const allCourses = activeCourses.length > 0 ? activeCourses : await Course.find().lean();
-    const currentEnrollments = await Enrollment.find({ userId }).lean();
-    const enrolledCourseIds = new Set(currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean));
-
-    // Auto-enroll if needed
-    for (const pCourse of allCourses) {
-      if (!enrolledCourseIds.has(pCourse._id.toString())) {
-        try {
-          await Enrollment.create({
-            userId,
-            courseId: pCourse._id,
-            progress: 0,
-          });
-          enrolledCourseIds.add(pCourse._id.toString());
-        } catch (e) {
-          // ignore
-        }
-      }
-    }
-
-    const courseIds = Array.from(enrolledCourseIds);
+    const courseIds = currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean);
 
     // 2. Fetch live classes and exams
     const [liveClasses, exams] = await Promise.all([
@@ -65,6 +42,8 @@ export async function GET(req: NextRequest) {
           select: "title category instructor",
           model: Course,
         })
+        .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
+        .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
         .sort({ startTime: -1 })
         .lean(),
 
@@ -95,6 +74,8 @@ export async function GET(req: NextRequest) {
       // Fallback recording URL for missed sessions
       const recordingLink = lc.recordingUrl || `https://www.youtube.com/watch?v=dQw4w9WgXcQ`; // Or playback URL
 
+      const primaryMaterial = lc.materialId || (lc.materials && lc.materials[0]) || null;
+
       return {
         _id: lc._id.toString(),
         title: lc.title || "Live Lecture Session",
@@ -110,6 +91,8 @@ export async function GET(req: NextRequest) {
         dayOfWeek: start.toLocaleDateString("en-US", { weekday: "long" }),
         meetingLink: lc.meetingLink || "https://meet.google.com/demo-lecture-room",
         recordingUrl: recordingLink,
+        material: primaryMaterial,
+        materials: lc.materials || (primaryMaterial ? [primaryMaterial] : []),
         resources: lc.resources && lc.resources.length > 0 ? lc.resources : [
           "Lecture-Slides-PDF.pdf",
           "Workshop-Code-Repository.zip"

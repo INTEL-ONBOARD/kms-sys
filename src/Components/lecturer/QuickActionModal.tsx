@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { FiX, FiFilePlus, FiCalendar, FiUploadCloud } from "react-icons/fi";
+import { useState, useEffect, useRef } from "react";
+import { 
+  FiX, 
+  FiFilePlus, 
+  FiCalendar, 
+  FiUploadCloud, 
+  FiFileText, 
+  FiTrash2, 
+  FiLoader,
+  FiCheckCircle 
+} from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
+import MaterialUploadModal from "./MaterialUploadModal";
 
 interface QuickActionModalProps {
   type: "assignment" | "class" | "material";
@@ -11,8 +21,14 @@ interface QuickActionModalProps {
 }
 
 export default function QuickActionModal({ type, onClose, onSuccess }: QuickActionModalProps) {
+  if (type === "material") {
+    return <MaterialUploadModal onClose={onClose} onSuccess={onSuccess} />;
+  }
+
   const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState("");
   const [courses, setCourses] = useState<Array<{ _id: string; title: string }>>([]);
 
   // Form states
@@ -23,6 +39,13 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const [maxPoints, setMaxPoints] = useState("100");
   const [link, setLink] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Homework");
+
+  // Live Class Material Upload State
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [materialType, setMaterialType] = useState<"notes" | "slides" | "tutorial" | "other">("slides");
+  const [materialTitle, setMaterialTitle] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -42,7 +65,94 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     fetchCourses();
   }, []);
 
-  const [category, setCategory] = useState("Homework");
+  const handleFileSelect = (file: File) => {
+    if (file.size > 250 * 1024 * 1024) {
+      toast.error("File exceeds maximum allowed size of 250MB");
+      return;
+    }
+    setMaterialFile(file);
+    if (!materialTitle.trim()) {
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+      setMaterialTitle(nameWithoutExt);
+    }
+  };
+
+  const uploadMaterialToR2 = async (file: File, targetCourseId: string): Promise<string | null> => {
+    try {
+      setUploadProgressText("Requesting secure storage upload URL...");
+      const presignRes = await fetch("/api/materials/generate-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || "application/octet-stream",
+          fileSize: file.size,
+          courseId: targetCourseId,
+        }),
+      });
+
+      if (!presignRes.ok) {
+        const errorData = await presignRes.json();
+        throw new Error(errorData.error || "Failed to generate upload URL");
+      }
+
+      const { uploadUrl, fileKey, publicUrl } = await presignRes.json();
+
+      setUploadProgressText(`Uploading ${file.name} to Cloudflare R2...`);
+
+      // Upload file directly to Cloudflare R2
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl, true);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Storage upload failed with HTTP status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Network error during file upload to Cloudflare R2."));
+        };
+
+        xhr.send(file);
+      });
+
+      setUploadProgressText("Saving course material record...");
+
+      // Save CourseMaterial record to MongoDB
+      const saveRes = await fetch("/api/materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: materialTitle.trim() || title.trim() || file.name,
+          description: `Lecture material for live class: "${title.trim()}"`,
+          courseId: targetCourseId,
+          materialType: materialType,
+          fileName: file.name,
+          fileKey: fileKey,
+          fileUrl: publicUrl,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+          isPublished: true,
+        }),
+      });
+
+      if (!saveRes.ok) {
+        const errJson = await saveRes.json();
+        throw new Error(errJson.error || "Failed to save material record");
+      }
+
+      const savedMaterialData = await saveRes.json();
+      return savedMaterialData.data?._id || null;
+    } catch (uploadErr) {
+      console.error("Material upload error during class scheduling:", uploadErr);
+      throw uploadErr;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,9 +162,25 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     }
 
     setSubmitting(true);
+    setUploadProgressText("");
 
     try {
       if (type === "class") {
+        let uploadedMaterialId: string | null = null;
+
+        // If lecturer attached a lecture material file, upload it first to R2
+        if (materialFile) {
+          try {
+            uploadedMaterialId = await uploadMaterialToR2(materialFile, courseId);
+          } catch (uploadError: any) {
+            toast.error(uploadError.message || "Failed to upload attached lecture material");
+            setSubmitting(false);
+            return;
+          }
+        }
+
+        setUploadProgressText("Scheduling live class session...");
+
         const res = await fetch("/api/lecturer/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -65,11 +191,17 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             time,
             meetingLink: link,
             description,
+            materialId: uploadedMaterialId,
+            materials: uploadedMaterialId ? [uploadedMaterialId] : [],
           }),
         });
 
         if (res.ok) {
-          toast.success(`Live Class "${title}" scheduled successfully!`);
+          if (uploadedMaterialId) {
+            toast.success(`Live Class "${title}" scheduled and lecture material uploaded successfully!`);
+          } else {
+            toast.success(`Live Class "${title}" scheduled successfully!`);
+          }
           if (onSuccess) onSuccess();
           onClose();
         } else {
@@ -109,6 +241,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
       toast.error("Failed to complete action");
     } finally {
       setSubmitting(false);
+      setUploadProgressText("");
     }
   };
 
@@ -124,9 +257,14 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     material: <FiUploadCloud className="text-amber-600" />,
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 font-sans">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 font-sans max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
           className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 p-1 transition"
@@ -140,7 +278,11 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           </div>
           <div>
             <h3 className="text-lg font-extrabold text-[#2D3748]">{titles[type]}</h3>
-            <p className="text-xs text-[#A0AEC0]">Fill in details to publish to your students</p>
+            <p className="text-xs text-[#A0AEC0]">
+              {type === "class" 
+                ? "Set up live class details and attach lecture materials/slides"
+                : "Fill in details to publish to your students"}
+            </p>
           </div>
         </div>
 
@@ -170,7 +312,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={type === "assignment" ? "e.g. Midterm Lab Assignment" : "Class Title..."}
+              placeholder={type === "assignment" ? "e.g. Midterm Lab Assignment" : "e.g. Advanced System Design & Scalability"}
               className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
             />
           </div>
@@ -259,7 +401,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Description / Notes</label>
             <textarea
-              rows={3}
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Additional details for students..."
@@ -267,20 +409,124 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             />
           </div>
 
+          {/* ATTACH LECTURE MATERIAL SECTION (FOR LIVE CLASS) */}
+          {type === "class" && (
+            <div className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-[#2D3748]">
+                  Attach Lecture Material & Notes <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full">
+                  Cloudflare R2 Direct
+                </span>
+              </div>
+
+              {!materialFile ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileSelect(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                    isDragging ? "border-[#5A67D8] bg-[#EEF2FF]/40" : "border-gray-200 hover:border-[#5A67D8]/60 hover:bg-gray-50/70"
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.zip,.mp4"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleFileSelect(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <FiUploadCloud className="text-2xl text-gray-400 mx-auto mb-1" />
+                  <p className="text-xs font-bold text-gray-700">Click or drag & drop lecture slides or PDF notes</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Supports PDF, PPTX, DOCX, ZIP up to 250MB</p>
+                </div>
+              ) : (
+                <div className="p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-sm">
+                        <FiFileText />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#2D3748] truncate">{materialFile.name}</p>
+                        <p className="text-[10px] text-gray-400">{formatSize(materialFile.size)}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMaterialFile(null)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                      title="Remove attached file"
+                    >
+                      <FiTrash2 className="text-sm" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-600 mb-0.5">Material Category</label>
+                      <select
+                        value={materialType}
+                        onChange={(e) => setMaterialType(e.target.value as any)}
+                        className="w-full border border-gray-200 rounded-lg p-1.5 text-xs outline-none bg-white font-medium"
+                      >
+                        <option value="slides">Lecture Slides (PPT)</option>
+                        <option value="notes">Lecture Notes (PDF)</option>
+                        <option value="tutorial">Tutorial Sheet</option>
+                        <option value="other">General Resource</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-600 mb-0.5">Material Title</label>
+                      <input
+                        type="text"
+                        value={materialTitle}
+                        onChange={(e) => setMaterialTitle(e.target.value)}
+                        placeholder="Material title..."
+                        className="w-full border border-gray-200 rounded-lg p-1.5 text-xs outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {uploadProgressText && (
+            <div className="p-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2 text-xs text-blue-700 font-medium animate-pulse">
+              <FiLoader className="animate-spin text-sm shrink-0" />
+              <span>{uploadProgressText}</span>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-end pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 border border-gray-300 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition"
+              disabled={submitting}
+              className="px-5 py-2.5 border border-gray-300 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition disabled:opacity-50"
+              className="px-5 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition disabled:opacity-50 flex items-center gap-2"
             >
-              {submitting ? "Publishing..." : "Publish"}
+              {submitting && <FiLoader className="animate-spin text-sm" />}
+              <span>{submitting ? (materialFile ? "Uploading & Scheduling..." : "Publishing...") : (type === "class" ? "Schedule Live Class" : "Publish")}</span>
             </button>
           </div>
         </form>

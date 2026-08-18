@@ -14,7 +14,9 @@ import {
   FiChevronDown,
   FiAlertCircle,
   FiBookOpen,
-  FiArrowRight
+  FiArrowRight,
+  FiDownload,
+  FiFileText
 } from 'react-icons/fi';
 import { MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -36,6 +38,8 @@ interface LiveSession {
   dayOfWeek: string;
   meetingLink: string;
   recordingUrl: string;
+  material?: { _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string };
+  materials?: Array<{ _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string }>;
   resources: string[];
   status: "live" | "upcoming" | "ended" | "cancelled";
   isLiveNow: boolean;
@@ -313,10 +317,42 @@ export default function LiveClassesPage() {
                           <span>&bull;</span>
                           <span className="flex items-center gap-1"><FiClock className="text-gray-400" /> {session.startTimeFormatted} - {session.endTimeFormatted}</span>
                         </p>
+
+                        {(session.material || (session.materials && session.materials.length > 0)) && (
+                          <div className="mt-2.5 flex items-center gap-2">
+                            {(() => {
+                              const mat = session.material || session.materials?.[0];
+                              if (!mat) return null;
+                              return (
+                                <a
+                                  href={`/api/materials/${mat._id}/file?action=view`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-100 transition shadow-xs"
+                                  title="View / Read attached lecture notes"
+                                >
+                                  <FiFileText className="text-xs" />
+                                  <span className="truncate max-w-[180px]">{mat.title || mat.fileName || "Lecture Notes"}</span>
+                                </a>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 self-end md:self-center">
+                    <div className="flex items-center gap-2.5 self-end md:self-center">
+                      {(session.material || (session.materials && session.materials.length > 0)) && (
+                        <a
+                          href={`/api/materials/${(session.material || session.materials?.[0])?._id}/file?action=download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+                          title="Download lecture notes"
+                        >
+                          <FiDownload className="text-xs" /> Slides
+                        </a>
+                      )}
                       <button
                         onClick={() => setJoiningSession(session)}
                         className="px-6 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2"

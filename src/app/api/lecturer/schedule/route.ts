@@ -3,8 +3,10 @@ import { getToken } from "next-auth/jwt";
 import { connectToDatabase } from "@/lib/db";
 import Course from "@/models/Course";
 import LiveClass from "@/models/LiveClass";
+import CourseMaterial from "@/models/CourseMaterial";
 import Notification from "@/models/Notification";
 import Enrollment from "@/models/Enrollment";
+import mongoose from "mongoose";
 
 // GET: Fetch live classes for lecturer (all or filtered by date)
 export async function GET(req: NextRequest) {
@@ -62,6 +64,8 @@ export async function GET(req: NextRequest) {
 
     const schedule = await LiveClass.find(query)
       .populate("courseId", "title category")
+      .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
+      .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
       .sort({ startTime: 1 })
       .lean();
 
@@ -85,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, courseId, date, time, duration, meetingLink } = body;
+    const { title, courseId, date, time, duration, meetingLink, materialId, materials } = body;
 
     if (!title) {
       return NextResponse.json({ message: "Class title is required" }, { status: 400 });
@@ -145,6 +149,8 @@ export async function POST(req: NextRequest) {
     const classDuration = Number(duration) || 60; // in minutes
     const endTimeDate = new Date(startTimeDate.getTime() + classDuration * 60 * 1000);
 
+    const materialsList = Array.isArray(materials) ? materials : (materialId ? [materialId] : []);
+
     const liveClass = await LiveClass.create({
       title,
       description: body.description || "Interactive online lecture session.",
@@ -153,8 +159,16 @@ export async function POST(req: NextRequest) {
       startTime: startTimeDate,
       endTime: endTimeDate,
       meetingLink: meetingLink || "https://meet.google.com/demo-room",
+      materialId: materialId || (materialsList[0] ?? undefined),
+      materials: materialsList,
       status: "upcoming",
     });
+
+    const populatedLiveClass = await LiveClass.findById(liveClass._id)
+      .populate("courseId", "title category")
+      .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
+      .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
+      .lean();
 
     // Notify enrolled students safely
     try {
@@ -175,7 +189,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: "Live Class scheduled successfully", liveClass },
+      { message: "Live Class scheduled successfully", liveClass: populatedLiveClass },
       { status: 201 }
     );
   } catch (error: any) {
@@ -197,7 +211,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { classId, recordingUrl, description, resources, status } = body;
+    const { classId, recordingUrl, description, resources, materialId, materials, status } = body;
 
     if (!classId) {
       return NextResponse.json({ message: "classId is required" }, { status: 400 });
@@ -213,6 +227,8 @@ export async function PATCH(req: NextRequest) {
     if (recordingUrl !== undefined) liveClass.recordingUrl = recordingUrl;
     if (description !== undefined) liveClass.description = description;
     if (resources !== undefined) liveClass.resources = resources;
+    if (materialId !== undefined) liveClass.materialId = materialId;
+    if (materials !== undefined) liveClass.materials = materials;
     if (status !== undefined) liveClass.status = status;
 
     await liveClass.save();
