@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiBook, FiCalendar, FiBarChart2, FiVideo } from 'react-icons/fi';
+import { FiBook, FiCalendar, FiBarChart2, FiVideo, FiFileText } from 'react-icons/fi';
 import { MdDashboard, MdOutlineAssignment, MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 
 export default function Sidebar() {

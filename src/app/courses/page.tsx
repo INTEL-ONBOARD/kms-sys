@@ -23,7 +23,11 @@ import {
   FiInfo,
   FiFolder,
   FiCheckSquare,
-  FiExternalLink
+  FiExternalLink,
+  FiFileText,
+  FiDownload,
+  FiPackage,
+  FiFilm
 } from 'react-icons/fi';
 import { MdOutlineAssignment, MdOutlineMenuBook } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -57,6 +61,18 @@ interface CourseLiveClass {
   status: string;
 }
 
+interface CourseMaterialItem {
+  _id: string;
+  title: string;
+  description?: string;
+  materialType: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType?: string;
+  createdAt: string;
+}
+
 interface Course {
   _id: string;
   title: string;
@@ -73,6 +89,8 @@ interface Course {
   modules?: ModuleTopic[];
   assignments?: CourseAssignment[];
   assignmentCount?: number;
+  materials?: CourseMaterialItem[];
+  materialCount?: number;
   liveClasses?: CourseLiveClass[];
   liveClassCount?: number;
   announcements?: { _id: string; message: string; createdAt: string }[];
@@ -88,7 +106,7 @@ export default function CoursesPage() {
   
   // Selected course for detailed module view
   const [selectedCourse, setSelectedCourse] = useState<{ course: Course; index: number } | null>(null);
-  const [activeCourseTab, setActiveCourseTab] = useState<'about' | 'modules' | 'assignments' | 'classes'>('about');
+  const [activeCourseTab, setActiveCourseTab] = useState<'about' | 'materials' | 'modules' | 'assignments' | 'classes'>('about');
   const [expandedModule, setExpandedModule] = useState<string | null>("01");
 
   const fetchCourses = async () => {
@@ -163,9 +181,13 @@ export default function CoursesPage() {
     return styles[index % styles.length];
   };
 
-  const handleOpenCourse = (course: Course, index: number) => {
+  const handleOpenCourse = (
+    course: Course, 
+    index: number, 
+    defaultTab: 'about' | 'materials' | 'modules' | 'assignments' | 'classes' = 'about'
+  ) => {
     setSelectedCourse({ course, index });
-    setActiveCourseTab('about');
+    setActiveCourseTab(defaultTab);
     setExpandedModule("01");
   };
 
@@ -283,9 +305,13 @@ export default function CoursesPage() {
               <div className="w-16 h-16 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-4 text-2xl">
                 <FiBook />
               </div>
-              <h3 className="text-base font-bold text-gray-700">No Courses Found</h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                {searchQuery ? `No enrolled courses match "${searchQuery}".` : "You are not currently enrolled in any courses."}
+              <h3 className="text-base font-bold text-gray-700">
+                {searchQuery ? "No Matching Courses" : "No Enrolled Courses"}
+              </h3>
+              <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
+                {searchQuery 
+                  ? `No enrolled courses match "${searchQuery}".` 
+                  : "You are not enrolled in any courses yet. Please contact your academic administrator to enroll you in your assigned courses and modules."}
               </p>
               {searchQuery && (
                 <button
@@ -348,6 +374,16 @@ export default function CoursesPage() {
                           <span className="flex items-center gap-1 text-[#5A67D8]">
                             <FiBookOpen className="text-xs" /> 4 Modules
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCourse(course, index, 'materials');
+                            }}
+                            className="flex items-center gap-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded transition font-bold"
+                            title="View Course Materials & Lecture Notes"
+                          >
+                            <FiFileText className="text-xs" /> {course.materialCount || 0} Materials
+                          </button>
                           <span className="flex items-center gap-1 text-orange-500">
                             <MdOutlineAssignment className="text-xs" /> {course.assignmentCount || 0} Tasks
                           </span>
@@ -413,6 +449,17 @@ export default function CoursesPage() {
                 }`}
               >
                 <FiInfo /> About & Overview
+              </button>
+
+              <button
+                onClick={() => setActiveCourseTab('materials')}
+                className={`py-3.5 px-4 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+                  activeCourseTab === 'materials'
+                    ? 'border-[#5A67D8] text-[#5A67D8]'
+                    : 'border-transparent hover:text-gray-800'
+                }`}
+              >
+                <FiFileText /> Lecture Materials ({selectedCourse.course.materialCount || 0})
               </button>
 
               <button
@@ -518,7 +565,23 @@ export default function CoursesPage() {
                     <h4 className="text-xs font-bold text-[#2D3748] uppercase tracking-wider mb-3">
                       Course Workspace & Direct Links
                     </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <button 
+                        onClick={() => setActiveCourseTab('materials')}
+                        className="p-4 bg-white border border-gray-200 hover:border-[#5A67D8] hover:shadow-md rounded-2xl transition group flex flex-col justify-between text-left"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mb-2">
+                          <FiFileText />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#2D3748] group-hover:text-[#5A67D8] transition">Course Materials</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{selectedCourse.course.materialCount || 0} Lecture Notes & PDFs</p>
+                        </div>
+                        <div className="flex items-center text-[10px] font-bold text-[#5A67D8] mt-2 gap-1">
+                          View Files <FiArrowRight />
+                        </div>
+                      </button>
+
                       <Link 
                         href="/assignments"
                         className="p-4 bg-white border border-gray-200 hover:border-[#5A67D8] hover:shadow-md rounded-2xl transition group flex flex-col justify-between"
@@ -568,6 +631,121 @@ export default function CoursesPage() {
                       </Link>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* 2. COURSE MATERIALS & NOTES TAB */}
+              {activeCourseTab === 'materials' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-extrabold text-sm text-[#111827] uppercase tracking-wider">
+                        Lecture Notes, Slides & Course Materials
+                      </h4>
+                      <p className="text-gray-400 text-[11px] mt-0.5">
+                        Download or read lecture resources uploaded by your professor
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-[#5A67D8] bg-[#EEF2FF] px-2.5 py-1 rounded-full font-bold">
+                      {selectedCourse.course.materialCount || 0} Files
+                    </span>
+                  </div>
+
+                  {(selectedCourse.course.materials || []).length === 0 ? (
+                    <div className="text-center py-12 bg-[#F7FAFC] rounded-2xl border border-gray-100 text-gray-400">
+                      <FiFileText className="text-4xl mx-auto mb-3 text-gray-300" />
+                      <p className="font-bold text-gray-600 text-xs">No lecture materials uploaded yet</p>
+                      <p className="text-[11px] text-gray-400 mt-1 max-w-xs mx-auto">
+                        Your lecturer has not uploaded any PDFs, slides, or notes for this course yet. Check back soon!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(selectedCourse.course.materials || []).map((mat) => {
+                        const formatSize = (bytes: number) => {
+                          if (!bytes || bytes === 0) return "0 KB";
+                          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                          return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                        };
+
+                        const getCategoryBadge = (type: string) => {
+                          switch (type) {
+                            case "notes":
+                              return { bg: "bg-blue-50 text-blue-700 border-blue-100", label: "Lecture Notes" };
+                            case "slides":
+                              return { bg: "bg-amber-50 text-amber-700 border-amber-100", label: "Slides / PPT" };
+                            case "tutorial":
+                              return { bg: "bg-emerald-50 text-emerald-700 border-emerald-100", label: "Tutorial Sheet" };
+                            case "recording":
+                              return { bg: "bg-purple-50 text-purple-700 border-purple-100", label: "Video / Media" };
+                            default:
+                              return { bg: "bg-gray-50 text-gray-700 border-gray-200", label: "Resource" };
+                          }
+                        };
+
+                        const badge = getCategoryBadge(mat.materialType);
+
+                        return (
+                          <div 
+                            key={mat._id}
+                            className="p-4 bg-white hover:bg-[#F7FAFC] rounded-2xl border border-gray-100 transition-all hover:border-indigo-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] text-[#5A67D8] flex items-center justify-center text-lg flex-shrink-0 mt-0.5">
+                                <FiFileText />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase border ${badge.bg}`}>
+                                    {badge.label}
+                                  </span>
+                                  <span className="text-[11px] text-gray-400 font-medium">
+                                    {formatSize(mat.fileSize)}
+                                  </span>
+                                  <span className="text-[11px] text-gray-300">&bull;</span>
+                                  <span className="text-[11px] text-gray-400">
+                                    {mat.createdAt}
+                                  </span>
+                                </div>
+                                <h5 className="font-bold text-[#111827] text-xs md:text-sm truncate" title={mat.title}>
+                                  {mat.title}
+                                </h5>
+                                {mat.description && (
+                                  <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                                    {mat.description}
+                                  </p>
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-1 truncate font-mono">
+                                  {mat.fileName}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                              <a
+                                href={`/api/materials/${mat._id}/file?action=view`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3.5 py-2 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#5A67D8] font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                                title="Open and read document in browser"
+                              >
+                                <FiExternalLink className="text-xs" /> View / Read
+                              </a>
+                              <a
+                                href={`/api/materials/${mat._id}/file?action=download`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+                                title="Download file directly"
+                              >
+                                <FiDownload className="text-xs" /> Download
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
