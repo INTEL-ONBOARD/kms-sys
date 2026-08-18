@@ -8,6 +8,13 @@ import LiveClass from "@/models/LiveClass";
 import Exam from "@/models/Exam";
 import CourseMaterial from "@/models/CourseMaterial";
 
+// Ensure models are registered in Mongoose
+Course;
+CourseMaterial;
+LiveClass;
+Exam;
+Enrollment;
+
 export async function GET(req: NextRequest) {
   try {
     const token = await getToken({
@@ -42,8 +49,16 @@ export async function GET(req: NextRequest) {
           select: "title category instructor",
           model: Course,
         })
-        .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
-        .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
+        .populate({
+          path: "materialId",
+          model: CourseMaterial,
+          select: "title fileName fileUrl fileSize mimeType materialType",
+        })
+        .populate({
+          path: "materials",
+          model: CourseMaterial,
+          select: "title fileName fileUrl fileSize mimeType materialType",
+        })
         .sort({ startTime: -1 })
         .lean(),
 

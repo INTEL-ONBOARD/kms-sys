@@ -9,6 +9,14 @@ import Exam from "@/models/Exam";
 import LiveClass from "@/models/LiveClass";
 import CourseMaterial from "@/models/CourseMaterial";
 
+// Ensure models are registered in Mongoose
+Course;
+CourseMaterial;
+LiveClass;
+Exam;
+Assignment;
+Enrollment;
+
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({

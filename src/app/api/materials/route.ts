@@ -6,8 +6,15 @@ import { connectToDatabase } from "@/lib/db";
 import CourseMaterial from "@/models/CourseMaterial";
 import Course from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
+import User from "@/models/User";
 import { deleteR2Object } from "@/lib/r2";
 import mongoose from "mongoose";
+
+// Ensure models are registered in Mongoose
+Course;
+CourseMaterial;
+Enrollment;
+User;
 
 /**
  * GET /api/materials?courseId=xyz
@@ -64,8 +71,8 @@ export async function GET(req: NextRequest) {
     }
 
     const materials = await CourseMaterial.find(query)
-      .populate("lecturerId", "name email")
-      .populate("courseId", "title category")
+      .populate({ path: "lecturerId", model: User, select: "name email" })
+      .populate({ path: "courseId", model: Course, select: "title category" })
       .sort({ createdAt: -1 })
       .lean();
 

@@ -8,6 +8,13 @@ import Notification from "@/models/Notification";
 import Enrollment from "@/models/Enrollment";
 import mongoose from "mongoose";
 
+// Ensure models are registered in Mongoose
+Course;
+CourseMaterial;
+LiveClass;
+Enrollment;
+Notification;
+
 // GET: Fetch live classes for lecturer (all or filtered by date)
 export async function GET(req: NextRequest) {
   try {
@@ -63,9 +70,9 @@ export async function GET(req: NextRequest) {
     }
 
     const schedule = await LiveClass.find(query)
-      .populate("courseId", "title category")
-      .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
-      .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
+      .populate({ path: "courseId", model: Course, select: "title category" })
+      .populate({ path: "materialId", model: CourseMaterial, select: "title fileName fileUrl fileSize mimeType materialType" })
+      .populate({ path: "materials", model: CourseMaterial, select: "title fileName fileUrl fileSize mimeType materialType" })
       .sort({ startTime: 1 })
       .lean();
 
@@ -165,9 +172,9 @@ export async function POST(req: NextRequest) {
     });
 
     const populatedLiveClass = await LiveClass.findById(liveClass._id)
-      .populate("courseId", "title category")
-      .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
-      .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
+      .populate({ path: "courseId", model: Course, select: "title category" })
+      .populate({ path: "materialId", model: CourseMaterial, select: "title fileName fileUrl fileSize mimeType materialType" })
+      .populate({ path: "materials", model: CourseMaterial, select: "title fileName fileUrl fileSize mimeType materialType" })
       .lean();
 
     // Notify enrolled students safely
