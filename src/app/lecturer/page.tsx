@@ -14,10 +14,12 @@ import {
   FiUsers,
   FiClock,
   FiPlus,
-  FiCheckCircle
+  FiCheckCircle,
+  FiUploadCloud
 } from "react-icons/fi";
 import { MdEventNote } from "react-icons/md";
 import QuickActionModal from "@/Components/lecturer/QuickActionModal";
+import MaterialUploadModal from "@/Components/lecturer/MaterialUploadModal";
 import AnnouncementComposer from "@/Components/lecturer/AnnouncementComposer";
 import MiniBarChart from "@/Components/lecturer/MiniBarChart";
 import MiniDonutChart from "@/Components/lecturer/MiniDonutChart";
@@ -172,12 +174,20 @@ export default function LecturerDashboardPage() {
             Here&apos;s what&apos;s happening in your classes today.
           </p>
         </div>
-        <button
-          onClick={() => setModalType("class")}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition"
-        >
-          <FiPlus className="text-sm" /> Schedule Class
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={() => setModalType("material")}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition"
+          >
+            <FiUploadCloud className="text-sm" /> Upload Material
+          </button>
+          <button
+            onClick={() => setModalType("class")}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition"
+          >
+            <FiPlus className="text-sm" /> Schedule Class
+          </button>
+        </div>
       </div>
 
       {/* Stat Cards Row */}
@@ -520,8 +530,16 @@ export default function LecturerDashboardPage() {
         </div>
       </div>
 
-      {/* Quick Action Modal */}
-      {modalType && <QuickActionModal type={modalType} onClose={() => setModalType(null)} />}
+      {/* Modals */}
+      {modalType === "material" && (
+        <MaterialUploadModal
+          onClose={() => setModalType(null)}
+          onSuccess={() => fetchDashboard()}
+        />
+      )}
+      {modalType && modalType !== "material" && (
+        <QuickActionModal type={modalType} onClose={() => setModalType(null)} />
+      )}
     </>
   );
 }

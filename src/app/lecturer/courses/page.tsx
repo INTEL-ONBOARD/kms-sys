@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FiBookOpen, FiUsers, FiClipboard, FiPlus, FiSearch } from "react-icons/fi";
+import { FiBookOpen, FiUsers, FiClipboard, FiPlus, FiSearch, FiUploadCloud } from "react-icons/fi";
 import CourseCardLecturer from "@/Components/lecturer/CourseCardLecturer";
-import QuickActionModal from "@/Components/lecturer/QuickActionModal";
+import MaterialUploadModal from "@/Components/lecturer/MaterialUploadModal";
 
 export default function LecturerCoursesPage() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, hasMore: false });
 
   const fetchCourses = async (page = 1) => {
@@ -43,7 +43,7 @@ export default function LecturerCoursesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100/50">
         <div>
           <h1 className="text-2xl font-extrabold text-[#111827]">My Teaching Courses</h1>
-          <p className="text-xs text-gray-400 mt-1">Manage curriculum, student rosters, and assignments</p>
+          <p className="text-xs text-gray-400 mt-1">Manage curriculum, lecture materials, student rosters, and assignments</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
@@ -56,6 +56,14 @@ export default function LecturerCoursesPage() {
               className="w-full bg-[#F7FAFC] text-xs text-gray-700 rounded-xl py-2.5 pl-9 pr-4 outline-none focus:ring-1 focus:ring-[#2563EB]"
             />
           </div>
+
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-sm transition shrink-0"
+          >
+            <FiUploadCloud className="text-sm" />
+            <span>Upload Material</span>
+          </button>
         </div>
       </div>
 
@@ -103,7 +111,12 @@ export default function LecturerCoursesPage() {
         </div>
       )}
 
-      {showModal && <QuickActionModal type="assignment" onClose={() => setShowModal(false)} />}
+      {showUploadModal && (
+        <MaterialUploadModal
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => fetchCourses(pagination.page)}
+        />
+      )}
     </div>
   );
 }

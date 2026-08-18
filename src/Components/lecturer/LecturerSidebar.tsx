@@ -24,6 +24,7 @@ export default function LecturerSidebar() {
   const navItems = [
     { label: "Dashboard", href: "/lecturer", icon: MdDashboard },
     { label: "Courses", href: "/lecturer/courses", icon: FiBook },
+    { label: "Materials", href: "/lecturer/materials", icon: FiFileText },
     { label: "Students", href: "/lecturer/students", icon: FiUsers },
     { label: "Assignments", href: "/lecturer/assignments", icon: MdOutlineAssignment },
     { label: "Exams", href: "/lecturer/exams", icon: FiFileText },
