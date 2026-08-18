@@ -27,6 +27,7 @@ export default function CoursesAdminPage() {
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All Categories');
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -94,12 +95,16 @@ export default function CoursesAdminPage() {
 
   // --- 3. Filter & Pagination Logic ---
   
+  // Derive unique categories for the filter
+  const uniqueCategories = ['All Categories', ...new Set(courses.map(c => c.category))];
+
   // Filter courses based on search term and selected status
   const filteredCourses = courses.filter((course) => {
     const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           course.instructor.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || course.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCategory = selectedCategoryFilter === 'All Categories' || course.category === selectedCategoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   // Calculate pagination variables
@@ -111,7 +116,7 @@ export default function CoursesAdminPage() {
   // Reset to page 1 whenever the user types a search or changes the filter
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, selectedCategoryFilter]);
 
   // --- 4. Action Handlers (API Calls) ---
 
@@ -198,10 +203,21 @@ export default function CoursesAdminPage() {
               <p className="text-[#A0AEC0] font-medium mt-1">Manage all platform courses, categories, and tags</p>
             </div>
             <div className="flex space-x-3 mt-4 md:mt-0">
-              <button className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300">
-                <FiTag className="mr-2 text-lg text-indigo-500" />
-                Categories
-              </button>
+              <div className="relative flex items-center">
+                <FiTag className="absolute left-3.5 text-lg text-indigo-500 pointer-events-none" />
+                <select 
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 pl-10 pr-8 py-2.5 rounded-lg text-sm font-bold shadow-sm appearance-none outline-none cursor-pointer transition duration-300 w-full"
+                >
+                  {uniqueCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <div className="absolute right-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
               {/* Open Add Modal Button */}
               <button onClick={() => setIsAddModalOpen(true)} className="bg-[#5A67D8] hover:bg-[#434190] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300">
                 <FiPlus className="mr-2 text-lg" />
@@ -353,6 +369,12 @@ export default function CoursesAdminPage() {
                       <option value="Media">Media</option>
                       <option value="Computing">Computing</option>
                       <option value="Arts">Arts</option>
+                      <option value="Science">Science</option>
+                      <option value="Mathematics">Mathematics</option>
+                      <option value="Business">Business</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Medicine">Medicine</option>
+                      <option value="Law">Law</option>
                     </select>
                   </div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Price</label><input required type="text" placeholder="Free or $49.99" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>
@@ -479,6 +501,12 @@ export default function CoursesAdminPage() {
                       <option value="Media">Media</option>
                       <option value="Computing">Computing</option>
                       <option value="Arts">Arts</option>
+                      <option value="Science">Science</option>
+                      <option value="Mathematics">Mathematics</option>
+                      <option value="Business">Business</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Medicine">Medicine</option>
+                      <option value="Law">Law</option>
                     </select>
                   </div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Price</label><input required type="text" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>

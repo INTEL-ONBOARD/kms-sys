@@ -5,6 +5,7 @@ import Enrollment from "@/models/Enrollment";
 import Assignment from "@/models/Assignment";
 import Exam from "@/models/Exam";
 import LiveClass from "@/models/LiveClass";
+import Course from "@/models/Course";
 
 export async function GET(request: NextRequest) {
   try {

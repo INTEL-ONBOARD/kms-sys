@@ -4,6 +4,8 @@ import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 
+Course; // Prevent tree-shaking
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /**
