@@ -1,75 +1,112 @@
 "use client";
 
-import { useState } from 'react';
-import { FiChevronDown, FiDownload, FiFileText, FiPrinter, FiCheckCircle, FiX } from 'react-icons/fi';
+import { useState, useEffect, useMemo } from 'react';
+import { 
+  FiChevronDown, 
+  FiDownload, 
+  FiFileText, 
+  FiPrinter, 
+  FiCheckCircle, 
+  FiX, 
+  FiRefreshCw, 
+  FiBookOpen,
+  FiAward
+} from 'react-icons/fi';
 import Sidebar from '@/Components/Sidebar';
 import Header from '@/Components/DashHeader';
 import { generateCSVReport, downloadFile, triggerPDFPrint, StudentReportData } from '@/lib/reportGenerator';
+
+interface CourseGrade {
+  id: string | number;
+  courseId?: string;
+  title: string;
+  code: string;
+  assignments: string;
+  courseWork: string;
+  finalExam: string;
+  attendance: string;
+  grade: string;
+  gradeColor: string;
+  semester: string;
+  instructor?: string;
+  totalPoints?: number;
+}
 
 export default function GradesPage() {
   const [selectedSemester, setSelectedSemester] = useState('All');
   const [selectedCourse, setSelectedCourse] = useState('All');
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
+  // Dynamic API state
+  const [loading, setLoading] = useState(true);
+  const [gradesData, setGradesData] = useState<CourseGrade[]>([]);
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<string[]>([]);
+  const [studentInfo, setStudentInfo] = useState<{
+    studentName: string;
+    studentId: string;
+    gpa: string;
+    cgpa: string;
+  }>({
+    studentName: "Authenticated Student",
+    studentId: "",
+    gpa: "3.8",
+    cgpa: "3.8",
+  });
 
-  // Full course grades dataset with semester metadata
-  const gradesData = [
-    {
-      id: 1,
-      title: "Animation Studies I (WISE-25.1F/CO)",
-      code: "WISE-25.1F/CO",
-      assignments: "18 / 20",
-      courseWork: "26 / 30",
-      finalExam: "34 / 40",
-      attendance: "10 / 10",
-      grade: "A",
-      gradeColor: "text-green-500 bg-green-50",
-      semester: "Semester 01",
-    },
-    {
-      id: 2,
-      title: "Drawing and Illustration (WISE-25.1F/CO)",
-      code: "WISE-25.1F/CO",
-      assignments: "20 / 20",
-      courseWork: "22 / 30",
-      finalExam: "32 / 40",
-      attendance: "08 / 10",
-      grade: "B +",
-      gradeColor: "text-orange-400 bg-orange-50",
-      semester: "Semester 01",
-    },
-    {
-      id: 3,
-      title: "Design Principles I (WISE-25.1F/CO)",
-      code: "WISE-25.1F/CO",
-      assignments: "19 / 20",
-      courseWork: "27 / 30",
-      finalExam: "38 / 40",
-      attendance: "09 / 10",
-      grade: "A",
-      gradeColor: "text-green-500 bg-green-50",
-      semester: "Semester 02",
-    },
-    {
-      id: 4,
-      title: "Principles of Script Writing (WISE-25.1F/CO)",
-      code: "WISE-25.1F/CO",
-      assignments: "17 / 20",
-      courseWork: "29 / 30",
-      finalExam: "35 / 40",
-      attendance: "09 / 10",
-      grade: "A -",
-      gradeColor: "text-green-400 bg-green-50",
-      semester: "Semester 02",
+  const fetchGrades = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/student/reports');
+      if (res.ok) {
+        const data = await res.json();
+        setGradesData(data.allGrades || data.grades || []);
+        setAvailableSemesters(data.availableSemesters || ["Semester 01", "Semester 02"]);
+        setAvailableCourses(data.availableCourses || []);
+        setStudentInfo({
+          studentName: data.studentName || "Student",
+          studentId: data.studentId || "",
+          gpa: data.gpa || "3.8",
+          cgpa: data.cgpa || "3.8",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load grades data:", err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchGrades();
+  }, []);
 
   // Filter grades based on selected Semester and Course
-  const filteredGrades = gradesData.filter((item) => {
-    const matchesSemester = selectedSemester === 'All' || selectedSemester === 'Select' || item.semester === selectedSemester;
-    const matchesCourse = selectedCourse === 'All' || selectedCourse === 'All Courses' || item.title.includes(selectedCourse);
-    return matchesSemester && matchesCourse;
-  });
+  const filteredGrades = useMemo(() => {
+    return gradesData.filter((item) => {
+      const matchesSemester = selectedSemester === 'All' || selectedSemester === 'Select' || item.semester === selectedSemester;
+      const matchesCourse = selectedCourse === 'All' || selectedCourse === 'All Courses' || item.title === selectedCourse || item.title.includes(selectedCourse);
+      return matchesSemester && matchesCourse;
+    });
+  }, [gradesData, selectedSemester, selectedCourse]);
+
+  // Compute filtered GPA dynamically if filtered
+  const displayGPA = useMemo(() => {
+    if (filteredGrades.length === 0) return studentInfo.gpa;
+    const gradePointMap: Record<string, number> = {
+      'A': 4.0,
+      'A -': 3.7,
+      'B +': 3.3,
+      'B': 3.0,
+      'B -': 2.7,
+      'C +': 2.3,
+      'C': 2.0,
+      'D': 1.0,
+    };
+    const totalPts = filteredGrades.reduce((sum, g) => sum + (gradePointMap[g.grade] || 3.0), 0);
+    return (totalPts / filteredGrades.length).toFixed(1);
+  }, [filteredGrades, studentInfo.gpa]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -80,10 +117,11 @@ export default function GradesPage() {
 
   const getReportPayload = (): StudentReportData => {
     return {
-      studentName: "Authenticated Student",
+      studentName: studentInfo.studentName,
+      studentId: studentInfo.studentId,
       semester: selectedSemester === 'All' || selectedSemester === 'Select' ? 'All Semesters' : selectedSemester,
-      gpa: "3.7",
-      cgpa: "3.8",
+      gpa: displayGPA,
+      cgpa: studentInfo.cgpa,
       grades: filteredGrades.map(g => ({
         id: g.id,
         title: g.title,
@@ -126,7 +164,7 @@ export default function GradesPage() {
         <Header />
 
         {/* Scrollable Content Container */}
-        <div className="flex-1 overflow-y-auto px-8 pb-12 pt-6">
+        <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-12 pt-6">
           
           {/* Toast Alert Notification */}
           {toastMessage && (
@@ -141,12 +179,27 @@ export default function GradesPage() {
             </div>
           )}
 
-          {/* Page Title */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide">Grades</h1>
+          {/* Page Title & Refresh */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide flex items-center gap-2">
+                <FiAward className="text-[#5A67D8]" /> Course Grades & Academic Performance
+              </h1>
+              <p className="text-xs text-[#A0AEC0] mt-1">
+                Real-time assessment scores, module coursework breakdown, attendance, and semester GPA
+              </p>
+            </div>
+
+            <button
+              onClick={fetchGrades}
+              title="Refresh Grades"
+              className="p-2.5 text-gray-400 hover:text-[#5A67D8] bg-white border border-gray-100 hover:border-[#5A67D8] rounded-xl shadow-sm transition self-start sm:self-auto"
+            >
+              <FiRefreshCw className={`text-sm ${loading ? "animate-spin text-[#5A67D8]" : ""}`} />
+            </button>
           </div>
 
-          {/* Filters Row - Styled as a single continuous bar to match the mockup */}
+          {/* Filters Row */}
           <div className="flex flex-col md:flex-row items-center bg-[#F4F7FE] border border-gray-100 rounded-xl px-4 py-3 mb-8 shadow-sm w-full xl:w-3/4 gap-4 md:gap-0">
             
             {/* Semester Filter Area */}
@@ -159,25 +212,29 @@ export default function GradesPage() {
                   className="appearance-none w-full bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer pr-6"
                 >
                   <option value="All">All Semesters</option>
-                  <option value="Semester 01">Semester 01</option>
-                  <option value="Semester 02">Semester 02</option>
+                  {availableSemesters.map((sem) => (
+                    <option key={sem} value={sem}>
+                      {sem}
+                    </option>
+                  ))}
                 </select>
                 <FiChevronDown className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
 
             {/* Course Filter Area */}
-            <div className="relative w-full md:w-64 pl-0 md:pl-4">
+            <div className="relative w-full md:w-80 pl-0 md:pl-4">
               <select
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
-                className="appearance-none w-full bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer pr-6"
+                className="appearance-none w-full bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer pr-6 truncate"
               >
-                <option value="All">All Courses</option>
-                <option value="Animation Studies I">Animation Studies I</option>
-                <option value="Drawing and Illustration">Drawing and Illustration</option>
-                <option value="Design Principles I">Design Principles I</option>
-                <option value="Principles of Script Writing">Principles of Script Writing</option>
+                <option value="All">All Courses ({gradesData.length})</option>
+                {availableCourses.map((cTitle) => (
+                  <option key={cTitle} value={cTitle}>
+                    {cTitle}
+                  </option>
+                ))}
               </select>
               <FiChevronDown className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -187,20 +244,31 @@ export default function GradesPage() {
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6 mb-10">
             
             {/* Current Semester GPA Card */}
-            <div className="bg-white shadow-sm border border-gray-100 border-l-[8px] border-l-[#DD6B20] p-6 flex flex-col justify-center min-w-[240px]">
-              <span className="text-4xl font-extrabold text-[#2D3748] mb-1">3.7</span>
+            <div className="bg-white shadow-sm border border-gray-100 border-l-[8px] border-l-[#DD6B20] p-6 flex flex-col justify-center min-w-[240px] rounded-r-xl">
+              <span className="text-4xl font-extrabold text-[#2D3748] mb-1">{displayGPA}</span>
               <div className="flex items-baseline space-x-1.5">
                 <span className="text-sm font-bold text-[#DD6B20]">GPA</span>
-                <span className="text-[11px] font-semibold text-[#DD6B20] opacity-80">this semester</span>
+                <span className="text-[11px] font-semibold text-[#DD6B20] opacity-80">
+                  {selectedSemester === 'All' ? 'Overall Average' : selectedSemester}
+                </span>
               </div>
             </div>
 
             {/* Overall CGPA Card */}
-            <div className="bg-white shadow-sm border border-gray-100 border-l-[8px] border-l-[#38A169] p-6 flex flex-col justify-center min-w-[240px]">
-              <span className="text-4xl font-extrabold text-[#2D3748] mb-1">3.8</span>
+            <div className="bg-white shadow-sm border border-gray-100 border-l-[8px] border-l-[#38A169] p-6 flex flex-col justify-center min-w-[240px] rounded-r-xl">
+              <span className="text-4xl font-extrabold text-[#2D3748] mb-1">{studentInfo.cgpa}</span>
               <div className="flex items-baseline space-x-1.5">
                 <span className="text-sm font-bold text-[#38A169]">CGPA</span>
-                <span className="text-[11px] font-semibold text-[#38A169] opacity-80">Cumulative</span>
+                <span className="text-[11px] font-semibold text-[#38A169] opacity-80">Cumulative Performance</span>
+              </div>
+            </div>
+
+            {/* Enrolled Courses Metric Card */}
+            <div className="bg-white shadow-sm border border-gray-100 border-l-[8px] border-l-[#5A67D8] p-6 flex flex-col justify-center min-w-[240px] rounded-r-xl">
+              <span className="text-4xl font-extrabold text-[#2D3748] mb-1">{gradesData.length}</span>
+              <div className="flex items-baseline space-x-1.5">
+                <span className="text-sm font-bold text-[#5A67D8]">Courses</span>
+                <span className="text-[11px] font-semibold text-[#5A67D8] opacity-80">Enrolled This Academic Year</span>
               </div>
             </div>
             
@@ -208,7 +276,12 @@ export default function GradesPage() {
 
           {/* Grades Table Section */}
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-[#2D3748] mb-4">Course Grades</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-[#2D3748]">Course Grades Breakdown</h2>
+              <span className="text-xs text-gray-500 font-medium">
+                Showing {filteredGrades.length} course assessment(s)
+              </span>
+            </div>
             
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
@@ -216,21 +289,37 @@ export default function GradesPage() {
                   <thead>
                     <tr className="bg-gray-50 text-[#A0AEC0] text-[11px] uppercase tracking-wider font-bold">
                       <th className="px-8 py-4">Course</th>
-                      <th className="px-4 py-4 text-center">Assignments</th>
-                      <th className="px-4 py-4 text-center">Course work 1</th>
-                      <th className="px-4 py-4 text-center">Final exam</th>
-                      <th className="px-4 py-4 text-center">Attendance</th>
+                      <th className="px-4 py-4 text-center">Assignments (20)</th>
+                      <th className="px-4 py-4 text-center">Course work 1 (30)</th>
+                      <th className="px-4 py-4 text-center">Final exam (40)</th>
+                      <th className="px-4 py-4 text-center">Attendance (10)</th>
                       <th className="px-8 py-4 text-center">Grade</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredGrades.length > 0 ? (
+                    {loading ? (
+                      Array.from({ length: 4 }).map((_, i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="px-8 py-5">
+                            <div className="h-4 bg-gray-200 rounded w-48 mb-1.5" />
+                            <div className="h-3 bg-gray-100 rounded w-24" />
+                          </td>
+                          <td className="px-4 py-5 text-center"><div className="h-4 bg-gray-100 rounded w-16 mx-auto" /></td>
+                          <td className="px-4 py-5 text-center"><div className="h-4 bg-gray-100 rounded w-16 mx-auto" /></td>
+                          <td className="px-4 py-5 text-center"><div className="h-4 bg-gray-100 rounded w-16 mx-auto" /></td>
+                          <td className="px-4 py-5 text-center"><div className="h-4 bg-gray-100 rounded w-16 mx-auto" /></td>
+                          <td className="px-8 py-5 text-center"><div className="h-6 bg-gray-200 rounded w-12 mx-auto" /></td>
+                        </tr>
+                      ))
+                    ) : filteredGrades.length > 0 ? (
                       filteredGrades.map((course) => (
                         <tr key={course.id} className="hover:bg-[#F7FAFC] transition">
                           <td className="px-8 py-5">
                             <div className="flex flex-col">
                               <span className="text-sm font-bold text-[#2D3748]">{course.title}</span>
-                              <span className="text-[11px] font-medium text-gray-400 mt-0.5">{course.code}</span>
+                              <span className="text-[11px] font-medium text-gray-400 mt-0.5">
+                                {course.code} &bull; {course.semester}
+                              </span>
                             </div>
                           </td>
                           <td className="px-4 py-5 text-center text-sm font-medium text-[#4A5568]">{course.assignments}</td>
@@ -246,8 +335,9 @@ export default function GradesPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-8 py-8 text-center text-gray-400 text-sm">
-                          No grades found matching the selected filters.
+                        <td colSpan={6} className="px-8 py-12 text-center text-gray-400 text-sm">
+                          <FiBookOpen className="text-3xl mx-auto mb-2 text-gray-300" />
+                          No enrolled course grades found matching the selected filter criteria.
                         </td>
                       </tr>
                     )}
@@ -286,7 +376,7 @@ export default function GradesPage() {
               </button>
             </div>
             <p className="text-xs text-gray-500 mb-6">
-              Choose your preferred report format for export ({filteredGrades.length} course(s) selected).
+              Export academic report for <span className="font-bold text-gray-700">{studentInfo.studentName}</span> ({filteredGrades.length} course(s) selected).
             </p>
 
             <div className="space-y-3">
