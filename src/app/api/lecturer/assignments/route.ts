@@ -159,18 +159,69 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Validate that the assignment title exists in Course.assessmentItems
+    // 1. Fetch course details and check Assessment & Grade Breakdown limits
     const courseDoc = await Course.findById(targetCourseId);
-    if (courseDoc && courseDoc.assessmentItems && courseDoc.assessmentItems.length > 0) {
-      const isExam = courseDoc.assessmentItems.some(
-        (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+    if (!courseDoc) {
+      return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    const configuredItems = courseDoc.assessmentItems || [];
+    const assignmentBreakdownItems = configuredItems.filter(
+      (i: any) => i.type !== "exam" && i.type !== "attendance"
+    );
+    const maxAllowedAssignments = assignmentBreakdownItems.length;
+
+    if (maxAllowedAssignments === 0) {
+      return NextResponse.json(
+        { 
+          message: "No assignments are configured in Course Assessment & Grade Breakdown for this course. Please configure the breakdown under Course Management before creating assignments." 
+        },
+        { status: 400 }
       );
-      if (isExam) {
-        return NextResponse.json(
-          { message: `"${title}" is configured as an Exam. Please create it under Exam Manager.` },
-          { status: 400 }
-        );
-      }
+    }
+
+    // 2. Validate that the assignment title exists in Course.assessmentItems
+    const matchedBreakdownItem = assignmentBreakdownItems.find(
+      (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase()
+    );
+
+    const isExamItem = configuredItems.some(
+      (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+    );
+
+    if (isExamItem) {
+      return NextResponse.json(
+        { message: `"${title}" is configured as an Exam in the Course Breakdown. Please create it under Exam Manager.` },
+        { status: 400 }
+      );
+    }
+
+    if (!matchedBreakdownItem) {
+      return NextResponse.json(
+        { 
+          message: `"${title}" is not defined in this Course's Assessment & Grade Breakdown. You can only create assignments that are allocated in the Course Breakdown (${assignmentBreakdownItems.map(i => i.name).join(", ")}).` 
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Strict Quota Enforcement: Check how many assignments already exist for this course
+    const existingAssignmentsForCourse = await Assignment.find({
+      courseId: targetCourseId,
+      category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] }
+    }).lean();
+
+    const existingAssignment = existingAssignmentsForCourse.find(
+      (a: any) => a.title.trim().toLowerCase() === title.trim().toLowerCase()
+    );
+
+    if (!existingAssignment && existingAssignmentsForCourse.length >= maxAllowedAssignments) {
+      return NextResponse.json(
+        {
+          message: `Cannot create more than ${maxAllowedAssignments} assignment(s) for this course. The Course Assessment & Grade Breakdown currently allocates ${maxAllowedAssignments} assignment(s). Please update the Course Grade Breakdown if you wish to add more assignments.`
+        },
+        { status: 400 }
+      );
     }
 
     if (!dueDate) {
@@ -197,11 +248,21 @@ export async function POST(req: NextRequest) {
       title: { $regex: new RegExp(`^${title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
     });
 
+    const itemCategory = 
+      category || 
+      (matchedBreakdownItem.type === "quiz" 
+        ? "Quiz" 
+        : matchedBreakdownItem.type === "project" 
+        ? "Project" 
+        : matchedBreakdownItem.type === "coursework" 
+        ? "Lab Report" 
+        : "Homework");
+
     if (assignment) {
       assignment.dueDate = assignmentDueDate;
       assignment.maxPoints = Number(maxPoints) || assignment.maxPoints || 100;
       if (description) assignment.description = description;
-      if (category) assignment.category = category;
+      assignment.category = itemCategory;
       assignment.attachmentUrl = attachmentUrl || assignment.attachmentUrl || "";
       assignment.attachmentName = attachmentName || assignment.attachmentName || "";
       assignment.attachmentSize = Number(attachmentSize) || assignment.attachmentSize || 0;
@@ -210,47 +271,18 @@ export async function POST(req: NextRequest) {
       await assignment.save();
     } else {
       assignment = await Assignment.create({
-        title: title.trim(),
+        title: matchedBreakdownItem.name.trim(),
         description: description || "",
         courseId: targetCourseId,
         dueDate: assignmentDueDate,
         maxPoints: Number(maxPoints) || 100,
-        category: category || "Homework",
+        category: itemCategory,
         attachmentUrl: attachmentUrl || "",
         attachmentName: attachmentName || "",
         attachmentSize: Number(attachmentSize) || 0,
         fileKey: fileKey || "",
         status: "open",
       });
-    }
-
-    // Sync into Course.assessmentItems if not present
-    try {
-      const courseDoc = await Course.findById(targetCourseId);
-      if (courseDoc) {
-        const items = courseDoc.assessmentItems || [];
-        const exists = items.some((i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase());
-        if (!exists) {
-          const itemType = 
-            category === "Quiz" 
-              ? "quiz" 
-              : category === "Project" 
-              ? "project" 
-              : category === "Lab Report" || category === "Case Study" 
-              ? "coursework" 
-              : "assignment";
-
-          const assignedWeight = Number(weight) || 15;
-          courseDoc.assessmentItems.push({
-            name: title.trim(),
-            type: itemType,
-            weight: assignedWeight,
-          });
-          await courseDoc.save();
-        }
-      }
-    } catch (syncErr) {
-      console.error("Course breakdown sync notice:", syncErr);
     }
 
     // Notify enrolled students about the new assignment

@@ -146,6 +146,23 @@ export default function LecturerAssignmentsPage() {
     return courses.length > 0 ? courses[0] : null;
   }, [courses, selectedCourseId]);
 
+  const activeCourseBreakdownItems = useMemo(() => {
+    return (activeCourse?.assessmentItems || []).filter(
+      (i) => i.type !== "exam" && i.type !== "attendance"
+    );
+  }, [activeCourse]);
+
+  const activeCourseAssignments = useMemo(() => {
+    if (!activeCourse) return [];
+    return assignments.filter(
+      (a) => (typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === activeCourse._id
+    );
+  }, [assignments, activeCourse]);
+
+  const isCourseLimitReached = 
+    activeCourseBreakdownItems.length > 0 && 
+    activeCourseAssignments.length >= activeCourseBreakdownItems.length;
+
   return (
     <div className="space-y-6 font-sans">
       {/* Top Header */}
@@ -181,9 +198,18 @@ export default function LecturerAssignmentsPage() {
 
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer active:scale-95"
+            className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
+              isCourseLimitReached 
+                ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
           >
-            <FiPlus className="text-base" /> Create Assignment
+            <FiPlus className="text-base" /> 
+            <span>
+              {isCourseLimitReached 
+                ? `Create Assignment (${activeCourseAssignments.length}/${activeCourseBreakdownItems.length})` 
+                : "Create Assignment"}
+            </span>
           </button>
         </div>
       </div>
@@ -197,14 +223,25 @@ export default function LecturerAssignmentsPage() {
                 <FiLayers />
               </div>
               <div>
-                <h3 className="text-xs font-extrabold text-[#1E293B] flex items-center gap-2">
-                  <span>Course Assessment & Grade Breakdown</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xs font-extrabold text-[#1E293B]">
+                    Course Assessment & Grade Breakdown
+                  </h3>
                   <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                     {activeCourse.title}
                   </span>
-                </h3>
-                <p className="text-[11px] text-gray-400">
-                  Assessment components configured for this course. Click on any component to create or update its assignment brief.
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                    isCourseLimitReached
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}>
+                    {isCourseLimitReached 
+                      ? `${activeCourseAssignments.length} / ${activeCourseBreakdownItems.length} Assignments (Max Limit Reached)`
+                      : `${activeCourseAssignments.length} / ${activeCourseBreakdownItems.length} Assignments Configured`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Number of assignments is strictly limited to the Course Assessment & Grade Breakdown. {isCourseLimitReached ? "To add more assignments, edit the breakdown weights below." : "Click any available component to configure its brief."}
                 </p>
               </div>
             </div>
@@ -229,7 +266,8 @@ export default function LecturerAssignmentsPage() {
             ) : (
               activeCourse.assessmentItems.map((item, idx) => {
                 const hasCreatedAssignment = assignments.some(
-                  (a) => a.title.toLowerCase() === item.name.toLowerCase()
+                  (a) => a.title.toLowerCase() === item.name.toLowerCase() && 
+                    ((typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === activeCourse._id)
                 );
 
                 return (

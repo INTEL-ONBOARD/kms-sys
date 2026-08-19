@@ -48,6 +48,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
 
   // Assignment PDF Brief state
   const [assignmentPdfFile, setAssignmentPdfFile] = useState<File | null>(null);
+  const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
 
   // Live Class Material Upload State
   const [materialFile, setMaterialFile] = useState<File | null>(null);
@@ -56,24 +57,53 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchCoursesAndAssignments = async () => {
       try {
-        const res = await fetch("/api/lecturer/courses?limit=50");
-        if (res.ok) {
-          const data = await res.json();
-          setCourses(data.data || []);
-          if (data.data && data.data.length > 0) {
-            setCourseId(data.data[0]._id);
-            const firstItems = (data.data[0].assessmentItems || []).filter(
+        const [coursesRes, assignRes] = await Promise.all([
+          fetch("/api/lecturer/courses?limit=50"),
+          fetch("/api/lecturer/assignments?limit=100")
+        ]);
+
+        let loadedAssignments: any[] = [];
+        if (assignRes.ok) {
+          const assignData = await assignRes.json();
+          loadedAssignments = assignData.assignments || [];
+          setExistingAssignments(loadedAssignments);
+        }
+
+        if (coursesRes.ok) {
+          const data = await coursesRes.json();
+          const loadedCourses = data.data || [];
+          setCourses(loadedCourses);
+
+          if (loadedCourses.length > 0) {
+            const firstC = loadedCourses[0];
+            setCourseId(firstC._id);
+
+            const firstItems = (firstC.assessmentItems || []).filter(
               (i: any) => i.type !== "exam" && i.type !== "attendance"
             );
-            if (firstItems.length > 0) {
-              setTitle(firstItems[0].name);
-              setWeight(String(firstItems[0].weight));
-              if (firstItems[0].type === "quiz") setCategory("Quiz");
-              else if (firstItems[0].type === "project") setCategory("Project");
-              else if (firstItems[0].type === "coursework") setCategory("Lab Report");
+
+            // Find first available breakdown item that hasn't been created yet
+            const firstCourseAssigns = loadedAssignments.filter(
+              (a: any) => (typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === firstC._id
+            );
+            const createdTitles = new Set(firstCourseAssigns.map((a: any) => a.title?.trim().toLowerCase()));
+            const availableItems = firstItems.filter(
+              (i: any) => !createdTitles.has(i.name?.trim().toLowerCase())
+            );
+
+            const initialItem = availableItems.length > 0 ? availableItems[0] : (firstItems.length > 0 ? firstItems[0] : null);
+
+            if (initialItem) {
+              setTitle(initialItem.name);
+              setWeight(String(initialItem.weight));
+              if (initialItem.type === "quiz") setCategory("Quiz");
+              else if (initialItem.type === "project") setCategory("Project");
+              else if (initialItem.type === "coursework") setCategory("Lab Report");
               else setCategory("Homework");
+            } else {
+              setTitle("");
             }
           }
         }
@@ -81,7 +111,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
         console.error("Failed to load courses for modal:", err);
       }
     };
-    fetchCourses();
+    fetchCoursesAndAssignments();
   }, []);
 
   const handleFileSelect = (file: File) => {
@@ -336,6 +366,25 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     (i: any) => i.type !== "exam" && i.type !== "attendance"
   );
 
+  const courseCreatedAssignments = existingAssignments.filter(
+    (a: any) => (typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === courseId
+  );
+
+  const createdTitlesMap = new Map<string, any>();
+  courseCreatedAssignments.forEach((a: any) => {
+    if (a.title) createdTitlesMap.set(a.title.trim().toLowerCase(), a);
+  });
+
+  const availableBreakdownItems = courseBreakdownItems.filter(
+    (i: any) => !createdTitlesMap.has(i.name?.trim().toLowerCase())
+  );
+
+  const isMaxLimitReached = 
+    type === "assignment" && 
+    courseBreakdownItems.length > 0 && 
+    courseCreatedAssignments.length >= courseBreakdownItems.length &&
+    availableBreakdownItems.length === 0;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 font-sans max-h-[90vh] overflow-y-auto">
@@ -364,7 +413,18 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           {/* Course Selector */}
           {courses.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Target Course</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-semibold text-gray-700">Target Course</label>
+                {type === "assignment" && selectedCourseObj && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    isMaxLimitReached 
+                      ? "bg-amber-50 text-amber-700 border-amber-200" 
+                      : "bg-blue-50 text-blue-700 border-blue-100"
+                  }`}>
+                    {courseCreatedAssignments.length} / {courseBreakdownItems.length} Assignments Configured
+                  </span>
+                )}
+              </div>
               <select
                 value={courseId}
                 onChange={(e) => {
@@ -374,12 +434,21 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                   const items = (matchedC?.assessmentItems || []).filter(
                     (i: any) => i.type !== "exam" && i.type !== "attendance"
                   );
-                  if (items.length > 0) {
-                    setTitle(items[0].name);
-                    setWeight(String(items[0].weight));
-                    if (items[0].type === "quiz") setCategory("Quiz");
-                    else if (items[0].type === "project") setCategory("Project");
-                    else if (items[0].type === "coursework") setCategory("Lab Report");
+                  
+                  const targetAssigns = existingAssignments.filter(
+                    (a: any) => (typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === newCId
+                  );
+                  const createdTitles = new Set(targetAssigns.map((a: any) => a.title?.trim().toLowerCase()));
+                  const avail = items.filter((i: any) => !createdTitles.has(i.name?.trim().toLowerCase()));
+
+                  const pick = avail.length > 0 ? avail[0] : (items.length > 0 ? items[0] : null);
+
+                  if (pick) {
+                    setTitle(pick.name);
+                    setWeight(String(pick.weight));
+                    if (pick.type === "quiz") setCategory("Quiz");
+                    else if (pick.type === "project") setCategory("Project");
+                    else if (pick.type === "coursework") setCategory("Lab Report");
                     else setCategory("Homework");
                   } else {
                     setTitle("");
@@ -387,12 +456,34 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                 }}
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
               >
-                {courses.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.title}
-                  </option>
-                ))}
+                {courses.map((c) => {
+                  const cItems = (c.assessmentItems || []).filter(
+                    (i: any) => i.type !== "exam" && i.type !== "attendance"
+                  );
+                  const cAssigns = existingAssignments.filter(
+                    (a: any) => (typeof a.courseId === "object" ? a.courseId?._id : a.courseId) === c._id
+                  );
+                  const isFull = cItems.length > 0 && cAssigns.length >= cItems.length;
+
+                  return (
+                    <option key={c._id} value={c._id}>
+                      {c.title} {type === "assignment" ? `(${cAssigns.length}/${cItems.length} Tasks${isFull ? " - Quota Full" : ""})` : ""}
+                    </option>
+                  );
+                })}
               </select>
+            </div>
+          )}
+
+          {/* QUOTA WARNING WHEN MAX ASSIGNMENTS ARE REACHED */}
+          {type === "assignment" && isMaxLimitReached && (
+            <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1 animate-in fade-in">
+              <p className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                <span>⚠️</span> Maximum Assignment Limit Reached ({courseBreakdownItems.length} / {courseBreakdownItems.length})
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                This course&apos;s <strong>Assessment & Grade Breakdown</strong> specifies exactly {courseBreakdownItems.length} assignment(s), and all {courseBreakdownItems.length} have already been created. You cannot create more than {courseBreakdownItems.length} assignment(s) for this course without first adding components to the Course Grade Breakdown under Course Management.
+              </p>
             </div>
           )}
 
@@ -413,6 +504,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
               ) : (
                 <select
                   required
+                  disabled={isMaxLimitReached}
                   value={title}
                   onChange={(e) => {
                     const selectedName = e.target.value;
@@ -426,14 +518,25 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                       else setCategory("Homework");
                     }
                   }}
-                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-[#1E293B] outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC] cursor-pointer"
+                  className={`w-full border rounded-xl p-2.5 text-xs font-bold outline-none transition ${
+                    isMaxLimitReached 
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" 
+                      : "border-gray-200 text-[#1E293B] focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC] cursor-pointer"
+                  }`}
                 >
                   <option value="">-- Select Configured Assessment Item --</option>
-                  {courseBreakdownItems.map((item, idx) => (
-                    <option key={idx} value={item.name}>
-                      {item.name} ({item.weight}% Grade Weight &bull; {item.type})
-                    </option>
-                  ))}
+                  {courseBreakdownItems.map((item, idx) => {
+                    const alreadyCreated = createdTitlesMap.has(item.name?.trim().toLowerCase());
+                    return (
+                      <option 
+                        key={idx} 
+                        value={item.name}
+                        disabled={alreadyCreated}
+                      >
+                        {item.name} ({item.weight}% Weight &bull; {item.type}) {alreadyCreated ? "[Already Created]" : "[Available Slot]"}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
             </div>
@@ -461,10 +564,11 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                   <input
                     type="date"
                     required
+                    disabled={isMaxLimitReached}
                     min={new Date().toISOString().split("T")[0]}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                    className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] disabled:bg-gray-100 disabled:text-gray-400"
                   />
                 </div>
                 <div>
@@ -490,12 +594,17 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                 </div>
 
                 {!assignmentPdfFile ? (
-                  <label className="border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer bg-gray-50/50 hover:bg-blue-50/30 transition">
+                  <label className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition ${
+                    isMaxLimitReached 
+                      ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed" 
+                      : "border-gray-200 hover:border-blue-500 cursor-pointer bg-gray-50/50 hover:bg-blue-50/30"
+                  }`}>
                     <FiUploadCloud className="text-2xl text-blue-600 mb-1" />
                     <p className="text-xs font-bold text-gray-700">Click to upload Assignment PDF / Rubric</p>
                     <p className="text-[10px] text-gray-400">PDF, DOCX, or ZIP files up to 250MB</p>
                     <input
                       type="file"
+                      disabled={isMaxLimitReached}
                       accept=".pdf,.doc,.docx,.zip"
                       className="hidden"
                       onChange={(e) => {
@@ -690,11 +799,19 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (type === "assignment" && (isMaxLimitReached || courseBreakdownItems.length === 0))}
               className="px-5 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm transition disabled:opacity-50 flex items-center gap-2"
             >
               {submitting && <FiLoader className="animate-spin text-sm" />}
-              <span>{submitting ? (materialFile ? "Uploading & Scheduling..." : "Publishing...") : (type === "class" ? "Schedule Live Class" : "Publish")}</span>
+              <span>
+                {submitting 
+                  ? (materialFile ? "Uploading & Scheduling..." : "Publishing...") 
+                  : (type === "class" 
+                    ? "Schedule Live Class" 
+                    : isMaxLimitReached 
+                    ? `Limit Reached (${courseCreatedAssignments.length}/${courseBreakdownItems.length})` 
+                    : "Publish Assignment")}
+              </span>
             </button>
           </div>
         </form>
