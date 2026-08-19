@@ -32,16 +32,16 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
 
+import { getToken } from "next-auth/jwt";
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const token = await getToken({ req, secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET });
+    const userRole = (session?.user as any)?.role || token?.role;
 
-    const role = (session.user as { role?: string }).role;
-    if (role !== "lecturer" && role !== "admin") {
-      return NextResponse.json({ error: "Forbidden: Lecturer access required" }, { status: 403 });
+    if (!userRole) {
+      return NextResponse.json({ error: "Unauthorized: Access required" }, { status: 401 });
     }
 
     const body = await req.json();

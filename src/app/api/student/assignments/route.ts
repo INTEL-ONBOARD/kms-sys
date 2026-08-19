@@ -28,27 +28,66 @@ export async function GET(req: NextRequest) {
 
     await connectToDatabase();
 
-    // 1. Get ONLY courses the student is explicitly enrolled in by Admin
-    const currentEnrollments = await Enrollment.find({
-      $or: [{ userId: userObjectId }, { userId: userId }]
+    const userDoc = await User.findOne({
+      $or: [
+        ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: new mongoose.Types.ObjectId(userId) }] : []),
+        { email: token.email }
+      ]
     }).lean();
-    const courseIds = currentEnrollments.map((e: any) => e.courseId?.toString()).filter(Boolean);
+    const actualUserId = userDoc ? userDoc._id : userObjectId;
 
-    // 2. Fetch all assignments for enrolled courses
-    const assignments = await Assignment.find({ courseId: { $in: courseIds } })
+    // 1. Get courses the student is explicitly enrolled in
+    const currentEnrollments = await Enrollment.find({
+      $or: [
+        { userId: actualUserId },
+        { userId: actualUserId.toString() },
+        { userId: userId },
+        { userId: userObjectId }
+      ]
+    }).lean();
+    
+    let enrolledCourseIds = currentEnrollments.map((e: any) => e.courseId).filter(Boolean);
+
+    // If student has no specific enrollments yet, fallback to all published courses
+    if (enrolledCourseIds.length === 0) {
+      const publishedCourses = await Course.find({ published: true }).select("_id").lean();
+      enrolledCourseIds = publishedCourses.map((c: any) => c._id);
+    }
+
+    const courseObjectIds = enrolledCourseIds.map((id: any) =>
+      mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+    );
+
+    // 2. Fetch all assignments for enrolled/published courses (excluding exams)
+    const assignments = await Assignment.find({ 
+      courseId: { $in: [...courseObjectIds, ...enrolledCourseIds] },
+      category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] }
+    })
       .populate({
         path: "courseId",
-        select: "title category instructor",
+        select: "title category instructor assessmentItems",
         model: Course,
       })
       .sort({ dueDate: 1 })
       .lean();
 
-    const assignmentIds = assignments.map((a) => a._id);
+    // Exclude any items that are configured as exams in the course breakdown
+    const validAssignments = assignments.filter((a: any) => {
+      const course = a.courseId;
+      if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+        const match = course.assessmentItems.find(
+          (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+        );
+        if (match && match.type === "exam") return false;
+      }
+      return true;
+    });
+
+    const assignmentIds = validAssignments.map((a) => a._id);
 
     // 3. Fetch any existing submissions from this student for these assignments
     const submissions = await Submission.find({
-      studentId: userId,
+      studentId: { $in: [actualUserId, actualUserId.toString(), userId, userObjectId] },
       assignmentId: { $in: assignmentIds },
     }).lean();
 
@@ -60,7 +99,7 @@ export async function GET(req: NextRequest) {
     const now = new Date();
 
     // 4. Format assignments with submission status and urgency
-    const formattedAssignments = assignments.map((a: any) => {
+    const formattedAssignments = validAssignments.map((a: any) => {
       const sub = submissionMap.get(a._id.toString());
       const due = a.dueDate ? new Date(a.dueDate) : new Date();
       const diffMs = due.getTime() - now.getTime();
@@ -95,6 +134,15 @@ export async function GET(req: NextRequest) {
 
       const isUrgent = !sub && diffDays <= 3 && diffDays >= 0;
 
+      // Extract grade weight from course assessmentItems if available
+      let weight = 20;
+      if (a.courseId?.assessmentItems && Array.isArray(a.courseId.assessmentItems)) {
+        const match = a.courseId.assessmentItems.find(
+          (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+        );
+        if (match && typeof match.weight === "number") weight = match.weight;
+      }
+
       return {
         _id: a._id.toString(),
         title: a.title || "Untitled Assignment",
@@ -103,6 +151,10 @@ export async function GET(req: NextRequest) {
         courseId: a.courseId?._id?.toString() || "",
         courseCategory: a.courseId?.category || "General",
         instructor: a.courseId?.instructor || "Module Lecturer",
+        attachmentUrl: a.attachmentUrl || "",
+        attachmentName: a.attachmentName || "",
+        attachmentSize: a.attachmentSize || 0,
+        weight,
         issuedDate: a.createdAt ? new Date(a.createdAt).toISOString() : new Date().toISOString(),
         issuedDateFormatted: a.createdAt 
           ? new Date(a.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
