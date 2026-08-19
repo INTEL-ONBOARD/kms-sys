@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
       return {
         _id: sub._id.toString(),
         assignmentTitle: sub.assignmentId?.title || "Untitled Assignment",
+        assignmentDescription: sub.assignmentId?.description || "",
+        maxPoints: sub.assignmentId?.maxPoints || 100,
         courseTitle: sub.courseId?.title || "General Course",
         studentName: sub.studentId?.name || "Student",
         studentEmail: sub.studentId?.email || "",
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
         isOverdue,
         overdueDays,
         submittedAt: sub.submittedAt,
-        content: sub.content,
+        content: sub.content || "",
         files: sub.files || [],
       };
     }).sort((a, b) => {
