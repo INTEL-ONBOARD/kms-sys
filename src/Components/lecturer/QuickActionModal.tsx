@@ -240,22 +240,43 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     }
   };
 
+  // Local ISO Date and Time helpers for blocking past selections
+  const now = new Date();
+  const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      toast.warning("Please select an assignment component from the Course Grade Breakdown");
+      toast.warning(
+        type === "assignment"
+          ? "Please select an assignment component from the Course Grade Breakdown"
+          : "Please enter a class title"
+      );
       return;
     }
-
-    const todayStr = new Date().toISOString().split("T")[0];
 
     if (type === "assignment") {
       if (!date) {
         toast.warning("Due date is required");
         return;
       }
-      if (date < todayStr) {
+      if (date < todayDateStr) {
         toast.error("Assignment due date cannot be in the past. Please select a valid future date.");
+        return;
+      }
+    }
+
+    if (type === "class") {
+      if (!date || !time) {
+        toast.warning("Date and start time are required for scheduling a live class");
+        return;
+      }
+      const [year, month, day] = date.split("-").map(Number);
+      const [hours, minutes] = time.split(":").map(Number);
+      const selectedDateTime = new Date(year, month - 1, day, hours, minutes);
+      if (isNaN(selectedDateTime.getTime()) || selectedDateTime.getTime() < Date.now() - 60000) {
+        toast.error("Cannot schedule a live class for a past date or time. Please select a future date and time.");
         return;
       }
     }
@@ -666,22 +687,42 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           {type === "class" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Date <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="date"
                   required
+                  min={todayDateStr}
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setDate(newDate);
+                    if (newDate === todayDateStr && time && time < currentTimeStr) {
+                      setTime(currentTimeStr);
+                    }
+                  }}
                   className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Start Time</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Start Time <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="time"
                   required
+                  min={date === todayDateStr ? currentTimeStr : undefined}
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => {
+                    const newTime = e.target.value;
+                    if (date === todayDateStr && newTime < currentTimeStr) {
+                      toast.warning("Start time cannot be in the past for today's session.");
+                      setTime(currentTimeStr);
+                    } else {
+                      setTime(newTime);
+                    }
+                  }}
                   className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
                 />
               </div>

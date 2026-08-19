@@ -221,8 +221,23 @@ export async function getLecturerCourses(
     ],
   };
 
+  if (pagination?.search) {
+    const searchRegex = createSafeSearchRegex(pagination.search);
+    query.$and = [
+      {
+        $or: [
+          { title: searchRegex },
+          { category: searchRegex },
+          { description: searchRegex },
+          { instructor: searchRegex },
+        ],
+      },
+    ];
+  }
+
   const total = await Course.countDocuments(query);
   const courses = await Course.find(query)
+    .sort({ [pagination.sortBy || "createdAt"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
     .lean();
@@ -231,7 +246,7 @@ export async function getLecturerCourses(
     return {
       data: [],
       courses: [],
-      pagination: buildPaginationMeta(0, pagination.page, pagination.limit),
+      pagination: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 

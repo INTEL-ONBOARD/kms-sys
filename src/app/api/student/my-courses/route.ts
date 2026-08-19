@@ -230,7 +230,53 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return successResponse({ courses: myCourses, total: myCourses.length }, undefined, 200);
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search")?.trim() || searchParams.get("q")?.trim() || "";
+    const status = searchParams.get("status")?.trim() || "All";
+    const category = searchParams.get("category")?.trim() || "All";
+    const sortBy = searchParams.get("sort")?.trim() || "Newest";
+
+    let filteredCourses = myCourses;
+
+    // Search query filter
+    if (search) {
+      const q = search.toLowerCase();
+      filteredCourses = filteredCourses.filter(
+        (c: any) =>
+          c.title.toLowerCase().includes(q) ||
+          (c.category && c.category.toLowerCase().includes(q)) ||
+          (c.instructor && c.instructor.toLowerCase().includes(q)) ||
+          (c.description && c.description.toLowerCase().includes(q)) ||
+          (c.code && c.code.toLowerCase().includes(q))
+      );
+    }
+
+    // Status filter
+    if (status === "Active") {
+      filteredCourses = filteredCourses.filter((c: any) => (c.progress ?? 0) < 100);
+    } else if (status === "Completed") {
+      filteredCourses = filteredCourses.filter((c: any) => (c.progress ?? 0) >= 100);
+    }
+
+    // Category filter
+    if (category && category !== "All") {
+      filteredCourses = filteredCourses.filter(
+        (c: any) => c.category && c.category.toLowerCase() === category.toLowerCase()
+      );
+    }
+
+    // Sorting
+    if (sortBy === "Oldest") {
+      filteredCourses.reverse();
+    } else if (sortBy === "A-Z") {
+      filteredCourses.sort((a: any, b: any) => a.title.localeCompare(b.title));
+    } else if (sortBy === "Z-A") {
+      filteredCourses.sort((a: any, b: any) => b.title.localeCompare(a.title));
+    } else if (sortBy === "Progress") {
+      filteredCourses.sort((a: any, b: any) => (b.progress ?? 0) - (a.progress ?? 0));
+    }
+
+    return successResponse({ courses: filteredCourses, total: filteredCourses.length }, undefined, 200);
   } catch (error) {
     return handleApiError(error, "GET /api/student/my-courses");
   }

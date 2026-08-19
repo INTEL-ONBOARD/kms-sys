@@ -117,6 +117,11 @@ export async function createLiveClass(
     }
   }
 
+  // Block scheduling for past dates and times (with 60-second network buffer)
+  if (startTimeDate.getTime() < Date.now() - 60000) {
+    throw new BadRequestError("Cannot schedule a live class for a past date or time. Please select a future date and time.");
+  }
+
   const classDuration = Number(input.duration) || 60;
   const endTimeDate = new Date(startTimeDate.getTime() + classDuration * 60 * 1000);
 
