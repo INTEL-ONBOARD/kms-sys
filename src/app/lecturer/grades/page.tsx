@@ -311,12 +311,21 @@ export default function LecturerGradebookPage() {
 
                         <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto">
                           <a
-                            href={fileUrl}
+                            href={`/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=view`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial"
                           >
                             <FiExternalLink /> Open Document
+                          </a>
+                          <a
+                            href={`/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-white hover:bg-gray-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs"
+                            title="Download File"
+                          >
+                            <FiDownload />
                           </a>
                         </div>
                       </div>

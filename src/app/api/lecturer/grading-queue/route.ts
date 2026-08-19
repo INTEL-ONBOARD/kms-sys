@@ -3,6 +3,8 @@ import { getToken } from "next-auth/jwt";
 import { connectToDatabase } from "@/lib/db";
 import Course from "@/models/Course";
 import Submission from "@/models/Submission";
+import Assignment from "@/models/Assignment";
+import User from "@/models/User";
 
 export async function GET(req: NextRequest) {
   try {
