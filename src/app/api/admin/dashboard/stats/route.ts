@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     const stats = await DashboardService.getAdminDashboardStats();
     return successResponse(stats, undefined, 200);
   } catch (error) {
+    console.error("Error in /api/admin/dashboard/stats:", error);
     return handleApiError(error, "GET /api/admin/dashboard/stats");
   }
 }
