@@ -51,8 +51,8 @@ export default function GradesPage() {
   }>({
     studentName: "Authenticated Student",
     studentId: "",
-    gpa: "3.8",
-    cgpa: "3.8",
+    gpa: "0.0",
+    cgpa: "0.0",
   });
 
   const fetchGrades = async () => {
@@ -67,8 +67,8 @@ export default function GradesPage() {
         setStudentInfo({
           studentName: data.studentName || "Student",
           studentId: data.studentId || "",
-          gpa: data.gpa || "3.8",
-          cgpa: data.cgpa || "3.8",
+          gpa: data.gpa || "0.0",
+          cgpa: data.cgpa || "0.0",
         });
       }
     } catch (err) {
@@ -93,7 +93,7 @@ export default function GradesPage() {
 
   // Compute filtered GPA dynamically if filtered
   const displayGPA = useMemo(() => {
-    if (filteredGrades.length === 0) return studentInfo.gpa;
+    if (filteredGrades.length === 0) return studentInfo.gpa || "0.0";
     const gradePointMap: Record<string, number> = {
       'A': 4.0,
       'A -': 3.7,
@@ -103,9 +103,13 @@ export default function GradesPage() {
       'C +': 2.3,
       'C': 2.0,
       'D': 1.0,
+      'F': 0.0,
+      'N/A': 0.0,
     };
-    const totalPts = filteredGrades.reduce((sum, g) => sum + (gradePointMap[g.grade] || 3.0), 0);
-    return (totalPts / filteredGrades.length).toFixed(1);
+    const scoredGrades = filteredGrades.filter(g => g.grade !== 'N/A' && g.grade !== 'Pending');
+    if (scoredGrades.length === 0) return "0.0";
+    const totalPts = scoredGrades.reduce((sum, g) => sum + (gradePointMap[g.grade] ?? 0.0), 0);
+    return (totalPts / scoredGrades.length).toFixed(1);
   }, [filteredGrades, studentInfo.gpa]);
 
   const showToast = (msg: string) => {

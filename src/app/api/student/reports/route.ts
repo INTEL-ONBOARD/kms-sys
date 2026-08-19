@@ -48,84 +48,74 @@ export async function GET(request: NextRequest) {
       Exam.find({ courseId: { $in: validCourseIds } }).lean(),
     ]);
 
-    // 3. Map dynamic course grades
+    // 3. Map dynamic course grades - ONLY updated after student submits assignment, lecturer reviews it, and results are published
     const allGrades = validEnrollments.map((enrollment: any, index: number) => {
       const course = enrollment.courseId;
       const cIdStr = course._id ? course._id.toString() : "";
-      const progress = typeof enrollment.progress === "number" ? enrollment.progress : 0;
       
       // Assign realistic semester partition based on course order / metadata
       const courseSemester = course.semester || (index % 2 === 0 ? "Semester 01" : "Semester 02");
       const courseCode = course.code || `WISE-${cIdStr.substring(0, 4).toUpperCase()}/CO`;
 
-      // Filter assignments & submissions for this course
-      const courseAssignments = assignments.filter((a: any) => a.courseId?.toString() === cIdStr);
-      const courseSubmissions = submissions.filter((s: any) => s.courseId?.toString() === cIdStr);
-      const gradedSubmissions = courseSubmissions.filter((s: any) => typeof s.grade === "number");
+      // Filter submissions for this course that have been reviewed, graded, and published by lecturer
+      const courseSubmissions = submissions.filter(
+        (s: any) => s.courseId?.toString() === cIdStr && s.status === "graded" && typeof s.grade === "number" && s.grade !== null
+      );
 
-      // Calculate Assignment score (out of 20)
+      const hasPublishedResults = courseSubmissions.length > 0;
+
       let assignmentScoreNum = 0;
-      if (gradedSubmissions.length > 0) {
-        const totalEarned = gradedSubmissions.reduce((acc: number, s: any) => acc + s.grade, 0);
-        const avgEarnedPercent = totalEarned / (gradedSubmissions.length * 100);
-        assignmentScoreNum = Math.round(avgEarnedPercent * 20);
-      } else {
-        // Dynamic baseline from course progress
-        assignmentScoreNum = Math.min(20, Math.max(14, Math.round(15 + (progress / 100) * 5)));
-      }
-      assignmentScoreNum = Math.min(20, Math.max(0, assignmentScoreNum));
+      let courseWorkNum = 0;
+      let finalExamNum = 0;
+      let attendanceNum = 0;
+      let totalPoints = 0;
+      let letterGrade = "Pending";
+      let gradeColor = "text-gray-400 bg-gray-100";
+      let gpaPoint = 0.0;
 
-      // Calculate CourseWork 1 score (out of 30)
-      const cwRatio = Math.min(1, Math.max(0.65, (assignmentScoreNum / 20) * 0.9 + (progress / 100) * 0.2));
-      const courseWorkNum = Math.min(30, Math.max(18, Math.round(cwRatio * 30)));
+      if (hasPublishedResults) {
+        const totalEarned = courseSubmissions.reduce((acc: number, s: any) => acc + s.grade, 0);
+        const avgEarnedPercent = totalEarned / (courseSubmissions.length * 100);
 
-      // Calculate Final Exam score (out of 40)
-      const courseExams = exams.filter((ex: any) => ex.courseId?.toString() === cIdStr);
-      const examRatio = Math.min(1, Math.max(0.70, (assignmentScoreNum / 20) * 0.85 + (progress / 100) * 0.25));
-      const finalExamNum = Math.min(40, Math.max(25, Math.round(examRatio * 40)));
+        assignmentScoreNum = Math.min(20, Math.max(0, Math.round(avgEarnedPercent * 20)));
+        courseWorkNum = Math.min(30, Math.max(0, Math.round(avgEarnedPercent * 30)));
+        finalExamNum = Math.min(40, Math.max(0, Math.round(avgEarnedPercent * 40)));
+        attendanceNum = Math.min(10, Math.max(1, Math.round(avgEarnedPercent * 10)));
+        totalPoints = assignmentScoreNum + courseWorkNum + finalExamNum + attendanceNum;
 
-      // Calculate Attendance score (out of 10)
-      const attendanceNum = Math.min(10, Math.max(8, Math.round(8 + (progress / 100) * 2)));
-
-      // Calculate overall percentage (out of 100)
-      const totalPoints = assignmentScoreNum + courseWorkNum + finalExamNum + attendanceNum;
-      
-      let letterGrade = "B";
-      let gradeColor = "text-blue-500 bg-blue-50";
-      let gpaPoint = 3.0;
-
-      if (totalPoints >= 93) {
-        letterGrade = "A";
-        gradeColor = "text-green-500 bg-green-50";
-        gpaPoint = 4.0;
-      } else if (totalPoints >= 88) {
-        letterGrade = "A -";
-        gradeColor = "text-green-400 bg-green-50";
-        gpaPoint = 3.7;
-      } else if (totalPoints >= 82) {
-        letterGrade = "B +";
-        gradeColor = "text-orange-400 bg-orange-50";
-        gpaPoint = 3.3;
-      } else if (totalPoints >= 75) {
-        letterGrade = "B";
-        gradeColor = "text-blue-500 bg-blue-50";
-        gpaPoint = 3.0;
-      } else if (totalPoints >= 70) {
-        letterGrade = "B -";
-        gradeColor = "text-blue-400 bg-blue-50";
-        gpaPoint = 2.7;
-      } else if (totalPoints >= 65) {
-        letterGrade = "C +";
-        gradeColor = "text-yellow-600 bg-yellow-50";
-        gpaPoint = 2.3;
-      } else if (totalPoints >= 60) {
-        letterGrade = "C";
-        gradeColor = "text-yellow-500 bg-yellow-50";
-        gpaPoint = 2.0;
-      } else {
-        letterGrade = "D";
-        gradeColor = "text-red-500 bg-red-50";
-        gpaPoint = 1.0;
+        if (totalPoints >= 93) {
+          letterGrade = "A";
+          gradeColor = "text-green-500 bg-green-50";
+          gpaPoint = 4.0;
+        } else if (totalPoints >= 88) {
+          letterGrade = "A -";
+          gradeColor = "text-green-400 bg-green-50";
+          gpaPoint = 3.7;
+        } else if (totalPoints >= 82) {
+          letterGrade = "B +";
+          gradeColor = "text-orange-400 bg-orange-50";
+          gpaPoint = 3.3;
+        } else if (totalPoints >= 75) {
+          letterGrade = "B";
+          gradeColor = "text-blue-500 bg-blue-50";
+          gpaPoint = 3.0;
+        } else if (totalPoints >= 70) {
+          letterGrade = "B -";
+          gradeColor = "text-blue-400 bg-blue-50";
+          gpaPoint = 2.7;
+        } else if (totalPoints >= 65) {
+          letterGrade = "C +";
+          gradeColor = "text-yellow-600 bg-yellow-50";
+          gpaPoint = 2.3;
+        } else if (totalPoints >= 60) {
+          letterGrade = "C";
+          gradeColor = "text-yellow-500 bg-yellow-50";
+          gpaPoint = 2.0;
+        } else {
+          letterGrade = "D";
+          gradeColor = "text-red-500 bg-red-50";
+          gpaPoint = 1.0;
+        }
       }
 
       return {
@@ -133,17 +123,18 @@ export async function GET(request: NextRequest) {
         courseId: cIdStr,
         title: course.title || "Untitled Course",
         code: courseCode,
-        assignments: `${String(assignmentScoreNum).padStart(2, "0")} / 20`,
-        courseWork: `${String(courseWorkNum).padStart(2, "0")} / 30`,
-        finalExam: `${String(finalExamNum).padStart(2, "0")} / 40`,
-        attendance: `${String(attendanceNum).padStart(2, "0")} / 10`,
+        assignments: hasPublishedResults ? `${String(assignmentScoreNum).padStart(2, "0")} / 20` : "-- / 20",
+        courseWork: hasPublishedResults ? `${String(courseWorkNum).padStart(2, "0")} / 30` : "-- / 30",
+        finalExam: hasPublishedResults ? `${String(finalExamNum).padStart(2, "0")} / 40` : "-- / 40",
+        attendance: hasPublishedResults ? `${String(attendanceNum).padStart(2, "0")} / 10` : "-- / 10",
         grade: letterGrade,
         gradeColor,
         gpaPoint,
         totalPoints,
+        hasPublishedResults,
+        gradedCount: courseSubmissions.length,
         semester: courseSemester,
         instructor: course.instructor || "Faculty Instructor",
-        progress,
       };
     });
 
@@ -156,15 +147,15 @@ export async function GET(request: NextRequest) {
       ? allGrades
       : allGrades.filter((g) => g.semester === requestedSemester);
 
-    // Calculate dynamic GPA & CGPA
-    const totalCourses = allGrades.length;
-    const avgCGPAPoints = totalCourses > 0
-      ? (allGrades.reduce((acc, g) => acc + g.gpaPoint, 0) / totalCourses).toFixed(1)
-      : "3.8";
+    // Calculate dynamic GPA & CGPA (0.0 for newly registered/unstarted students or unreviewed submissions)
+    const scoredCourses = allGrades.filter((g: any) => g.hasPublishedResults && g.totalPoints > 0);
+    const avgCGPAPoints = scoredCourses.length > 0
+      ? (scoredCourses.reduce((acc: number, g: any) => acc + g.gpaPoint, 0) / scoredCourses.length).toFixed(1)
+      : "0.0";
 
-    const filteredTotal = filteredGrades.length;
-    const avgSemesterGPA = filteredTotal > 0
-      ? (filteredGrades.reduce((acc, g) => acc + g.gpaPoint, 0) / filteredTotal).toFixed(1)
+    const filteredScored = filteredGrades.filter((g: any) => g.hasPublishedResults && g.totalPoints > 0);
+    const avgSemesterGPA = filteredScored.length > 0
+      ? (filteredScored.reduce((acc: number, g: any) => acc + g.gpaPoint, 0) / filteredScored.length).toFixed(1)
       : avgCGPAPoints;
 
     const reportData = {
@@ -182,7 +173,7 @@ export async function GET(request: NextRequest) {
       allGrades,
       availableSemesters,
       availableCourses,
-      totalEnrolled: totalCourses,
+      totalEnrolled: allGrades.length,
     };
 
     if (format === "csv") {

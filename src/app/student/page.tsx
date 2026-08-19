@@ -60,6 +60,9 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [credits, setCredits] = useState<number>(0);
+  const [gpa, setGpa] = useState<string>("0.0");
+  const [attendance, setAttendance] = useState<number>(0);
 
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -92,6 +95,9 @@ export default function DashboardPage() {
           setExams(data.exams || []);
           setLiveClasses(data.liveClasses || []);
           setMaterials(data.materials || []);
+          setCredits(data.credits ?? 0);
+          setGpa(data.gpa ?? "0.0");
+          setAttendance(data.attendance ?? 0);
         }
       } catch (err) {
         console.error('Failed to load dashboard:', err);
@@ -157,15 +163,15 @@ export default function DashboardPage() {
                   </div>
                   <div className="relative w-full h-48 flex items-center justify-center mt-4">
                     <div className="absolute z-20 -top-4 left-6 w-24 h-24 rounded-full bg-[#857BE4] flex flex-col items-center justify-center text-white shadow-[6px_6px_20px_rgba(133,123,228,0.4)] animate-breathe">
-                      <span className="text-xl font-bold">42</span>
+                      <span className="text-xl font-bold">{credits}</span>
                       <span className="text-[10px] font-medium opacity-90 tracking-wide mt-0.5">Credits</span>
                     </div>
                     <div className="absolute z-30 top-6 right-4 w-32 h-32 rounded-full bg-[#F39B40] flex flex-col items-center justify-center text-white shadow-[6px_6px_20px_rgba(243,155,64,0.4)] animate-breathe-delayed">
-                      <span className="text-3xl font-bold">3.8</span>
+                      <span className="text-3xl font-bold">{gpa}</span>
                       <span className="text-[11px] font-medium opacity-90 tracking-wide mt-1">Current GPA</span>
                     </div>
                     <div className="absolute z-20 -bottom-6 left-12 w-28 h-28 rounded-full bg-[#42C3DF] flex flex-col items-center justify-center text-white shadow-[6px_6px_20px_rgba(66,195,223,0.4)] animate-breathe-fast">
-                      <span className="text-2xl font-bold">92%</span>
+                      <span className="text-2xl font-bold">{attendance}%</span>
                       <span className="text-[11px] font-medium opacity-90 tracking-wide mt-0.5">Attendance</span>
                     </div>
                   </div>

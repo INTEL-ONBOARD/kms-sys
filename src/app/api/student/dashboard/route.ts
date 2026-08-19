@@ -8,6 +8,7 @@ import Assignment from "@/models/Assignment";
 import Exam from "@/models/Exam";
 import LiveClass from "@/models/LiveClass";
 import CourseMaterial from "@/models/CourseMaterial";
+import Submission from "@/models/Submission";
 
 // Ensure models are registered in Mongoose
 Course;
@@ -16,6 +17,7 @@ LiveClass;
 Exam;
 Assignment;
 Enrollment;
+Submission;
 
 export async function GET(request: NextRequest) {
   try {
@@ -87,6 +89,45 @@ export async function GET(request: NextRequest) {
       .limit(6)
       .lean() : [];
 
+    // 6. Calculate dynamic Credits, Attendance, and GPA (0 / 0.0 for new users or unreviewed work)
+    let credits = 0;
+    let attendance = 0;
+    let gpa = "0.0";
+
+    if (validEnrollments.length > 0) {
+      // Credits: 4 credits per completed course
+      credits = validEnrollments.reduce((sum: number, e: any) => {
+        const prog = typeof e.progress === "number" ? e.progress : 0;
+        return sum + (prog >= 100 ? 4 : Math.floor((prog / 100) * 4));
+      }, 0);
+
+      // Attendance: Average attendance percentage across enrolled courses
+      const totalProgress = validEnrollments.reduce((sum: number, e: any) => sum + (typeof e.progress === "number" ? e.progress : 0), 0);
+      attendance = Math.round(totalProgress / validEnrollments.length);
+
+      // GPA: Calculate ONLY from reviewed and published graded submissions
+      const gradedSubmissions = await Submission.find({
+        studentId: userObjectId,
+        status: "graded",
+        grade: { $ne: null },
+      }).lean();
+
+      if (gradedSubmissions.length > 0) {
+        const totalPoints = gradedSubmissions.reduce((sum: number, s: any) => {
+          const g = typeof s.grade === "number" ? s.grade : 0;
+          if (g >= 93) return sum + 4.0;
+          if (g >= 88) return sum + 3.7;
+          if (g >= 82) return sum + 3.3;
+          if (g >= 75) return sum + 3.0;
+          if (g >= 70) return sum + 2.7;
+          if (g >= 65) return sum + 2.3;
+          if (g >= 60) return sum + 2.0;
+          return sum + 1.0;
+        }, 0);
+        gpa = (totalPoints / gradedSubmissions.length).toFixed(1);
+      }
+    }
+
     return NextResponse.json(
       {
         enrollments: validEnrollments,
@@ -94,6 +135,9 @@ export async function GET(request: NextRequest) {
         exams,
         liveClasses,
         materials,
+        credits,
+        gpa,
+        attendance,
       },
       { status: 200 }
     );
