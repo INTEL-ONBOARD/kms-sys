@@ -32,6 +32,7 @@ export default function SignupPage() {
   });
 
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -44,13 +45,67 @@ export default function SignupPage() {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
     
     // Move from Step 2 to Step 3
     if (step === 2) {
+      const errors: Record<string, string> = {};
+      const nameRegex = /^[A-Za-z\s\-]+$/;
+      const phoneRegex = /^[0-9]{10}$/;
+
+      if (!nameRegex.test(formData.firstName)) errors.firstName = "Must contain only letters, spaces, and hyphens.";
+      if (!nameRegex.test(formData.lastName)) errors.lastName = "Must contain only letters, spaces, and hyphens.";
+      if (!phoneRegex.test(formData.phone)) errors.phone = "Must be exactly 10 digits.";
+
+      if (role === 'student') {
+        if (!nameRegex.test(formData.parentName)) errors.parentName = "Must contain only letters, spaces, and hyphens.";
+        if (!phoneRegex.test(formData.parentContact)) errors.parentContact = "Must be exactly 10 digits.";
+        
+        if (formData.dob) {
+           const selectedDate = new Date(formData.dob);
+           const today = new Date();
+           today.setHours(0, 0, 0, 0);
+           if (selectedDate > today) {
+             errors.dob = "Date of birth cannot be in the future.";
+           }
+        }
+      }
+
+      if (role === 'lecturer') {
+        const expertiseRegex = /^[^0-9]*$/;
+        if (!expertiseRegex.test(formData.expertise)) {
+          errors.expertise = "Numbers are not allowed.";
+        }
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+
       setStep(3);
     } 
     // Final Form Submission (Step 3)
     else if (step === 3) {
+      const errors: Record<string, string> = {};
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const passwordRegex = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$/;
+
+      if (!emailRegex.test(formData.email)) {
+        errors.email = "Please enter a valid email address.";
+      }
+      if (!passwordRegex.test(formData.password)) {
+        errors.password = "Password must be at least 8 characters long, contain at least 1 uppercase letter and 1 number.";
+      }
+      if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = "Passwords do not match.";
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+
       submitRegistration();
     }
   };
@@ -58,22 +113,19 @@ export default function SignupPage() {
   // Move to the previous step
   const handleBack = () => {
     setError('');
+    setFieldErrors({});
     setStep(step - 1);
   };
 
   // Handle Role Selection (Step 1)
   const selectRole = (selectedRole: 'student' | 'lecturer') => {
     setRole(selectedRole);
+    setFieldErrors({});
     setStep(2); // Automatically move to step 2 after selecting a role
   };
 
   // Final API Submission Logic
   const submitRegistration = async () => {
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -180,15 +232,18 @@ export default function SignupPage() {
                   {/* Common Fields for Step 2 */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
-                    <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.firstName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.firstName && <p className="text-red-500 text-xs mt-1">{fieldErrors.firstName}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Last Name</label>
-                    <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.lastName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.lastName && <p className="text-red-500 text-xs mt-1">{fieldErrors.lastName}</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
-                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="tel" name="phone" maxLength={10} value={formData.phone} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.phone ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.phone && <p className="text-red-500 text-xs mt-1">{fieldErrors.phone}</p>}
                   </div>
 
                   {/* Student Specific Fields */}
@@ -196,7 +251,8 @@ export default function SignupPage() {
                     <>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Date of Birth</label>
-                        <input type="date" name="dob" value={formData.dob} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                        <input type="date" name="dob" max={new Date().toISOString().split('T')[0]} value={formData.dob} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.dob ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                        {fieldErrors.dob && <p className="text-red-500 text-xs mt-1">{fieldErrors.dob}</p>}
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Home Address</label>
@@ -204,11 +260,13 @@ export default function SignupPage() {
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Parent/Guardian Name</label>
-                        <input type="text" name="parentName" value={formData.parentName} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                        <input type="text" name="parentName" value={formData.parentName} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.parentName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                        {fieldErrors.parentName && <p className="text-red-500 text-xs mt-1">{fieldErrors.parentName}</p>}
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Parent Contact</label>
-                        <input type="tel" name="parentContact" value={formData.parentContact} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                        <input type="tel" name="parentContact" maxLength={10} value={formData.parentContact} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.parentContact ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                        {fieldErrors.parentContact && <p className="text-red-500 text-xs mt-1">{fieldErrors.parentContact}</p>}
                       </div>
                     </>
                   )}
@@ -228,7 +286,8 @@ export default function SignupPage() {
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Area of Expertise</label>
-                        <input type="text" name="expertise" placeholder="e.g. Data Science" value={formData.expertise} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                        <input type="text" name="expertise" placeholder="e.g. Data Science" value={formData.expertise} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.expertise ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                        {fieldErrors.expertise && <p className="text-red-500 text-xs mt-1">{fieldErrors.expertise}</p>}
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Highest Qualification</label>
@@ -253,15 +312,18 @@ export default function SignupPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter your email" className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter your email" className={`w-full px-4 py-3 border ${fieldErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.email && <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
-                    <input type="password" name="password" value={formData.password} onChange={handleChange} required minLength={6} placeholder="Create a strong password" className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="password" name="password" value={formData.password} onChange={handleChange} required minLength={8} placeholder="Create a strong password" className={`w-full px-4 py-3 border ${fieldErrors.password ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.password && <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Confirm Password</label>
-                    <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required minLength={6} placeholder="Confirm your password" className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition" />
+                    <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required minLength={8} placeholder="Confirm your password" className={`w-full px-4 py-3 border ${fieldErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    {fieldErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{fieldErrors.confirmPassword}</p>}
                   </div>
                 </div>
               )}

@@ -1,63 +1,31 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { connectToDatabase } from "@/lib/db";
-import Notification from "@/models/Notification";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/server/core/auth-context";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import * as NotificationService from "@/server/services/notification.service";
 
 export async function GET(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token || (!token.id && !token.sub)) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const userId = (token.id || token.sub) as string;
-
-    await connectToDatabase();
-
-    const notifications = await Notification.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(30)
-      .lean();
-
-    const unreadCount = notifications.filter((n) => !n.read).length;
-
-    return NextResponse.json({ notifications, unreadCount }, { status: 200 });
-  } catch (error: any) {
-    console.error("Unified Notifications GET Error:", error);
-    return NextResponse.json({ message: "Internal Server Error", error: error.message }, { status: 500 });
+    const authUser = await requireAuth(req);
+    const result = await NotificationService.getUserNotifications(authUser.id, 30);
+    return successResponse(result, undefined, 200);
+  } catch (error) {
+    return handleApiError(error, "GET /api/notifications");
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token || (!token.id && !token.sub)) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const userId = (token.id || token.sub) as string;
+    const authUser = await requireAuth(req);
     const body = await req.json().catch(() => ({}));
     const { notificationId } = body;
 
-    await connectToDatabase();
+    const result = await NotificationService.markNotificationsAsRead(
+      authUser.id,
+      notificationId
+    );
 
-    if (notificationId) {
-      await Notification.updateOne({ _id: notificationId, userId }, { read: true });
-    } else {
-      await Notification.updateMany({ userId, read: false }, { read: true });
-    }
-
-    return NextResponse.json({ message: "Notifications updated successfully" }, { status: 200 });
-  } catch (error: any) {
-    console.error("Unified Notifications PATCH Error:", error);
-    return NextResponse.json({ message: "Internal Server Error", error: error.message }, { status: 500 });
+    return successResponse(result, result.message, 200);
+  } catch (error) {
+    return handleApiError(error, "PATCH /api/notifications");
   }
 }

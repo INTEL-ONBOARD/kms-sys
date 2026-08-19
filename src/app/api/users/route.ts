@@ -1,49 +1,32 @@
-import { NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/db";
-import User from "@/models/User";
+import { NextRequest } from "next/server";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import * as UserService from "@/server/services/user.service";
 
 export async function GET() {
   try {
-    await connectToDatabase();
-    const users = await User.find().sort({ createdAt: -1 }).lean();
-    return NextResponse.json(users, { status: 200 });
+    const { users } = await UserService.getUsers();
+    return successResponse(users, undefined, 200);
   } catch (error) {
-    return NextResponse.json(
-      { message: "Failed to fetch users", error: String(error) },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/users");
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const payload = (await request.json()) as {
-      name?: string;
-      email?: string;
-      role?: "student" | "instructor" | "admin";
-    };
-
+    const payload = await req.json();
     if (!payload.name?.trim() || !payload.email?.trim()) {
-      return NextResponse.json({ message: "name and email are required" }, { status: 400 });
+      return successResponse(undefined, "name and email are required", 400);
     }
 
-    await connectToDatabase();
-    const user = await User.create({
+    const user = await UserService.createUser({
       name: payload.name.trim(),
       email: payload.email.trim().toLowerCase(),
-      role: payload.role ?? "student"
+      password: payload.password || "TempPass123!",
+      role: payload.role || "student",
     });
 
-    return NextResponse.json(user, { status: 201 });
+    return successResponse(user, undefined, 201);
   } catch (error) {
-    const isDuplicate = String(error).includes("E11000");
-    if (isDuplicate) {
-      return NextResponse.json({ message: "Email already exists" }, { status: 409 });
-    }
-
-    return NextResponse.json(
-      { message: "Failed to create user", error: String(error) },
-      { status: 500 }
-    );
+    return handleApiError(error, "POST /api/users");
   }
 }

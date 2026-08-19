@@ -1,47 +1,27 @@
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import Course from '@/models/Course';
-import type { CourseInput } from '@/types/lms';
+import { NextRequest } from "next/server";
+import { requireRole } from "@/server/core/auth-context";
+import { validateBody } from "@/server/core/validator";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import { createCourseSchema } from "@/server/dtos/course.dto";
+import * as CourseService from "@/server/services/course.service";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    await connectToDatabase();
-    // Fetch all courses, newest first
-    const courses = await Course.find().sort({ createdAt: -1 });
-    return NextResponse.json({ courses }, { status: 200 });
+    const { courses } = await CourseService.getCourses();
+    return successResponse({ courses }, undefined, 200);
   } catch (error) {
-    return NextResponse.json({ message: "Failed to fetch courses" }, { status: 500 });
+    return handleApiError(error, "GET /api/admin/courses");
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as Partial<CourseInput>;
-    await connectToDatabase();
+    const authUser = await requireRole(req, ["super_admin", "admin", "lecturer"]);
+    const body = await validateBody(req, createCourseSchema);
+    const newCourse = await CourseService.createCourse(body, authUser.id);
 
-    // Explicitly extract all supported fields (including new schedule & colorCode)
-    const newCourse = await Course.create({
-      title:       body.title?.trim(),
-      description: body.description?.trim() || "",
-      instructor:  body.instructor?.trim(),
-      category:    body.category?.trim() || "Design",
-      price:       body.price?.trim() || "Free",
-      status:      body.status || "draft",
-      published:   body.published ?? false,
-      colorCode:   body.colorCode?.trim() || "#5A67D8",
-      // Filter out incomplete slots (must have dayOfWeek + startTime + endTime)
-      schedule: (body.schedule ?? []).filter(
-        (s) => s.dayOfWeek && s.startTime && s.endTime
-      ),
-      enrollments: 0,
-    });
-
-    return NextResponse.json(
-      { message: "Course created", course: newCourse },
-      { status: 201 }
-    );
+    return successResponse({ course: newCourse }, "Course created", 201);
   } catch (error) {
-    console.error("Error creating course:", error);
-    return NextResponse.json({ message: "Failed to create course" }, { status: 500 });
+    return handleApiError(error, "POST /api/admin/courses");
   }
-}
+}

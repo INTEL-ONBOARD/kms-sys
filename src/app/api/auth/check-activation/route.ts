@@ -1,40 +1,20 @@
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import User from '@/models/User';
+import { NextRequest } from "next/server";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import { BadRequestError } from "@/server/core/errors";
+import * as AuthService from "@/server/services/auth.service";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const token = searchParams.get('token');
+    const token = searchParams.get("token");
 
     if (!token) {
-      return NextResponse.json(
-        { message: 'Token is required.' },
-        { status: 400 }
-      );
+      throw new BadRequestError("Token is required.");
     }
 
-    await connectToDatabase();
-
-    const user = await User.findOne({ activationToken: token });
-
-    if (!user) {
-      return NextResponse.json(
-        { message: 'Invalid or expired activation link.' },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { needsPassword: !user.password },
-      { status: 200 }
-    );
-
+    const result = await AuthService.checkActivation(token);
+    return successResponse(result, undefined, 200);
   } catch (error) {
-    console.error('Check Activation API Error:', error);
-    return NextResponse.json(
-      { message: 'An error occurred.' },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/auth/check-activation");
   }
 }
