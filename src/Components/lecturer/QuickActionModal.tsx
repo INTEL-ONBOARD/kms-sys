@@ -29,7 +29,11 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgressText, setUploadProgressText] = useState("");
-  const [courses, setCourses] = useState<Array<{ _id: string; title: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ 
+    _id: string; 
+    title: string; 
+    assessmentItems?: Array<{ name: string; type: string; weight: number }> 
+  }>>([]);
 
   // Form states
   const [title, setTitle] = useState("");
@@ -37,9 +41,13 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [maxPoints, setMaxPoints] = useState("100");
+  const [weight, setWeight] = useState("20");
   const [link, setLink] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Homework");
+
+  // Assignment PDF Brief state
+  const [assignmentPdfFile, setAssignmentPdfFile] = useState<File | null>(null);
 
   // Live Class Material Upload State
   const [materialFile, setMaterialFile] = useState<File | null>(null);
@@ -56,6 +64,17 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           setCourses(data.data || []);
           if (data.data && data.data.length > 0) {
             setCourseId(data.data[0]._id);
+            const firstItems = (data.data[0].assessmentItems || []).filter(
+              (i: any) => i.type !== "exam" && i.type !== "attendance"
+            );
+            if (firstItems.length > 0) {
+              setTitle(firstItems[0].name);
+              setWeight(String(firstItems[0].weight));
+              if (firstItems[0].type === "quiz") setCategory("Quiz");
+              else if (firstItems[0].type === "project") setCategory("Project");
+              else if (firstItems[0].type === "coursework") setCategory("Lab Report");
+              else setCategory("Homework");
+            }
           }
         }
       } catch (err) {
@@ -77,15 +96,15 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     }
   };
 
-  const uploadMaterialToR2 = async (file: File, targetCourseId: string): Promise<string | null> => {
+  const uploadFileToR2 = async (file: File, targetCourseId: string): Promise<{ fileKey: string; publicUrl: string } | null> => {
     try {
-      setUploadProgressText("Requesting secure storage upload URL...");
+      setUploadProgressText(`Requesting upload URL for ${file.name}...`);
       const presignRes = await fetch("/api/materials/generate-upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileName: file.name,
-          fileType: file.type || "application/octet-stream",
+          fileType: file.type || "application/pdf",
           fileSize: file.size,
           courseId: targetCourseId,
         }),
@@ -98,9 +117,8 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
 
       const { uploadUrl, fileKey, publicUrl } = await presignRes.json();
 
-      setUploadProgressText(`Uploading ${file.name} to Cloudflare R2...`);
+      setUploadProgressText(`Uploading ${file.name} to storage...`);
 
-      // Upload file directly to Cloudflare R2
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl, true);
@@ -115,11 +133,23 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
         };
 
         xhr.onerror = () => {
-          reject(new Error("Network error during file upload to Cloudflare R2."));
+          reject(new Error("Network error during file upload."));
         };
 
         xhr.send(file);
       });
+
+      return { fileKey, publicUrl };
+    } catch (err: any) {
+      console.error("R2 file upload error:", err);
+      throw err;
+    }
+  };
+
+  const uploadMaterialToR2 = async (file: File, targetCourseId: string): Promise<string | null> => {
+    try {
+      const res = await uploadFileToR2(file, targetCourseId);
+      if (!res) return null;
 
       setUploadProgressText("Saving course material record...");
 
@@ -133,8 +163,8 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           courseId: targetCourseId,
           materialType: materialType,
           fileName: file.name,
-          fileKey: fileKey,
-          fileUrl: publicUrl,
+          fileKey: res.fileKey,
+          fileUrl: res.publicUrl,
           fileSize: file.size,
           mimeType: file.type || "application/octet-stream",
           isPublished: true,
@@ -157,8 +187,21 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      toast.warning("Title is required");
+      toast.warning("Please select an assignment component from the Course Grade Breakdown");
       return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    if (type === "assignment") {
+      if (!date) {
+        toast.warning("Due date is required");
+        return;
+      }
+      if (date < todayStr) {
+        toast.error("Assignment due date cannot be in the past. Please select a valid future date.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -209,6 +252,27 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           toast.error(errData.message || "Failed to schedule live class");
         }
       } else if (type === "assignment") {
+        let uploadedPdfUrl = "";
+        let uploadedPdfName = "";
+        let uploadedPdfSize = 0;
+        let uploadedFileKey = "";
+
+        if (assignmentPdfFile) {
+          try {
+            const uploadRes = await uploadFileToR2(assignmentPdfFile, courseId);
+            if (uploadRes) {
+              uploadedPdfUrl = uploadRes.publicUrl;
+              uploadedPdfName = assignmentPdfFile.name;
+              uploadedPdfSize = assignmentPdfFile.size;
+              uploadedFileKey = uploadRes.fileKey;
+            }
+          } catch (err: any) {
+            toast.error(err.message || "Failed to upload assignment PDF");
+            setSubmitting(false);
+            return;
+          }
+        }
+
         const res = await fetch("/api/lecturer/assignments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -219,11 +283,16 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             maxPoints,
             description,
             category,
+            weight: Number(weight) || 20,
+            attachmentUrl: uploadedPdfUrl,
+            attachmentName: uploadedPdfName,
+            attachmentSize: uploadedPdfSize,
+            fileKey: uploadedFileKey,
           }),
         });
 
         if (res.ok) {
-          toast.success(`Assignment "${title}" created successfully!`);
+          toast.success(`Assignment "${title}" created & synced with Grade Breakdown!`);
           if (onSuccess) onSuccess();
           onClose();
         } else {
@@ -262,6 +331,11 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const selectedCourseObj = courses.find((c) => c._id === courseId);
+  const courseBreakdownItems = (selectedCourseObj?.assessmentItems || []).filter(
+    (i: any) => i.type !== "exam" && i.type !== "attendance"
+  );
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 font-sans max-h-[90vh] overflow-y-auto">
@@ -281,7 +355,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             <p className="text-xs text-[#A0AEC0]">
               {type === "class" 
                 ? "Set up live class details and attach lecture materials/slides"
-                : "Fill in details to publish to your students"}
+                : "Create assignment based on Course Assessment & Grade Breakdown"}
             </p>
           </div>
         </div>
@@ -293,7 +367,24 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
               <label className="block text-xs font-semibold text-gray-700 mb-1">Target Course</label>
               <select
                 value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
+                onChange={(e) => {
+                  const newCId = e.target.value;
+                  setCourseId(newCId);
+                  const matchedC = courses.find(c => c._id === newCId);
+                  const items = (matchedC?.assessmentItems || []).filter(
+                    (i: any) => i.type !== "exam" && i.type !== "attendance"
+                  );
+                  if (items.length > 0) {
+                    setTitle(items[0].name);
+                    setWeight(String(items[0].weight));
+                    if (items[0].type === "quiz") setCategory("Quiz");
+                    else if (items[0].type === "project") setCategory("Project");
+                    else if (items[0].type === "coursework") setCategory("Lab Report");
+                    else setCategory("Homework");
+                  } else {
+                    setTitle("");
+                  }
+                }}
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
               >
                 {courses.map((c) => (
@@ -305,57 +396,134 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Title</label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={type === "assignment" ? "e.g. Midterm Lab Assignment" : "e.g. Advanced System Design & Scalability"}
-              className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
-            />
-          </div>
+          {/* Select ONLY from configured Course Assessment & Grade Breakdown */}
+          {type === "assignment" && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Assessment Component <span className="text-blue-600 font-bold">(From Course Grade Breakdown)</span>
+              </label>
+
+              {courseBreakdownItems.length === 0 ? (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                  <p className="font-bold">No assignment components configured in Grade Breakdown.</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Please configure Course Assessment & Grade Breakdown under Course Management first.
+                  </p>
+                </div>
+              ) : (
+                <select
+                  required
+                  value={title}
+                  onChange={(e) => {
+                    const selectedName = e.target.value;
+                    setTitle(selectedName);
+                    const match = courseBreakdownItems.find(i => i.name === selectedName);
+                    if (match) {
+                      setWeight(String(match.weight));
+                      if (match.type === "quiz") setCategory("Quiz");
+                      else if (match.type === "project") setCategory("Project");
+                      else if (match.type === "coursework") setCategory("Lab Report");
+                      else setCategory("Homework");
+                    }
+                  }}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-[#1E293B] outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC] cursor-pointer"
+                >
+                  <option value="">-- Select Configured Assessment Item --</option>
+                  {courseBreakdownItems.map((item, idx) => (
+                    <option key={idx} value={item.name}>
+                      {item.name} ({item.weight}% Grade Weight &bull; {item.type})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {type === "class" && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Live Class Title</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Advanced System Design & Scalability"
+                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
+              />
+            </div>
+          )}
 
           {type === "assignment" && (
             <>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Assignment Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
-                >
-                  <option value="Homework">Homework</option>
-                  <option value="Lab Report">Lab Report</option>
-                  <option value="Project">Project</option>
-                  <option value="Quiz">Quiz</option>
-                  <option value="Essay">Essay</option>
-                  <option value="Case Study">Case Study</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Due Date</label>
                   <input
                     type="date"
                     required
+                    min={new Date().toISOString().split("T")[0]}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Max Points</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Grade Weight (%)</label>
                   <input
-                    type="number"
-                    required
-                    value={maxPoints}
-                    onChange={(e) => setMaxPoints(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                    type="text"
+                    readOnly
+                    value={`${weight}%`}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none bg-blue-50 text-blue-700 font-black text-center"
                   />
                 </div>
+              </div>
+
+              {/* PDF ATTACHMENT UPLOAD SECTION */}
+              <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-[#1E293B]">
+                    Upload Assignment Brief / PDF <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full">
+                    Cloudflare R2 Direct
+                  </span>
+                </div>
+
+                {!assignmentPdfFile ? (
+                  <label className="border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer bg-gray-50/50 hover:bg-blue-50/30 transition">
+                    <FiUploadCloud className="text-2xl text-blue-600 mb-1" />
+                    <p className="text-xs font-bold text-gray-700">Click to upload Assignment PDF / Rubric</p>
+                    <p className="text-[10px] text-gray-400">PDF, DOCX, or ZIP files up to 250MB</p>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.zip"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setAssignmentPdfFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2 truncate">
+                      <FiFileText className="text-blue-600 text-lg shrink-0" />
+                      <div className="truncate">
+                        <p className="text-xs font-bold text-blue-950 truncate">{assignmentPdfFile.name}</p>
+                        <p className="text-[10px] text-blue-700 font-semibold">{formatSize(assignmentPdfFile.size)}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentPdfFile(null)}
+                      className="text-gray-400 hover:text-rose-600 p-1 transition"
+                      title="Remove PDF"
+                    >
+                      <FiTrash2 className="text-sm" />
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}

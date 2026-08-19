@@ -38,15 +38,36 @@ export async function GET(req: NextRequest) {
     const courseIds = courses.map((c) => c._id);
 
     const total = await Exam.countDocuments({ courseId: { $in: courseIds } });
-    const exams = await Exam.find({ courseId: { $in: courseIds } })
-      .populate("courseId", "title category")
+    const examsDocs = await Exam.find({ courseId: { $in: courseIds } })
+      .populate("courseId", "title category assessmentItems")
       .sort({ date: 1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
+    // Enrich exams with weight from course breakdown
+    const exams = examsDocs.map((e: any) => {
+      const course = e.courseId;
+      let weight: number | null = null;
+      if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+        const match = course.assessmentItems.find(
+          (item: any) => item.name?.toLowerCase() === e.title?.toLowerCase()
+        );
+        if (match) weight = match.weight;
+      }
+      return {
+        ...e,
+        weight: weight ?? (e.type === "final" ? 40 : e.type === "midterm" ? 25 : 15),
+      };
+    });
+
     return NextResponse.json({
       exams,
+      courses: courses.map((c: any) => ({
+        _id: c._id,
+        title: c.title,
+        assessmentItems: (c.assessmentItems || []).filter((i: any) => i.type === "exam"),
+      })),
       pagination: { page, limit, total, hasMore: skip + exams.length < total }
     });
   } catch (error: any) {
@@ -108,15 +129,51 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const examDate = date ? new Date(date) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // Validate that the exam title is an exam component in Course.assessmentItems
+    const courseDoc = await Course.findById(targetCourseId);
+    if (courseDoc && courseDoc.assessmentItems && courseDoc.assessmentItems.length > 0) {
+      const isConfiguredExam = courseDoc.assessmentItems.some(
+        (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+      );
+      if (!isConfiguredExam) {
+        const isAssignment = courseDoc.assessmentItems.some(
+          (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
+        );
+        if (isAssignment) {
+          return NextResponse.json(
+            { message: `"${title}" is configured as Coursework/Assignment in the Grade Breakdown. Please create it under Assignment Manager.` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (!date) {
+      return NextResponse.json({ message: "Exam date is required" }, { status: 400 });
+    }
+
+    const examDate = new Date(date);
+    if (isNaN(examDate.getTime())) {
+      return NextResponse.json({ message: "Invalid date format" }, { status: 400 });
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    if (examDate < startOfToday) {
+      return NextResponse.json(
+        { message: "Exam date cannot be in the past. Please select a valid future date." },
+        { status: 400 }
+      );
+    }
 
     const exam = await Exam.create({
-      title,
+      title: title.trim(),
       courseId: targetCourseId,
       date: examDate,
       duration: Number(duration) || 120,
       location: location || "Online Hall A",
-      type: type || "quiz",
+      type: type || "midterm",
       status: "scheduled",
     });
 
