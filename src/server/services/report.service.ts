@@ -1,9 +1,11 @@
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
 import Course from "@/models/Course";
 import Assignment from "@/models/Assignment";
 import Submission from "@/models/Submission";
 import Exam from "@/models/Exam";
+import User from "@/models/User";
 
 /**
  * Calculates student grades, GPA, CGPA, and coursework breakdown.
@@ -215,6 +217,11 @@ export async function getStudentReport(
       ? (filteredCompleted.reduce((acc: number, g: any) => acc + g.gpaPoint, 0) / filteredCompleted.length).toFixed(1)
       : avgCGPAPoints;
 
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+  const currentUser = await User.findById(userObjectId).select("name email role reportApproved").lean();
+
   return {
     studentName: userName || "Authenticated Student",
     studentId: userId,
@@ -231,5 +238,6 @@ export async function getStudentReport(
     availableSemesters,
     availableCourses,
     totalEnrolled: allGrades.length,
+    reportApproved: !!currentUser?.reportApproved,
   };
 }

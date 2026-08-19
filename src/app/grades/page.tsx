@@ -17,7 +17,9 @@ import {
   FiUser,
   FiTrendingUp,
   FiGrid,
-  FiList
+  FiList,
+  FiLock,
+  FiAlertCircle
 } from 'react-icons/fi';
 import Sidebar from '@/Components/Sidebar';
 import Header from '@/Components/DashHeader';
@@ -67,10 +69,14 @@ export default function GradesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [requestingApproval, setRequestingApproval] = useState(false);
+  const [approvalRequested, setApprovalRequested] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   
   // Dynamic API state
   const [loading, setLoading] = useState(true);
+  const [reportApproved, setReportApproved] = useState(false);
   const [gradesData, setGradesData] = useState<CourseGrade[]>([]);
   const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
@@ -95,6 +101,7 @@ export default function GradesPage() {
         setGradesData(data.allGrades || data.grades || []);
         setAvailableSemesters(data.availableSemesters || ["Semester 01", "Semester 02"]);
         setAvailableCourses(data.availableCourses || []);
+        setReportApproved(!!data.reportApproved);
         setStudentInfo({
           studentName: data.studentName || "Student",
           studentId: data.studentId || "",
@@ -276,11 +283,33 @@ export default function GradesPage() {
 
               <button
                 id="download-report-btn"
-                onClick={() => setShowDownloadModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                onClick={() => {
+                  if (reportApproved) {
+                    setShowDownloadModal(true);
+                  } else {
+                    setShowApprovalModal(true);
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${
+                  reportApproved
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                }`}
+                title={reportApproved ? "Export Academic Report" : "Admin Approval Required to Export Report"}
               >
-                <FiDownload className="text-sm" />
-                <span>Export Report</span>
+                {reportApproved ? (
+                  <>
+                    <FiDownload className="text-sm" />
+                    <span>Export Report</span>
+                    <span className="ml-1 px-1.5 py-0.5 bg-blue-500 text-[9px] uppercase font-black rounded text-white">Approved</span>
+                  </>
+                ) : (
+                  <>
+                    <FiLock className="text-sm text-amber-700" />
+                    <span>Export Report</span>
+                    <span className="ml-1 px-1.5 py-0.5 bg-amber-200 text-amber-900 text-[9px] uppercase font-black rounded">Approval Required</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -799,6 +828,71 @@ export default function GradesPage() {
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Approval Required Modal */}
+      {showApprovalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 border border-gray-100 relative">
+            <button
+              onClick={() => setShowApprovalModal(false)}
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+            >
+              <FiX className="text-lg" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl font-bold mb-4">
+              <FiLock />
+            </div>
+
+            <h3 className="text-base font-black text-gray-900">Admin Approval Required</h3>
+            <p className="text-xs text-gray-600 mt-2 leading-relaxed">
+              Exporting and downloading official academic reports requires administrator authorization.
+            </p>
+
+            <div className="mt-4 p-3.5 bg-amber-50 rounded-xl border border-amber-100 text-amber-900 text-xs flex items-start gap-2.5">
+              <FiAlertCircle className="text-base shrink-0 mt-0.5 text-amber-700" />
+              <span>Once an administrator reviews and approves your report download access, you will be able to export CSV spreadsheets and printable PDF transcripts.</span>
+            </div>
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
+              <button
+                disabled={requestingApproval || approvalRequested}
+                onClick={async () => {
+                  setRequestingApproval(true);
+                  try {
+                    const res = await fetch('/api/student/request-report-approval', { method: 'POST' });
+                    if (res.ok) {
+                      setApprovalRequested(true);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setRequestingApproval(false);
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {approvalRequested ? (
+                  <>
+                    <FiCheckCircle /> Request Sent to Admin
+                  </>
+                ) : requestingApproval ? (
+                  "Submitting..."
+                ) : (
+                  "Request Admin Approval"
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowApprovalModal(false)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

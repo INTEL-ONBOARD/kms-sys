@@ -31,6 +31,7 @@ const userSchema = new Schema(
     address: { type: String },
     parentName: { type: String },
     parentContact: { type: String },
+    reportApproved: { type: Boolean, default: false },
 
     // --- Lecturer/Instructor Specific Fields (Populated from Stepper UI) ---
     department: { type: String },

@@ -24,6 +24,7 @@ const mockGradesData = {
   studentId: "12345",
   gpa: "3.8",
   cgpa: "3.8",
+  reportApproved: true,
   availableSemesters: ["Semester 01", "Semester 02"],
   availableCourses: ["Animation Studies I", "Principles of Script Writing"],
   allGrades: [
@@ -78,7 +79,7 @@ describe('GradesPage component', () => {
     expect(screen.getByText(/Export Report/i)).toBeInTheDocument();
   });
 
-  it('opens download options modal when Export Report button is clicked', async () => {
+  it('opens download options modal when Export Report button is clicked and report is approved', async () => {
     render(<GradesPage />);
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
@@ -90,6 +91,26 @@ describe('GradesPage component', () => {
     expect(screen.getByText(/Export Academic Performance Report/i)).toBeInTheDocument();
     expect(screen.getByText(/CSV Spreadsheet/i)).toBeInTheDocument();
     expect(screen.getByText(/Printable PDF Transcript/i)).toBeInTheDocument();
+  });
+
+  it('shows admin approval modal when Export Report is clicked and report is not approved', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ...mockGradesData, reportApproved: false }),
+      })
+    ) as jest.Mock;
+
+    render(<GradesPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /Export Report/i });
+    fireEvent.click(downloadBtn);
+
+    expect(screen.getByText(/Admin Approval Required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Request Admin Approval/i })).toBeInTheDocument();
   });
 
   it('filters grade entries when selecting semester', async () => {
