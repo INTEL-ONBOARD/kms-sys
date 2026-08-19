@@ -1,39 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { NextRequest } from "next/server";
+import { requireAuth, requireRole } from "@/server/core/auth-context";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import { BadRequestError, NotFoundError } from "@/server/core/errors";
+import { deleteR2Object } from "@/lib/r2";
 import { connectToDatabase } from "@/lib/db";
 import CourseMaterial from "@/models/CourseMaterial";
 import Course from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import User from "@/models/User";
-import { deleteR2Object } from "@/lib/r2";
 import mongoose from "mongoose";
 
-// Ensure models are registered in Mongoose
+// Ensure models are registered
 Course;
 CourseMaterial;
 Enrollment;
 User;
 
-/**
- * GET /api/materials?courseId=xyz
- * Fetch course materials for a given course (accessible by students, lecturers, and admins)
- */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const token = await getToken({
-      req,
-      secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!session?.user && !token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const role = (session?.user as { role?: string })?.role || (token?.role as string);
-
+    const authUser = await requireAuth(req);
     const { searchParams } = new URL(req.url);
     const courseId = searchParams.get("courseId");
 
@@ -42,29 +27,36 @@ export async function GET(req: NextRequest) {
     const query: Record<string, unknown> = {};
     if (courseId) {
       if (!mongoose.Types.ObjectId.isValid(courseId)) {
-        return NextResponse.json({ error: "Invalid courseId" }, { status: 400 });
+        throw new BadRequestError("Invalid courseId");
       }
       query.courseId = new mongoose.Types.ObjectId(courseId);
     }
 
-    // Students can ONLY see materials for courses they are enrolled in by Admin
-    if (role === "student") {
-      const userId = (session?.user as any)?.id || (session?.user as any)?._id || token?.id || token?.sub;
-      const userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+    if (authUser.role === "student") {
+      const userObjectId = mongoose.Types.ObjectId.isValid(authUser.id)
+        ? new mongoose.Types.ObjectId(authUser.id)
+        : authUser.id;
 
       const enrollments = await Enrollment.find({
-        $or: [{ userId: userObjectId }, { userId: userId }]
+        $or: [{ userId: userObjectId }, { userId: authUser.id }],
       }).lean();
 
-      const enrolledCourseIds = enrollments.map((e: any) => e.courseId?.toString()).filter(Boolean);
+      const enrolledCourseIds = enrollments
+        .map((e: any) => e.courseId?.toString())
+        .filter(Boolean);
 
       if (courseId) {
-        const isEnrolled = enrolledCourseIds.includes(courseId.toString());
-        if (!isEnrolled) {
-          return NextResponse.json({ error: "Access denied: You are not enrolled in this course" }, { status: 403 });
+        if (!enrolledCourseIds.includes(courseId.toString())) {
+          return successResponse(
+            undefined,
+            "Access denied: You are not enrolled in this course",
+            403
+          );
         }
       } else {
-        query.courseId = { $in: enrolledCourseIds.map((id) => new mongoose.Types.ObjectId(id)) };
+        query.courseId = {
+          $in: enrolledCourseIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
       }
 
       query.isPublished = true;
@@ -76,30 +68,19 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json({ success: true, data: materials });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to fetch materials";
-    console.error("GET /api/materials error:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return successResponse(materials, undefined, 200, {
+      success: true,
+      data: materials,
+      materials,
+    });
+  } catch (error) {
+    return handleApiError(error, "GET /api/materials");
   }
 }
 
-/**
- * POST /api/materials
- * Save metadata after browser finishes direct upload to Cloudflare R2
- */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = session.user as { id?: string; _id?: string; role?: string; email?: string };
-    if (user.role !== "lecturer" && user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden: Lecturer access required" }, { status: 403 });
-    }
-
+    const authUser = await requireRole(req, ["lecturer", "super_admin", "admin"]);
     const body = await req.json();
     const {
       title,
@@ -113,34 +94,22 @@ export async function POST(req: NextRequest) {
       mimeType,
     } = body;
 
-    // Validate required fields
     if (!title || !courseId || !fileName || !fileKey || !fileUrl || !fileSize || !mimeType) {
-      return NextResponse.json(
-        { error: "Missing required material metadata" },
-        { status: 400 }
-      );
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(courseId)) {
-      return NextResponse.json({ error: "Invalid course ID" }, { status: 400 });
+      throw new BadRequestError("Missing required material metadata");
     }
 
     await connectToDatabase();
 
-    // Verify course exists
     const course = await Course.findById(courseId);
     if (!course) {
-      return NextResponse.json({ error: "Course not found" }, { status: 404 });
+      throw new NotFoundError("Course not found");
     }
 
-    const lecturerId = user.id || user._id;
-
-    // Persist document metadata
     const material = await CourseMaterial.create({
       title: title.trim(),
       description: description?.trim() || "",
       courseId: new mongoose.Types.ObjectId(courseId),
-      lecturerId: lecturerId ? new mongoose.Types.ObjectId(lecturerId) : undefined,
+      lecturerId: new mongoose.Types.ObjectId(authUser.id),
       materialType: materialType || "notes",
       fileName,
       fileKey,
@@ -150,47 +119,34 @@ export async function POST(req: NextRequest) {
       isPublished: true,
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Course material metadata saved successfully",
-        data: material,
-      },
-      { status: 201 }
+    return successResponse(
+      material,
+      "Course material metadata saved successfully",
+      201,
+      { success: true, data: material }
     );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to save material";
-    console.error("POST /api/materials error:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, "POST /api/materials");
   }
 }
 
-/**
- * DELETE /api/materials?id=xyz
- * Remove material record from database and delete underlying R2 object
- */
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    await requireRole(req, ["lecturer", "super_admin", "admin"]);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Valid material ID required" }, { status: 400 });
+      throw new BadRequestError("Valid material ID required");
     }
 
     await connectToDatabase();
 
     const material = await CourseMaterial.findById(id);
     if (!material) {
-      return NextResponse.json({ error: "Material not found" }, { status: 404 });
+      throw new NotFoundError("Material not found");
     }
 
-    // Delete object from Cloudflare R2
     if (material.fileKey) {
       try {
         await deleteR2Object(material.fileKey);
@@ -199,16 +155,12 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    // Remove DB document
     await CourseMaterial.findByIdAndDelete(id);
 
-    return NextResponse.json({
+    return successResponse(undefined, "Material deleted successfully", 200, {
       success: true,
-      message: "Material deleted successfully",
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to delete material";
-    console.error("DELETE /api/materials error:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, "DELETE /api/materials");
   }
 }
