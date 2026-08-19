@@ -20,7 +20,9 @@ import {
   FiCalendar,
   FiCheckSquare,
   FiHelpCircle,
-  FiInfo
+  FiInfo,
+  FiTrash2,
+  FiFile
 } from 'react-icons/fi';
 import { MdOutlineAssignment, MdOutlineNotificationsActive } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -45,6 +47,10 @@ interface AssignmentData {
   courseId: string;
   courseCategory: string;
   instructor: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentSize?: number;
+  weight?: number;
   issuedDate: string;
   issuedDateFormatted: string;
   dueDate: string;
@@ -77,6 +83,8 @@ function AssignmentsContent() {
   // Submission Form State
   const [submissionContent, setSubmissionContent] = useState('');
   const [submissionLink, setSubmissionLink] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgressText, setUploadProgressText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAssignments = async () => {
@@ -157,26 +165,95 @@ function AssignmentsContent() {
     setSubmittingAssignment(assignment);
     setSubmissionContent(assignment.submission?.content || '');
     setSubmissionLink(assignment.submission?.files?.[0] || '');
+    setSelectedFiles([]);
+    setUploadProgressText('');
+  };
+
+  const uploadFileToR2 = async (file: File, targetCourseId: string): Promise<string> => {
+    setUploadProgressText(`Requesting upload URL for ${file.name}...`);
+    const presignRes = await fetch("/api/materials/generate-upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileType: file.type || "application/octet-stream",
+        fileSize: file.size,
+        courseId: targetCourseId || "general",
+      }),
+    });
+
+    if (!presignRes.ok) {
+      const errorData = await presignRes.json();
+      throw new Error(errorData.error || "Failed to generate upload URL");
+    }
+
+    const { uploadUrl, publicUrl } = await presignRes.json();
+    setUploadProgressText(`Uploading ${file.name} to storage...`);
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Storage upload failed with HTTP status ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error during file upload"));
+      xhr.send(file);
+    });
+
+    return publicUrl;
   };
 
   const handleSubmitAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!submittingAssignment) return;
 
-    if (!submissionContent.trim() && !submissionLink.trim()) {
-      toast.warning("Please provide your text response or submission file/link");
+    if (!submissionContent.trim() && !submissionLink.trim() && selectedFiles.length === 0) {
+      toast.warning("Please upload a file, enter a project link, or type your response");
       return;
     }
 
     setIsSubmitting(true);
+    setUploadProgressText('');
+
     try {
+      const submittedFiles: string[] = [];
+
+      // Upload selected physical files to Cloudflare R2
+      if (selectedFiles.length > 0) {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          try {
+            const publicUrl = await uploadFileToR2(file, submittingAssignment.courseId);
+            submittedFiles.push(publicUrl);
+          } catch (uploadErr: any) {
+            toast.error(uploadErr.message || `Failed to upload ${file.name}`);
+            setIsSubmitting(false);
+            setUploadProgressText('');
+            return;
+          }
+        }
+      }
+
+      if (submissionLink.trim()) {
+        submittedFiles.push(submissionLink.trim());
+      }
+
+      setUploadProgressText("Saving submission record...");
+
       const res = await fetch('/api/student/assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assignmentId: submittingAssignment._id,
           content: submissionContent.trim(),
-          files: submissionLink.trim() ? [submissionLink.trim()] : [],
+          files: submittedFiles,
         }),
       });
 
@@ -186,6 +263,7 @@ function AssignmentsContent() {
         setSubmittingAssignment(null);
         setSubmissionContent('');
         setSubmissionLink('');
+        setSelectedFiles([]);
         fetchAssignments();
       } else {
         const errorData = await res.json();
@@ -196,6 +274,7 @@ function AssignmentsContent() {
       toast.error("Error submitting assignment");
     } finally {
       setIsSubmitting(false);
+      setUploadProgressText('');
     }
   };
 
@@ -367,6 +446,16 @@ function AssignmentsContent() {
                                 <span className="text-red-600 bg-red-100 px-2 py-0.5 rounded text-[11px] font-bold">
                                   {assignment.timeLeft}
                                 </span>
+                                {assignment.attachmentUrl && (
+                                  <a
+                                    href={`/api/student/assignments/${assignment._id}/attachment?action=view`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] font-bold text-red-700 bg-red-100 hover:bg-red-200 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1 transition"
+                                  >
+                                    <FiFileText className="text-xs" /> PDF Brief
+                                  </a>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -460,6 +549,16 @@ function AssignmentsContent() {
                                   <span className={assignment.isUrgent ? 'text-[#ED8936] font-bold' : 'text-gray-500'}>
                                     {assignment.timeLeft}
                                   </span>
+                                )}
+                                {assignment.attachmentUrl && (
+                                  <a
+                                    href={`/api/student/assignments/${assignment._id}/attachment?action=view`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1 transition"
+                                  >
+                                    <FiFileText className="text-xs" /> PDF Brief
+                                  </a>
                                 )}
                               </div>
                             </div>
@@ -649,6 +748,42 @@ function AssignmentsContent() {
               {/* 1. OVERVIEW & TASK INSTRUCTIONS */}
               {briefSection === 'overview' && (
                 <div className="space-y-5">
+                  {viewingBrief.attachmentUrl && (
+                    <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xl shrink-0 shadow-xs">
+                          <FiFileText />
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-xs text-blue-950">
+                            Attached Official Assignment Brief (PDF / Rubric)
+                          </h4>
+                          <p className="text-[11px] text-blue-700 font-medium">
+                            {viewingBrief.attachmentName || "Assignment_Brief.pdf"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0">
+                        <a
+                          href={`/api/student/assignments/${viewingBrief._id}/attachment?action=view`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2 bg-white hover:bg-gray-50 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial"
+                        >
+                          <FiExternalLink /> View in Browser
+                        </a>
+                        <a
+                          href={`/api/student/assignments/${viewingBrief._id}/attachment?action=download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-initial"
+                        >
+                          <FiUploadCloud className="rotate-180" /> Download PDF
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 text-[#434190] leading-relaxed">
                     <h4 className="font-extrabold text-sm mb-1 flex items-center gap-1.5 text-[#5A67D8]">
                       <FiInfo className="text-base" /> Assignment Objective
@@ -891,12 +1026,76 @@ function AssignmentsContent() {
             {/* Form */}
             <form onSubmit={handleSubmitAssignment} className="p-6 overflow-y-auto space-y-4 text-xs">
               
+              {/* File Upload Section */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="block font-bold text-gray-700">
+                    Upload Coursework File(s) <span className="text-[#5A67D8] font-bold">(PDF, Word, ZIP, Code)</span>
+                  </label>
+                  <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full">
+                    Direct Cloud Upload
+                  </span>
+                </div>
+
+                <label className="border-2 border-dashed border-gray-200 hover:border-[#5A67D8] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer bg-gray-50/60 hover:bg-blue-50/30 transition text-center">
+                  <FiUploadCloud className="text-2xl text-[#5A67D8] mb-1" />
+                  <p className="font-bold text-gray-700 text-xs">Click to browse or drop your coursework file</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">PDF, DOCX, ZIP, PPT, TXT, Code files up to 250MB</p>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        const newFiles = Array.from(e.target.files);
+                        setSelectedFiles((prev) => [...prev, ...newFiles]);
+                      }
+                    }}
+                  />
+                </label>
+
+                {/* Selected Files List */}
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                      Selected Files ({selectedFiles.length}):
+                    </p>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {selectedFiles.map((file, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-xl shadow-2xs"
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <FiFile className="text-[#5A67D8] shrink-0" />
+                            <div className="truncate">
+                              <p className="font-bold text-gray-800 truncate text-[11px]">{file.name}</p>
+                              <p className="text-[10px] text-gray-400">
+                                {(file.size / (1024 * 1024)).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                            className="text-gray-400 hover:text-red-500 p-1 transition shrink-0"
+                            title="Remove File"
+                          >
+                            <FiTrash2 className="text-sm" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block font-bold text-gray-700 mb-1.5">
-                  Submission Notes / Written Response
+                  Submission Notes / Written Response <span className="text-gray-400 font-normal">(Optional)</span>
                 </label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={submissionContent}
                   onChange={(e) => setSubmissionContent(e.target.value)}
                   placeholder="Type your response or project overview here..."
@@ -906,7 +1105,7 @@ function AssignmentsContent() {
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1.5">
-                  Cloud Project Link or File URL (Google Drive, GitHub, etc.)
+                  Cloud Project Link / Repository URL <span className="text-gray-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
@@ -916,6 +1115,13 @@ function AssignmentsContent() {
                   className="w-full bg-[#F7FAFC] border border-gray-200 text-gray-800 text-xs rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-[#5A67D8]"
                 />
               </div>
+
+              {uploadProgressText && (
+                <div className="p-2.5 bg-blue-50 text-blue-700 rounded-xl border border-blue-200 text-xs font-semibold flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>{uploadProgressText}</span>
+                </div>
+              )}
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 text-amber-800 text-[11px]">
                 {submittingAssignment.isOverdue ? (

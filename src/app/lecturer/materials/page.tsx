@@ -206,13 +206,40 @@ export default function LecturerMaterialsPage() {
             <FiRefreshCw className={`text-sm ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-100 hover:bg-[#434190] transition flex items-center justify-center gap-2"
+            onClick={() => {
+              if (courses.length === 0) {
+                toast.warning("Upload Blocked: You must be assigned to a course by an administrator before uploading materials.");
+                return;
+              }
+              setShowUploadModal(true);
+            }}
+            disabled={courses.length === 0}
+            title={courses.length === 0 ? "Course assignment required from Admin" : "Upload Material"}
+            className={`flex-1 sm:flex-none px-4 py-2.5 font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 ${
+              courses.length > 0
+                ? "bg-[#5A67D8] text-white shadow-indigo-100 hover:bg-[#434190] cursor-pointer"
+                : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+            }`}
           >
             <FiPlus className="text-base" /> Upload Material
           </button>
         </div>
       </div>
+
+      {/* Locked Notice if no assigned courses */}
+      {!loading && courses.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 font-bold">
+            🔒
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Materials Upload Locked</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              You are not assigned to any courses yet. Once an administrator assigns courses to your profile from the Admin Panel, you will be able to upload, organize, and distribute materials to enrolled students.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Summary Stat Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

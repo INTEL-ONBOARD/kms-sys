@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
 
     return paginatedResponse(result.exams, result.pagination, undefined, {
       exams: result.exams,
+      courses: result.courses,
     });
   } catch (error) {
     return handleApiError(error, "GET /api/lecturer/exams");

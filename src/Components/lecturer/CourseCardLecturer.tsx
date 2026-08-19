@@ -15,6 +15,18 @@ interface CourseCardLecturerProps {
     description?: string;
     status?: string;
     published?: boolean;
+    assessmentItems?: Array<{
+      _id?: string;
+      name: string;
+      type?: string;
+      weight: number;
+    }>;
+    gradingBreakdown?: {
+      assignmentsWeight?: number;
+      courseWorkWeight?: number;
+      finalExamWeight?: number;
+      attendanceWeight?: number;
+    };
   };
   onUpdate?: () => void;
 }

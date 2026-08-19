@@ -63,7 +63,7 @@ export async function getLecturerStudents(
   let courseQuery: Record<string, any> = {
     $or: [
       { instructorId: userId },
-      { instructor: { $regex: new RegExp(userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") } },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
     ],
   };
 
@@ -73,6 +73,10 @@ export async function getLecturerStudents(
 
   const lecturerCourses = await Course.find(courseQuery).lean();
   const lecturerCourseIds = lecturerCourses.map((c) => c._id);
+
+  if (!isSuperAdmin && lecturerCourseIds.length === 0) {
+    return { students: [], total: 0 };
+  }
 
   let enrollmentQuery: Record<string, any> = {
     courseId: { $in: lecturerCourseIds },

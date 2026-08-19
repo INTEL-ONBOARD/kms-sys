@@ -2,15 +2,15 @@ import { NextRequest } from "next/server";
 import { requireRole } from "@/server/core/auth-context";
 import { validateBody } from "@/server/core/validator";
 import { successResponse, handleApiError } from "@/server/core/api-response";
+import { parsePaginationParams } from "@/server/core/pagination";
 import { createUserSchema } from "@/server/dtos/user.dto";
 import * as UserService from "@/server/services/user.service";
-import { parsePaginationParams } from "@/server/core/pagination";
 
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ["super_admin", "admin"]);
     
-    const pagination = parsePaginationParams(req);
+    const pagination = parsePaginationParams(req, 100, 200);
     const searchParams = req.nextUrl.searchParams;
     const role = searchParams.get("role") || undefined;
     const status = searchParams.get("status") || undefined;

@@ -31,19 +31,58 @@ interface CourseManageModalProps {
     assignmentCount: number;
     status?: string;
     published?: boolean;
+    assessmentItems?: Array<{
+      _id?: string;
+      name: string;
+      type?: string;
+      weight: number;
+    }>;
+    gradingBreakdown?: {
+      assignmentsWeight?: number;
+      courseWorkWeight?: number;
+      finalExamWeight?: number;
+      attendanceWeight?: number;
+    };
   };
+  initialTab?: "overview" | "grading" | "materials" | "assignments" | "classes" | "students" | "breakdown";
   onClose: () => void;
   onUpdate?: () => void;
 }
 
-export default function CourseManageModal({ course, onClose, onUpdate }: CourseManageModalProps) {
+export default function CourseManageModal({ course, initialTab, onClose, onUpdate }: CourseManageModalProps) {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "materials" | "assignments" | "classes" | "students">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "grading" | "materials" | "assignments" | "classes" | "students">(
+    initialTab === "breakdown" ? "grading" : (initialTab as any) || "overview"
+  );
 
   // Form states
   const [description, setDescription] = useState(course.description || "Comprehensive course curriculum.");
   const [published, setPublished] = useState(course.published ?? true);
   const [saving, setSaving] = useState(false);
+
+  // Assessment & Grade Breakdown items (fully customizable by the lecturer)
+  const [assessmentItems, setAssessmentItems] = useState<any[]>(() => {
+    if (course.assessmentItems && course.assessmentItems.length > 0) {
+      return course.assessmentItems.map((item: any) => ({
+        _id: item._id,
+        name: item.name || "Assessment",
+        type: item.type || "assignment",
+        weight: Number(item.weight) || 0,
+      }));
+    }
+    return [
+      { name: "Assignments", type: "assignment", weight: course.gradingBreakdown?.assignmentsWeight ?? 20 },
+      { name: "Course work 1", type: "coursework", weight: course.gradingBreakdown?.courseWorkWeight ?? 30 },
+      { name: "Final exam", type: "exam", weight: course.gradingBreakdown?.finalExamWeight ?? 40 },
+      { name: "Attendance", type: "attendance", weight: course.gradingBreakdown?.attendanceWeight ?? 10 },
+    ];
+  });
+
+  // New assessment item form state
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemType, setNewItemType] = useState<"assignment" | "exam" | "coursework" | "attendance" | "quiz" | "project" | "other">("assignment");
+  const [newItemWeight, setNewItemWeight] = useState<number>(20);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   // Data states
   const [materials, setMaterials] = useState<any[]>([]);
@@ -129,13 +168,88 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
     }
   };
 
+  const totalAssessmentWeight = assessmentItems.reduce((acc, item) => acc + (Number(item.weight) || 0), 0);
+
+  const handleAddItem = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newItemName.trim()) {
+      toast.error("Please enter a name for the assessment component");
+      return;
+    }
+    if (newItemWeight <= 0) {
+      toast.error("Weight must be greater than 0");
+      return;
+    }
+    setAssessmentItems((prev) => [
+      ...prev,
+      {
+        name: newItemName.trim(),
+        type: newItemType,
+        weight: Number(newItemWeight),
+      },
+    ]);
+    setNewItemName("");
+    setNewItemWeight(15);
+    setShowAddForm(false);
+    toast.success("Assessment component added");
+  };
+
+  const handleQuickAdd = (type: "assignment" | "exam" | "coursework" | "quiz" | "project" | "attendance", defaultName: string, defaultWeight: number) => {
+    const existingOfType = assessmentItems.filter((i) => i.type === type).length;
+    const computedName = existingOfType > 0 ? `${defaultName} ${existingOfType + 1}` : defaultName;
+    setAssessmentItems((prev) => [
+      ...prev,
+      {
+        name: computedName,
+        type,
+        weight: defaultWeight,
+      },
+    ]);
+    toast.success(`Added ${computedName}`);
+  };
+
+  const handleUpdateItem = (index: number, field: string, value: any) => {
+    setAssessmentItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleDeleteItem = (index: number) => {
+    setAssessmentItems((prev) => prev.filter((_, i) => i !== index));
+    toast.success("Item removed from breakdown");
+  };
+
   const handleSaveChanges = async () => {
+    if (totalAssessmentWeight !== 100) {
+      toast.error(`Assessment weights must sum up to exactly 100% (Current total: ${totalAssessmentWeight}%)`);
+      return;
+    }
+
     setSaving(true);
     try {
-      await new Promise((res) => setTimeout(res, 600));
-      toast.success(`Course "${course.title}" updated successfully!`);
-      if (onUpdate) onUpdate();
-      onClose();
+      const res = await fetch(`/api/courses/${course._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          published,
+          assessmentItems: assessmentItems.map((item) => ({
+            name: item.name,
+            type: item.type,
+            weight: Number(item.weight),
+          })),
+        }),
+      });
+
+      if (res.ok) {
+        toast.success(`Course assessment & grade breakdown updated!`);
+        if (onUpdate) onUpdate();
+        onClose();
+      } else {
+        toast.error("Failed to update course settings");
+      }
     } catch (err) {
       toast.error("Failed to update course");
     } finally {
@@ -179,6 +293,16 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
               }`}
             >
               <FiBookOpen /> Overview & Settings
+            </button>
+            <button
+              onClick={() => setActiveTab("grading")}
+              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
+                activeTab === "grading"
+                  ? "border-[#5A67D8] text-[#5A67D8]"
+                  : "border-transparent hover:text-gray-800"
+              }`}
+            >
+              <FiEdit /> Grade Breakdown
             </button>
             <button
               onClick={() => setActiveTab("materials")}
@@ -266,6 +390,206 @@ export default function CourseManageModal({ course, onClose, onUpdate }: CourseM
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
                   </label>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: GRADE BREAKDOWN (CONFIGURED BY LECTURER) */}
+            {activeTab === "grading" && (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#2D3748]">Course Assessment & Grade Breakdown</h3>
+                    <p className="text-xs text-[#A0AEC0] mt-0.5">
+                      Configure and customize all scheduled assignments, exams, and coursework for this module.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(!showAddForm)}
+                    className="px-3 py-1.5 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] transition flex items-center gap-1.5 shadow-xs shrink-0"
+                  >
+                    <FiPlus /> {showAddForm ? "Cancel Add" : "Add Assessment / Assignment"}
+                  </button>
+                </div>
+
+                {/* Quick Add Presets Bar */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                  <span className="text-[11px] font-bold text-gray-400 shrink-0">Quick Add:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAdd("assignment", "Assignment", 20)}
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-[#5A67D8] font-bold rounded-lg transition shrink-0 flex items-center gap-1"
+                  >
+                    <FiPlus className="text-xs" /> + Assignment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAdd("coursework", "Course Work", 30)}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg transition shrink-0 flex items-center gap-1"
+                  >
+                    <FiPlus className="text-xs" /> + Coursework
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAdd("exam", "Final Exam", 40)}
+                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition shrink-0 flex items-center gap-1"
+                  >
+                    <FiPlus className="text-xs" /> + Final Exam
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAdd("attendance", "Attendance", 10)}
+                    className="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold rounded-lg transition shrink-0 flex items-center gap-1"
+                  >
+                    <FiPlus className="text-xs" /> + Attendance
+                  </button>
+                </div>
+
+                {/* Add New Custom Assessment Item Form */}
+                {showAddForm && (
+                  <form onSubmit={handleAddItem} className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3 animate-in fade-in">
+                    <h4 className="text-xs font-bold text-[#5A67D8]">Add New Assessment Component</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1">
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1">Component Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Assignment 2: React State"
+                          value={newItemName}
+                          onChange={(e) => setNewItemName(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs font-semibold text-gray-800 outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1">Type / Category</label>
+                        <select
+                          value={newItemType}
+                          onChange={(e: any) => setNewItemType(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs font-semibold text-gray-800 outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                        >
+                          <option value="assignment">Assignment</option>
+                          <option value="coursework">Coursework</option>
+                          <option value="exam">Final Exam</option>
+                          <option value="quiz">Quiz</option>
+                          <option value="project">Project</option>
+                          <option value="attendance">Attendance</option>
+                          <option value="other">Other Assessment</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1">Allocated Weight (%)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={newItemWeight}
+                            onChange={(e) => setNewItemWeight(Math.max(1, Math.min(100, Number(e.target.value) || 0)))}
+                            className="w-full bg-white border border-gray-200 rounded-lg p-2 text-xs font-bold text-gray-800 outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                          />
+                          <button
+                            type="submit"
+                            className="px-3 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] transition shrink-0"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {/* List of Configured Assessment Components */}
+                <div className="space-y-2.5">
+                  {assessmentItems.length === 0 ? (
+                    <div className="text-center py-8 bg-[#F7FAFC] rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
+                      No assessment components configured yet. Click above to add assignments or exams.
+                    </div>
+                  ) : (
+                    assessmentItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 bg-[#F7FAFC] hover:bg-white rounded-xl border border-gray-100 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
+                          <span className="w-6 h-6 rounded-full bg-indigo-100 text-[#5A67D8] font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleUpdateItem(idx, "name", e.target.value)}
+                              className="font-bold text-[#2D3748] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#5A67D8] focus:bg-white px-1 py-0.5 rounded outline-none w-full text-xs"
+                            />
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <select
+                                value={item.type || "assignment"}
+                                onChange={(e) => handleUpdateItem(idx, "type", e.target.value)}
+                                className="text-[10px] font-bold uppercase text-gray-500 bg-transparent border border-gray-200 rounded px-1.5 py-0.5 outline-none cursor-pointer"
+                              >
+                                <option value="assignment">Assignment</option>
+                                <option value="coursework">Coursework</option>
+                                <option value="exam">Exam</option>
+                                <option value="quiz">Quiz</option>
+                                <option value="project">Project</option>
+                                <option value="attendance">Attendance</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-gray-400">Weight:</span>
+                            <div className="relative w-18">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={item.weight}
+                                onChange={(e) => handleUpdateItem(idx, "weight", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                                className="w-16 bg-white border border-gray-200 rounded-lg py-1 px-2 text-right text-xs font-bold text-[#5A67D8] outline-none focus:ring-1 focus:ring-[#5A67D8]"
+                              />
+                            </div>
+                            <span className="text-xs font-bold text-gray-500">%</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem(idx)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="Remove component"
+                          >
+                            <FiTrash2 className="text-sm" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Summary Total Indicator */}
+                <div
+                  className={`p-4 rounded-xl border flex items-center justify-between ${
+                    totalAssessmentWeight === 100
+                      ? "bg-green-50/70 border-green-200 text-green-800"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FiCheckCircle className="text-base" />
+                    <span className="text-xs font-bold">
+                      {totalAssessmentWeight === 100
+                        ? "Total Assessment Allocation: Exactly 100%"
+                        : `Total Allocation: ${totalAssessmentWeight}% (Must equal 100% to save)`}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-white shadow-xs">
+                    {assessmentItems.length} Components = {totalAssessmentWeight}%
+                  </span>
                 </div>
               </div>
             )}

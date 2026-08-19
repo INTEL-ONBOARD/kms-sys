@@ -90,6 +90,8 @@ export async function createCourse(input: CreateCourseInput, creatorId?: string)
     schedule: (input.schedule || []).filter(
       (s) => s.dayOfWeek && s.startTime && s.endTime
     ),
+    assessmentItems: input.assessmentItems,
+    gradingBreakdown: input.gradingBreakdown,
     enrollments: 0,
   });
 
@@ -118,6 +120,65 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
     );
   }
 
+  if (input.assessmentItems !== undefined && Array.isArray(input.assessmentItems)) {
+    updatePayload.assessmentItems = input.assessmentItems.map((item: any) => ({
+      name: String(item.name || "Assessment Item").trim(),
+      type: item.type || "assignment",
+      weight: Math.max(0, Number(item.weight) || 0),
+    }));
+
+    // Automatically keep gradingBreakdown in sync
+    const assignSum = updatePayload.assessmentItems.filter((i: any) => i.type === "assignment").reduce((s: number, i: any) => s + i.weight, 0);
+    const cwSum = updatePayload.assessmentItems.filter((i: any) => i.type === "coursework" || i.type === "quiz" || i.type === "project").reduce((s: number, i: any) => s + i.weight, 0);
+    const examSum = updatePayload.assessmentItems.filter((i: any) => i.type === "exam").reduce((s: number, i: any) => s + i.weight, 0);
+    const attSum = updatePayload.assessmentItems.filter((i: any) => i.type === "attendance").reduce((s: number, i: any) => s + i.weight, 0);
+    updatePayload.gradingBreakdown = {
+      assignmentsWeight: assignSum,
+      courseWorkWeight: cwSum,
+      finalExamWeight: examSum,
+      attendanceWeight: attSum,
+    };
+
+    // Automatically sync assessment items into the Assignment collection
+    for (const item of updatePayload.assessmentItems) {
+      const itemType = item.type || "assignment";
+      if (["assignment", "coursework", "quiz", "project"].includes(itemType)) {
+        const existing = await Assignment.findOne({
+          courseId: id,
+          title: item.name,
+        });
+
+        if (!existing) {
+          const categoryName = 
+            itemType === "quiz" 
+              ? "Quiz" 
+              : itemType === "project" 
+              ? "Project" 
+              : itemType === "coursework" 
+              ? "Coursework" 
+              : "Homework";
+
+          await Assignment.create({
+            title: item.name,
+            description: `Continuous assessment component (${item.weight}% Course Weight) as defined in Course Assessment & Grade Breakdown.`,
+            courseId: id,
+            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            maxPoints: 100,
+            category: categoryName,
+            status: "open",
+          });
+        }
+      }
+    }
+  } else if (input.gradingBreakdown !== undefined) {
+    updatePayload.gradingBreakdown = {
+      assignmentsWeight: typeof input.gradingBreakdown.assignmentsWeight === "number" ? input.gradingBreakdown.assignmentsWeight : 20,
+      courseWorkWeight: typeof input.gradingBreakdown.courseWorkWeight === "number" ? input.gradingBreakdown.courseWorkWeight : 30,
+      finalExamWeight: typeof input.gradingBreakdown.finalExamWeight === "number" ? input.gradingBreakdown.finalExamWeight : 40,
+      attendanceWeight: typeof input.gradingBreakdown.attendanceWeight === "number" ? input.gradingBreakdown.attendanceWeight : 10,
+    };
+  }
+
   const updatedCourse = await Course.findByIdAndUpdate(id, updatePayload, {
     new: true,
     runValidators: true,
@@ -144,6 +205,7 @@ export async function deleteCourse(id: string) {
 
 /**
  * Retrieves courses assigned to or managed by a lecturer, with student counts, average completion, and assignment statistics.
+ * If a lecturer has no courses assigned yet from admin panel, returns an empty array.
  */
 export async function getLecturerCourses(
   lecturerId: string,
@@ -152,27 +214,40 @@ export async function getLecturerCourses(
 ) {
   await connectToDatabase();
 
-  const safeNameRegex = createSafeSearchRegex(lecturerName);
   const query: Record<string, any> = {
     $or: [
       { instructorId: lecturerId },
-      { instructor: { $regex: safeNameRegex } },
+      ...(lecturerName ? [{ instructor: { $regex: new RegExp(`^${lecturerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
     ],
   };
 
-  let total = await Course.countDocuments(query);
-  let courses = await Course.find(query)
+  if (pagination?.search) {
+    const searchRegex = createSafeSearchRegex(pagination.search);
+    query.$and = [
+      {
+        $or: [
+          { title: searchRegex },
+          { category: searchRegex },
+          { description: searchRegex },
+          { instructor: searchRegex },
+        ],
+      },
+    ];
+  }
+
+  const total = await Course.countDocuments(query);
+  const courses = await Course.find(query)
+    .sort({ [pagination.sortBy || "createdAt"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
     .lean();
 
-  // If no courses found for this lecturer specifically, fallback to all courses
-  if (total === 0) {
-    total = await Course.countDocuments();
-    courses = await Course.find()
-      .skip(pagination.skip)
-      .limit(pagination.limit)
-      .lean();
+  if (courses.length === 0) {
+    return {
+      data: [],
+      courses: [],
+      pagination: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
   }
 
   const courseIds = courses.map((c) => c._id);
@@ -208,6 +283,20 @@ export async function getLecturerCourses(
     return {
       ...course,
       _id: course._id.toString(),
+      assessmentItems: course.assessmentItems && course.assessmentItems.length > 0
+        ? course.assessmentItems
+        : [
+            { name: "Assignments", type: "assignment", weight: course.gradingBreakdown?.assignmentsWeight ?? 20 },
+            { name: "Course work 1", type: "coursework", weight: course.gradingBreakdown?.courseWorkWeight ?? 30 },
+            { name: "Final exam", type: "exam", weight: course.gradingBreakdown?.finalExamWeight ?? 40 },
+            { name: "Attendance", type: "attendance", weight: course.gradingBreakdown?.attendanceWeight ?? 10 },
+          ],
+      gradingBreakdown: course.gradingBreakdown || {
+        assignmentsWeight: 20,
+        courseWorkWeight: 30,
+        finalExamWeight: 40,
+        attendanceWeight: 10,
+      },
       studentCount: stats.count,
       avgCompletion: stats.avgProgress,
       assignmentCount: courseAssignments,

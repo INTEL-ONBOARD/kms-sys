@@ -5,6 +5,7 @@ import Assignment from "@/models/Assignment";
 import Submission from "@/models/Submission";
 import Enrollment from "@/models/Enrollment";
 import Notification from "@/models/Notification";
+import User from "@/models/User";
 import { BadRequestError, NotFoundError } from "../core/errors";
 import {
   PaginationParams,
@@ -15,7 +16,11 @@ import {
   CreateAssignmentInput,
   UpdateAssignmentInput,
   GradeSubmissionInput,
+  SubmitAssignmentInput,
 } from "../dtos/assignment.dto";
+
+// Ensure User is registered
+User;
 
 /**
  * Retrieves assignments for a lecturer with pagination and optional course/category filter.
@@ -28,14 +33,27 @@ export async function getLecturerAssignments(
 ) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
 
-  const query: Record<string, any> = { courseId: { $in: courseIds } };
+  if (courseIds.length === 0) {
+    return {
+      assignments: [],
+      courses: [],
+      pagination: buildPaginationMeta(0, pagination.page, pagination.limit),
+    };
+  }
+
+  const query: Record<string, any> = {
+    courseId: { $in: courseIds },
+    category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] },
+  };
   if (categoryParam && categoryParam !== "All") {
     query.category = categoryParam;
   }
@@ -45,15 +63,49 @@ export async function getLecturerAssignments(
   }
 
   const total = await Assignment.countDocuments(query);
-  const assignments = await Assignment.find(query)
-    .populate("courseId", "title category")
+  const assignmentsDocs = await Assignment.find(query)
+    .populate("courseId", "title category assessmentItems gradingBreakdown")
     .sort({ [pagination.sortBy || "createdAt"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
     .lean();
 
+  // Enrich assignments with their weight from Course assessmentItems and exclude any exam items
+  const assignments = assignmentsDocs
+    .filter((a: any) => {
+      const course = a.courseId;
+      if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+        const match = course.assessmentItems.find(
+          (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+        );
+        if (match && match.type === "exam") return false;
+      }
+      return true;
+    })
+    .map((a: any) => {
+      const course = a.courseId;
+      let weight: number | null = null;
+      if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+        const match = course.assessmentItems.find(
+          (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+        );
+        if (match) weight = match.weight;
+      }
+      return {
+        ...a,
+        weight: weight ?? (a.category === "Project" ? 25 : a.category === "Quiz" ? 10 : 20),
+      };
+    });
+
+  const formattedCourses = courses.map((c: any) => ({
+    _id: c._id,
+    title: c.title,
+    assessmentItems: (c.assessmentItems || []).filter((i: any) => i.type !== "exam" && i.type !== "attendance"),
+  }));
+
   return {
     assignments,
+    courses: formattedCourses,
     pagination: buildPaginationMeta(total, pagination.page, pagination.limit),
   };
 }
@@ -64,50 +116,160 @@ export async function getLecturerAssignments(
 export async function createAssignment(
   userId: string,
   userName: string,
-  input: CreateAssignmentInput & { maxPoints?: number; category?: string }
+  input: CreateAssignmentInput
 ) {
   await connectToDatabase();
 
-  let targetCourseId = input.courseId;
+  const {
+    title,
+    courseId,
+    dueDate,
+    maxPoints,
+    points,
+    description,
+    category,
+    attachmentUrl,
+    attachmentName,
+    attachmentSize,
+    fileKey,
+  } = input;
+
+  if (!title) {
+    throw new BadRequestError("Assignment title is required");
+  }
+
+  let targetCourseId = courseId;
   if (!targetCourseId) {
-    const nameRegex = createSafeSearchRegex(userName);
     const lecturerCourses = await Course.find({
-      $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+      $or: [
+        { instructorId: userId },
+        ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+      ],
     }).lean();
 
     if (lecturerCourses.length > 0) {
       targetCourseId = lecturerCourses[0]._id.toString();
-    } else {
-      const anyCourse = await Course.findOne().lean();
-      if (anyCourse) {
-        targetCourseId = anyCourse._id.toString();
-      } else {
-        const defaultCourse = await Course.create({
-          title: "General Lecture Course",
-          instructor: userName || "Lecturer",
-          instructorId: userId,
-          category: "General",
-          price: "Free",
-          published: true,
-        });
-        targetCourseId = defaultCourse._id.toString();
-      }
     }
   }
 
-  const dueDate = input.dueDate
-    ? new Date(input.dueDate)
-    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  if (!targetCourseId) {
+    throw new BadRequestError("You do not have any courses assigned to create assignments for. Please contact an administrator.");
+  }
 
-  const assignment = await Assignment.create({
-    title: input.title.trim(),
-    description: input.description?.trim() || "",
+  // Fetch course details and check Assessment & Grade Breakdown limits
+  const courseDoc = await Course.findById(targetCourseId);
+  if (!courseDoc) {
+    throw new NotFoundError("Course not found");
+  }
+
+  const configuredItems = courseDoc.assessmentItems || [];
+  const assignmentBreakdownItems = configuredItems.filter(
+    (i: any) => i.type !== "exam" && i.type !== "attendance"
+  );
+  const maxAllowedAssignments = assignmentBreakdownItems.length;
+
+  if (maxAllowedAssignments === 0) {
+    throw new BadRequestError(
+      "No assignments are configured in Course Assessment & Grade Breakdown for this course. Please configure the breakdown under Course Management before creating assignments."
+    );
+  }
+
+  // Validate that the assignment title exists in Course.assessmentItems
+  const matchedBreakdownItem = assignmentBreakdownItems.find(
+    (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase()
+  );
+
+  const isExamItem = configuredItems.some(
+    (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+  );
+
+  if (isExamItem) {
+    throw new BadRequestError(
+      `"${title}" is configured as an Exam in the Course Breakdown. Please create it under Exam Manager.`
+    );
+  }
+
+  if (!matchedBreakdownItem) {
+    throw new BadRequestError(
+      `"${title}" is not defined in this Course's Assessment & Grade Breakdown. You can only create assignments that are allocated in the Course Breakdown (${assignmentBreakdownItems.map((i: any) => i.name).join(", ")}).`
+    );
+  }
+
+  // Quota enforcement
+  const existingAssignmentsForCourse = await Assignment.find({
     courseId: targetCourseId,
-    dueDate,
-    maxPoints: input.maxPoints ?? input.points ?? 100,
-    category: input.category || "Homework",
-    status: input.status || "open",
+    category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] },
+  }).lean();
+
+  const existingAssignment = existingAssignmentsForCourse.find(
+    (a: any) => a.title.trim().toLowerCase() === title.trim().toLowerCase()
+  );
+
+  if (!existingAssignment && existingAssignmentsForCourse.length >= maxAllowedAssignments) {
+    throw new BadRequestError(
+      `Cannot create more than ${maxAllowedAssignments} assignment(s) for this course. The Course Assessment & Grade Breakdown currently allocates ${maxAllowedAssignments} assignment(s). Please update the Course Grade Breakdown if you wish to add more assignments.`
+    );
+  }
+
+  if (!dueDate) {
+    throw new BadRequestError("Assignment due date is required");
+  }
+
+  const assignmentDueDate = new Date(dueDate);
+  if (isNaN(assignmentDueDate.getTime())) {
+    throw new BadRequestError("Invalid due date format");
+  }
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  if (assignmentDueDate < startOfToday) {
+    throw new BadRequestError("Assignment due date cannot be in the past. Please select a valid future date.");
+  }
+
+  let assignment = await Assignment.findOne({
+    courseId: targetCourseId,
+    title: { $regex: new RegExp(`^${title.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
   });
+
+  const itemCategory =
+    category ||
+    (matchedBreakdownItem.type === "quiz"
+      ? "Quiz"
+      : matchedBreakdownItem.type === "project"
+      ? "Project"
+      : matchedBreakdownItem.type === "coursework"
+      ? "Lab Report"
+      : "Homework");
+
+  const effectiveMaxPoints = Number(maxPoints ?? points) || 100;
+
+  if (assignment) {
+    assignment.dueDate = assignmentDueDate;
+    assignment.maxPoints = effectiveMaxPoints;
+    if (description !== undefined) assignment.description = description;
+    assignment.category = itemCategory;
+    assignment.attachmentUrl = attachmentUrl || assignment.attachmentUrl || "";
+    assignment.attachmentName = attachmentName || assignment.attachmentName || "";
+    assignment.attachmentSize = Number(attachmentSize) || assignment.attachmentSize || 0;
+    if (fileKey) assignment.fileKey = fileKey;
+    assignment.status = "open";
+    await assignment.save();
+  } else {
+    assignment = await Assignment.create({
+      title: matchedBreakdownItem.name.trim(),
+      description: description || "",
+      courseId: targetCourseId,
+      dueDate: assignmentDueDate,
+      maxPoints: effectiveMaxPoints,
+      category: itemCategory,
+      attachmentUrl: attachmentUrl || "",
+      attachmentName: attachmentName || "",
+      attachmentSize: Number(attachmentSize) || 0,
+      fileKey: fileKey || "",
+      status: "open",
+    });
+  }
 
   // Notify enrolled students
   const enrollments = await Enrollment.find({ courseId: targetCourseId }).lean();
@@ -117,7 +279,7 @@ export async function createAssignment(
     const notifications = enrollments.map((e) => ({
       userId: e.userId,
       type: "assignment",
-      message: `New Assignment: "${input.title}" in ${courseTitle} (Due: ${dueDate.toLocaleDateString()})`,
+      message: `New Assignment: "${title}" in ${courseTitle} (Due: ${assignmentDueDate.toLocaleDateString()})`,
       link: "/assignments",
     }));
     await Notification.insertMany(notifications);
@@ -132,18 +294,24 @@ export async function createAssignment(
 export async function getGradingQueue(userId: string, userName: string) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
+
+  if (courseIds.length === 0) {
+    return { queue: [] };
+  }
 
   const pendingSubmissions = await Submission.find({
     courseId: { $in: courseIds },
     grade: null,
   })
-    .populate("assignmentId", "title dueDate maxPoints")
+    .populate("assignmentId", "title description dueDate maxPoints")
     .populate("studentId", "name email")
     .populate("courseId", "title")
     .sort({ submittedAt: 1 })
@@ -162,6 +330,8 @@ export async function getGradingQueue(userId: string, userName: string) {
       return {
         _id: sub._id.toString(),
         assignmentTitle: sub.assignmentId?.title || "Untitled Assignment",
+        assignmentDescription: sub.assignmentId?.description || "",
+        maxPoints: sub.assignmentId?.maxPoints || 100,
         courseTitle: sub.courseId?.title || "General Course",
         studentName: sub.studentId?.name || "Student",
         studentEmail: sub.studentId?.email || "",
@@ -169,7 +339,7 @@ export async function getGradingQueue(userId: string, userName: string) {
         isOverdue,
         overdueDays,
         submittedAt: sub.submittedAt,
-        content: sub.content,
+        content: sub.content || "",
         files: sub.files || [],
       };
     })
@@ -233,23 +403,46 @@ export async function getStudentAssignments(userId: string) {
     $or: [{ userId: userObjectId }, { userId }],
   }).lean();
 
-  const courseIds = currentEnrollments
+  let enrolledCourseIds = currentEnrollments
     .map((e: any) => e.courseId?.toString())
     .filter(Boolean);
 
-  const assignments = await Assignment.find({ courseId: { $in: courseIds } })
+  if (enrolledCourseIds.length === 0) {
+    const publishedCourses = await Course.find({ published: true }).select("_id").lean();
+    enrolledCourseIds = publishedCourses.map((c: any) => c._id.toString());
+  }
+
+  const courseObjectIds = enrolledCourseIds.map((id: any) =>
+    mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+  );
+
+  const assignments = await Assignment.find({
+    courseId: { $in: courseObjectIds },
+    category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] },
+  })
     .populate({
       path: "courseId",
-      select: "title category instructor",
+      select: "title category instructor assessmentItems",
       model: Course,
     })
     .sort({ dueDate: 1 })
     .lean();
 
-  const assignmentIds = assignments.map((a) => a._id);
+  const validAssignments = assignments.filter((a: any) => {
+    const course = a.courseId;
+    if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+      const match = course.assessmentItems.find(
+        (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+      );
+      if (match && match.type === "exam") return false;
+    }
+    return true;
+  });
+
+  const assignmentIds = validAssignments.map((a) => a._id);
 
   const submissions = await Submission.find({
-    studentId: userId,
+    studentId: { $in: [userObjectId, userId] },
     assignmentId: { $in: assignmentIds },
   }).lean();
 
@@ -260,7 +453,7 @@ export async function getStudentAssignments(userId: string) {
 
   const now = new Date();
 
-  const formattedAssignments = assignments.map((a: any) => {
+  const formattedAssignments = validAssignments.map((a: any) => {
     const sub = submissionMap.get(a._id.toString());
     const due = a.dueDate ? new Date(a.dueDate) : new Date();
     const diffMs = due.getTime() - now.getTime();
@@ -295,6 +488,14 @@ export async function getStudentAssignments(userId: string) {
 
     const isUrgent = !sub && diffDays <= 3 && diffDays >= 0;
 
+    let weight = 20;
+    if (a.courseId?.assessmentItems && Array.isArray(a.courseId.assessmentItems)) {
+      const match = a.courseId.assessmentItems.find(
+        (item: any) => item.name?.toLowerCase() === a.title?.toLowerCase()
+      );
+      if (match && typeof match.weight === "number") weight = match.weight;
+    }
+
     return {
       _id: a._id.toString(),
       title: a.title || "Untitled Assignment",
@@ -303,6 +504,10 @@ export async function getStudentAssignments(userId: string) {
       courseId: a.courseId?._id?.toString() || "",
       courseCategory: a.courseId?.category || "General",
       instructor: a.courseId?.instructor || "Module Lecturer",
+      attachmentUrl: a.attachmentUrl || "",
+      attachmentName: a.attachmentName || "",
+      attachmentSize: a.attachmentSize || 0,
+      weight,
       issuedDate: a.createdAt ? new Date(a.createdAt).toISOString() : new Date().toISOString(),
       issuedDateFormatted: a.createdAt
         ? new Date(a.createdAt).toLocaleDateString("en-US", {
@@ -348,7 +553,7 @@ export async function getStudentAssignments(userId: string) {
  */
 export async function submitAssignment(
   userId: string,
-  input: { assignmentId: string; courseId?: string; content?: string; files?: any[] }
+  input: SubmitAssignmentInput
 ) {
   await connectToDatabase();
 
@@ -360,14 +565,18 @@ export async function submitAssignment(
   const now = new Date();
   const isLate = assignment.dueDate && new Date(assignment.dueDate).getTime() < now.getTime();
 
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+
   const existingSubmission = await Submission.findOne({
     assignmentId: input.assignmentId,
-    studentId: userId,
+    studentId: { $in: [userObjectId, userId] },
   });
 
   let submission;
   if (existingSubmission) {
-    existingSubmission.content = input.content || existingSubmission.content;
+    existingSubmission.content = input.content || input.comments || existingSubmission.content;
     if (input.files && input.files.length > 0) existingSubmission.files = input.files;
     existingSubmission.submittedAt = now;
     existingSubmission.status = isLate ? "late" : "submitted";
@@ -375,9 +584,9 @@ export async function submitAssignment(
   } else {
     submission = await Submission.create({
       assignmentId: input.assignmentId,
-      studentId: userId,
+      studentId: userObjectId,
       courseId: input.courseId || assignment.courseId,
-      content: input.content || "",
+      content: input.content || input.comments || "",
       files: input.files || [],
       submittedAt: now,
       status: isLate ? "late" : "submitted",

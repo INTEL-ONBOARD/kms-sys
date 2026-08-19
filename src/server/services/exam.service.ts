@@ -3,7 +3,7 @@ import Exam from "@/models/Exam";
 import Course from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import Notification from "@/models/Notification";
-import { NotFoundError } from "../core/errors";
+import { BadRequestError, NotFoundError } from "../core/errors";
 import {
   PaginationParams,
   buildPaginationMeta,
@@ -21,12 +21,22 @@ export async function getLecturerExams(
 ) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
+
+  if (courseIds.length === 0) {
+    return {
+      exams: [],
+      courses: [],
+      pagination: buildPaginationMeta(0, pagination.page, pagination.limit),
+    };
+  }
 
   const query: Record<string, any> = { courseId: { $in: courseIds } };
   if (pagination.search) {
@@ -35,15 +45,38 @@ export async function getLecturerExams(
   }
 
   const total = await Exam.countDocuments(query);
-  const exams = await Exam.find(query)
-    .populate("courseId", "title category")
+  const examsDocs = await Exam.find(query)
+    .populate("courseId", "title category assessmentItems")
     .sort({ [pagination.sortBy || "date"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
     .lean();
 
+  // Enrich exams with weight from course breakdown
+  const exams = examsDocs.map((e: any) => {
+    const course = e.courseId;
+    let weight: number | null = null;
+    if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+      const match = course.assessmentItems.find(
+        (item: any) => item.name?.toLowerCase() === e.title?.toLowerCase()
+      );
+      if (match) weight = match.weight;
+    }
+    return {
+      ...e,
+      weight: weight ?? (e.type === "final" ? 40 : e.type === "midterm" ? 25 : 15),
+    };
+  });
+
+  const formattedCourses = courses.map((c: any) => ({
+    _id: c._id,
+    title: c.title,
+    assessmentItems: (c.assessmentItems || []).filter((i: any) => i.type === "exam"),
+  }));
+
   return {
     exams,
+    courses: formattedCourses,
     pagination: buildPaginationMeta(total, pagination.page, pagination.limit),
   };
 }
@@ -65,44 +98,71 @@ export async function createExam(
 ) {
   await connectToDatabase();
 
-  let targetCourseId = input.courseId;
+  const { title, courseId, date, duration, location, type } = input;
+
+  if (!title) {
+    throw new BadRequestError("Exam title is required");
+  }
+
+  let targetCourseId = courseId;
   if (!targetCourseId) {
-    const nameRegex = createSafeSearchRegex(userName);
     const lecturerCourses = await Course.find({
-      $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+      $or: [
+        { instructorId: userId },
+        ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+      ],
     }).lean();
 
     if (lecturerCourses.length > 0) {
       targetCourseId = lecturerCourses[0]._id.toString();
-    } else {
-      const anyCourse = await Course.findOne().lean();
-      if (anyCourse) {
-        targetCourseId = anyCourse._id.toString();
-      } else {
-        const defaultCourse = await Course.create({
-          title: "General Lecture Course",
-          instructor: userName || "Lecturer",
-          instructorId: userId,
-          category: "General",
-          price: "Free",
-          published: true,
-        });
-        targetCourseId = defaultCourse._id.toString();
+    }
+  }
+
+  if (!targetCourseId) {
+    throw new BadRequestError("You do not have any courses assigned to schedule exams for. Please contact an administrator.");
+  }
+
+  // Validate that the exam title is an exam component in Course.assessmentItems
+  const courseDoc = await Course.findById(targetCourseId);
+  if (courseDoc && courseDoc.assessmentItems && courseDoc.assessmentItems.length > 0) {
+    const isConfiguredExam = courseDoc.assessmentItems.some(
+      (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+    );
+    if (!isConfiguredExam) {
+      const isAssignment = courseDoc.assessmentItems.some(
+        (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
+      );
+      if (isAssignment) {
+        throw new BadRequestError(
+          `"${title}" is configured as Coursework/Assignment in the Grade Breakdown. Please create it under Assignment Manager.`
+        );
       }
     }
   }
 
-  const examDate = input.date
-    ? new Date(input.date)
-    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  if (!date) {
+    throw new BadRequestError("Exam date is required");
+  }
+
+  const examDate = new Date(date);
+  if (isNaN(examDate.getTime())) {
+    throw new BadRequestError("Invalid date format");
+  }
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  if (examDate < startOfToday) {
+    throw new BadRequestError("Exam date cannot be in the past. Please select a valid future date.");
+  }
 
   const exam = await Exam.create({
-    title: input.title.trim(),
+    title: title.trim(),
     courseId: targetCourseId,
     date: examDate,
-    duration: Number(input.duration) || 120,
-    location: input.location || "Online Hall A",
-    type: input.type || "quiz",
+    duration: Number(duration) || 120,
+    location: location || "Online Hall A",
+    type: type || "midterm",
     status: "scheduled",
   });
 
@@ -114,7 +174,7 @@ export async function createExam(
     const notifications = enrollments.map((e) => ({
       userId: e.userId,
       type: "exam",
-      message: `New Exam Scheduled: "${input.title}" in ${courseTitle} on ${examDate.toLocaleDateString()}`,
+      message: `New Exam Scheduled: "${title}" in ${courseTitle} on ${examDate.toLocaleDateString()}`,
       link: "/calendar",
     }));
     await Notification.insertMany(notifications);

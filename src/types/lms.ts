@@ -5,6 +5,20 @@ export type ScheduleSlot = {
   location: string;  // "Hall 15"
 };
 
+export type AssessmentItem = {
+  _id?: string;
+  name: string;
+  type?: "assignment" | "exam" | "coursework" | "attendance" | "quiz" | "project" | "other";
+  weight: number;
+};
+
+export type GradingBreakdown = {
+  assignmentsWeight?: number;
+  courseWorkWeight?: number;
+  finalExamWeight?: number;
+  attendanceWeight?: number;
+};
+
 export type CourseInput = {
   title: string;
   description?: string;
@@ -15,6 +29,8 @@ export type CourseInput = {
   published?: boolean;
   colorCode?: string;
   schedule?: ScheduleSlot[];
+  gradingBreakdown?: GradingBreakdown;
+  assessmentItems?: AssessmentItem[];
 };
 
 export type EnrollmentInput = {

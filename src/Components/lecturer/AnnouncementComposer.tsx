@@ -148,10 +148,11 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
 
           <textarea
             rows={3}
+            disabled={courses.length === 0 || submitting}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your announcement message here..."
-            className="w-full p-3 text-xs text-gray-800 outline-none resize-none"
+            placeholder={courses.length === 0 ? "Course assignment required from Admin to post announcements..." : "Type your announcement message here..."}
+            className="w-full p-3 text-xs text-gray-800 outline-none resize-none disabled:bg-gray-50 disabled:text-gray-400"
           />
 
           {attachmentName && (
@@ -163,9 +164,10 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
 
         {/* Checkbox + Submit */}
         <div className="flex items-center justify-between pt-1">
-          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-600">
+          <label className={`flex items-center gap-2 text-xs font-semibold ${courses.length === 0 ? "text-gray-400 cursor-not-allowed" : "text-gray-600 cursor-pointer"}`}>
             <input
               type="checkbox"
+              disabled={courses.length === 0 || submitting}
               checked={notifyStudents}
               onChange={(e) => setNotifyStudents(e.target.checked)}
               className="rounded text-[#2563EB] focus:ring-[#2563EB]"
@@ -175,8 +177,12 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
 
           <button
             type="submit"
-            disabled={submitting}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#2563EB] text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+            disabled={courses.length === 0 || submitting}
+            className={`flex items-center gap-1.5 px-4 py-2 font-bold text-xs rounded-xl transition ${
+              courses.length > 0 && !submitting
+                ? "bg-[#2563EB] text-white hover:bg-blue-700 cursor-pointer"
+                : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+            }`}
           >
             <FiSend />
             {submitting ? "Posting..." : "Post Announcement"}
