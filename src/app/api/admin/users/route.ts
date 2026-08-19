@@ -4,12 +4,21 @@ import { validateBody } from "@/server/core/validator";
 import { successResponse, handleApiError } from "@/server/core/api-response";
 import { createUserSchema } from "@/server/dtos/user.dto";
 import * as UserService from "@/server/services/user.service";
+import { parsePaginationParams } from "@/server/core/pagination";
 
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ["super_admin", "admin"]);
-    const { users } = await UserService.getUsers();
-    return successResponse({ users }, undefined, 200);
+    
+    const pagination = parsePaginationParams(req);
+    const searchParams = req.nextUrl.searchParams;
+    const role = searchParams.get("role") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const department = searchParams.get("department") || undefined;
+
+    const result = await UserService.getUsers(pagination, { role, status, department });
+    
+    return successResponse(result, undefined, 200);
   } catch (error) {
     return handleApiError(error, "GET /api/admin/users");
   }

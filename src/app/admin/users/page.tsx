@@ -12,6 +12,7 @@ interface UserData {
   role: string;
   status: string;
   createdAt: string;
+  department?: string;
 }
 
 export default function UserAdminPage() {
@@ -21,10 +22,13 @@ export default function UserAdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; 
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const itemsPerPage = 5;
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -54,10 +58,23 @@ export default function UserAdminPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/users');
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+      });
+      if (searchTerm) params.append('search', searchTerm);
+      if (roleFilter !== 'All') params.append('role', roleFilter);
+      if (statusFilter !== 'All') params.append('status', statusFilter);
+      if (departmentFilter !== 'All') params.append('department', departmentFilter);
+
+      const response = await fetch(`/api/admin/users?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setTotalUsers(data.pagination.total);
+        }
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -68,22 +85,11 @@ export default function UserAdminPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentPage, searchTerm, roleFilter, statusFilter, departmentFilter]);
 
-  // Search & Filter Logic
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'All' || user.role === roleFilter;
-    const matchesStatus = statusFilter === 'All' || user.status?.toLowerCase() === statusFilter.toLowerCase();
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
-  // Pagination Logic
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, statusFilter, departmentFilter]);
 
   const handleNextPage = () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
@@ -92,10 +98,6 @@ export default function UserAdminPage() {
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, roleFilter, statusFilter]);
 
   // --- Action Handlers ---
   
@@ -263,6 +265,19 @@ export default function UserAdminPage() {
               <FiFilter className="text-gray-400" />
               <select 
                 className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Business & Management">Business & Management</option>
+                <option value="Computing">Computing</option>
+                <option value="Science">Science</option>
+                <option value="Art">Art</option>
+              </select>
+
+              <select 
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
@@ -292,6 +307,7 @@ export default function UserAdminPage() {
                   <tr>
                     <th className="px-6 py-4">User Details</th>
                     <th className="px-6 py-4">Role</th>
+                    <th className="px-6 py-4">Department</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Joined Date</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -300,11 +316,11 @@ export default function UserAdminPage() {
                 <tbody className="divide-y divide-gray-100">
                   
                   {loading ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
-                  ) : currentUsers.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
+                  ) : users.length === 0 ? (
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
                   ) : (
-                    currentUsers.map((user) => (
+                    users.map((user) => (
                       <tr key={user._id} className="hover:bg-gray-50 transition duration-150">
                         <td className="px-6 py-4">
                           <div className="flex items-center">
@@ -321,6 +337,9 @@ export default function UserAdminPage() {
                           <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getRoleBadge(user.role)}`}>
                             {user.role.replace('_', ' ')}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-700 font-medium text-sm">
+                          {user.department ? user.department : <span className="text-gray-300">-</span>}
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize flex w-max items-center ${getStatusBadge(user.status || 'inactive')}`}>
@@ -360,7 +379,7 @@ export default function UserAdminPage() {
             </div>
 
             <div className="p-4 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
-              <span>Showing {currentUsers.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries</span>
+              <span>Showing {users.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {(currentPage - 1) * itemsPerPage + users.length} of {totalUsers} entries</span>
               <div className="flex space-x-1">
                 <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50">Prev</button>
                 <button className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md font-medium">{currentPage}</button>
