@@ -6,7 +6,7 @@ import type { EnrollmentInput } from "@/types/lms";
 
 // Import Security and Audit Logger Utilities (Tasks #498 & #500)
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { isAuthorized } from "@/lib/permissions";
 import { logAuditAction } from "@/lib/auditLogger";
 

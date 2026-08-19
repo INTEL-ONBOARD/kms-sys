@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import CourseMaterial from "@/models/CourseMaterial";
 import Course from "@/models/Course";
