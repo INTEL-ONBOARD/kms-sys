@@ -55,10 +55,12 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const [materialType, setMaterialType] = useState<"notes" | "slides" | "tutorial" | "other">("slides");
   const [materialTitle, setMaterialTitle] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [loadingCourses, setLoadingCourses] = useState(true);
 
   useEffect(() => {
     const fetchCoursesAndAssignments = async () => {
       try {
+        setLoadingCourses(true);
         const [coursesRes, assignRes] = await Promise.all([
           fetch("/api/lecturer/courses?limit=50"),
           fetch("/api/lecturer/assignments?limit=100")
@@ -109,10 +111,34 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
         }
       } catch (err) {
         console.error("Failed to load courses for modal:", err);
+      } finally {
+        setLoadingCourses(false);
       }
     };
     fetchCoursesAndAssignments();
   }, []);
+
+  if (!loadingCourses && courses.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+            🔒
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Action Blocked</h2>
+          <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+            You must be assigned to a course by an administrator before you can {type === "assignment" ? "create assignments" : "schedule live classes"}. Please contact your system administrator.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleFileSelect = (file: File) => {
     if (file.size > 250 * 1024 * 1024) {

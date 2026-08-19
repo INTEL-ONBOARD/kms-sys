@@ -164,14 +164,56 @@ export async function getAdminDashboardStats() {
 
 /**
  * Retrieves aggregate data for the Lecturer Dashboard.
+ * If lecturer is not assigned to any courses, returns zero-state statistics safely.
  */
 export async function getLecturerDashboard(userId: string, userName: string) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
+
+  if (courses.length === 0) {
+    return {
+      stats: {
+        activeCourses: 0,
+        totalStudents: 0,
+        pendingGrades: 0,
+        todaysClasses: 0,
+      },
+      courses: [],
+      schedule: [],
+      gradingQueue: [],
+      recentActivity: [],
+      performance: {
+        barChart: [],
+        lineChart: [],
+        donutChart: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        assignmentDonut: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        finalDonut: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        assignmentGradesSummary: {
+          totalEvaluated: 0,
+          averageScore: 0,
+          passingRate: 0,
+          distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        },
+        finalGradesSummary: {
+          totalEnrolled: 0,
+          completedCount: 0,
+          inProgressCount: 0,
+          completionRate: 0,
+          averageFinalGrade: 0,
+          passingRate: 0,
+          distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        },
+        students: [],
+        coursesPerformance: [],
+      },
+    };
+  }
 
   const courseIds = courses.map((c) => c._id);
 
@@ -651,12 +693,18 @@ export async function getLecturerDashboard(userId: string, userName: string) {
 export async function getLecturerActivity(userId: string, userName: string) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
+  if (courseIds.length === 0) {
+    return { activity: [] };
+  }
+
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [recentSubmissions, recentAnnouncements, gradedSubmissions] = await Promise.all([

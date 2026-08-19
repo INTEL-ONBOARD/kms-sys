@@ -51,7 +51,10 @@ interface AssignmentItem {
   status: string;
 }
 
+import { useToast } from "@/Components/ToastProvider";
+
 export default function LecturerAssignmentsPage() {
+  const toast = useToast();
   const [showModal, setShowModal] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [selectedCourseForModal, setSelectedCourseForModal] = useState<CourseItem | null>(null);
@@ -197,22 +200,49 @@ export default function LecturerAssignmentsPage() {
           )}
 
           <button
-            onClick={() => setShowModal(true)}
-            className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
-              isCourseLimitReached 
-                ? "bg-amber-600 hover:bg-amber-700 text-white" 
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => {
+              if (courses.length === 0) {
+                toast.warning("Action Blocked: You must be assigned to a course by an administrator before creating assignments.");
+                return;
+              }
+              setShowModal(true);
+            }}
+            disabled={courses.length === 0}
+            title={courses.length === 0 ? "Course assignment required from Admin" : "Create Assignment"}
+            className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2 ${
+              courses.length === 0
+                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                : isCourseLimitReached 
+                ? "bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-95" 
+                : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95"
             }`}
           >
             <FiPlus className="text-base" /> 
             <span>
-              {isCourseLimitReached 
+              {courses.length === 0
+                ? "Create Assignment"
+                : isCourseLimitReached 
                 ? `Create Assignment (${activeCourseAssignments.length}/${activeCourseBreakdownItems.length})` 
                 : "Create Assignment"}
             </span>
           </button>
         </div>
       </div>
+
+      {/* Locked Notice if no assigned courses */}
+      {!loading && courses.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 font-bold">
+            🔒
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Assignment Creation Locked</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              You are not assigned to any courses yet. Once an administrator assigns courses to your profile from the Admin Panel, you will be able to create assignments and manage grade breakdowns.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Course Assessment & Grade Breakdown Sync Panel */}
       {activeCourse && (

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FiBookOpen, FiUsers, FiClipboard, FiPlus, FiSearch, FiUploadCloud } from "react-icons/fi";
+import { FiBookOpen, FiUsers, FiClipboard, FiPlus, FiSearch, FiUploadCloud, FiLock } from "react-icons/fi";
 import CourseCardLecturer from "@/Components/lecturer/CourseCardLecturer";
 import MaterialUploadModal from "@/Components/lecturer/MaterialUploadModal";
+import { useToast } from "@/Components/ToastProvider";
 
 export default function LecturerCoursesPage() {
+  const toast = useToast();
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,14 +60,41 @@ export default function LecturerCoursesPage() {
           </div>
 
           <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-sm transition shrink-0"
+            onClick={() => {
+              if (courses.length === 0) {
+                toast.warning("Upload Blocked: You must be assigned to a course by an administrator before uploading materials.");
+                return;
+              }
+              setShowUploadModal(true);
+            }}
+            disabled={courses.length === 0}
+            title={courses.length === 0 ? "Course assignment required from Admin" : "Upload Material"}
+            className={`flex items-center gap-2 px-4 py-2.5 font-semibold text-xs rounded-xl shadow-sm transition shrink-0 ${
+              courses.length > 0
+                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+            }`}
           >
             <FiUploadCloud className="text-sm" />
             <span>Upload Material</span>
           </button>
         </div>
       </div>
+
+      {/* Locked Notice if no assigned courses */}
+      {!loading && courses.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 font-bold">
+            <FiLock />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Awaiting Course Assignment</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              You are not assigned to any courses yet. Once an administrator assigns courses to your account from the Admin Panel, they will appear here along with full access to curriculum, grade breakdown management, and material uploads.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Course Grid */}
       {loading ? (
@@ -111,6 +140,7 @@ export default function LecturerCoursesPage() {
         </div>
       )}
 
+      {/* Upload Modal */}
       {showUploadModal && (
         <MaterialUploadModal
           onClose={() => setShowUploadModal(false)}

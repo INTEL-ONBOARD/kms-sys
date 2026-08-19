@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth, requireRole } from "@/server/core/auth-context";
 import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError, NotFoundError } from "@/server/core/errors";
+import { BadRequestError, NotFoundError, ForbiddenError } from "@/server/core/errors";
 import { deleteR2Object } from "@/lib/r2";
 import { connectToDatabase } from "@/lib/db";
 import CourseMaterial from "@/models/CourseMaterial";
@@ -60,6 +60,34 @@ export async function GET(req: NextRequest) {
       }
 
       query.isPublished = true;
+    } else if (authUser.role === "lecturer") {
+      const lecturerCourses = await Course.find({
+        $or: [
+          { instructorId: authUser.id },
+          ...(authUser.name ? [{ instructor: { $regex: new RegExp(`^${authUser.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+        ],
+      }).lean();
+      const lecturerCourseIds = lecturerCourses.map((c) => c._id);
+
+      if (lecturerCourseIds.length === 0) {
+        return successResponse([], undefined, 200, {
+          success: true,
+          data: [],
+          materials: [],
+        });
+      }
+
+      if (courseId) {
+        if (!lecturerCourseIds.map(String).includes(courseId.toString())) {
+          return successResponse([], undefined, 200, {
+            success: true,
+            data: [],
+            materials: [],
+          });
+        }
+      } else {
+        query.courseId = { $in: lecturerCourseIds };
+      }
     }
 
     const materials = await CourseMaterial.find(query)
@@ -103,6 +131,16 @@ export async function POST(req: NextRequest) {
     const course = await Course.findById(courseId);
     if (!course) {
       throw new NotFoundError("Course not found");
+    }
+
+    // If lecturer, verify they are assigned to this course
+    if (authUser.role === "lecturer") {
+      const isAssigned =
+        course.instructorId?.toString() === authUser.id ||
+        (authUser.name && course.instructor?.toLowerCase() === authUser.name.toLowerCase());
+      if (!isAssigned) {
+        throw new ForbiddenError("You are not assigned to this course. Material upload is blocked.");
+      }
     }
 
     const material = await CourseMaterial.create({

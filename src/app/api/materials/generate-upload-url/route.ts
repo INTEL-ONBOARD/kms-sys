@@ -7,9 +7,13 @@ import * as MaterialService from "@/server/services/material.service";
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole(req, ["student", "lecturer", "super_admin", "admin"]);
+    const authUser = await requireRole(req, ["student", "lecturer", "super_admin", "admin"]);
     const body = await validateBody(req, generateUploadUrlSchema);
-    const result = await MaterialService.generateUploadUrl(body);
+    const result = await MaterialService.generateUploadUrl(body, {
+      id: authUser.id,
+      role: authUser.role,
+      name: authUser.name || undefined,
+    });
 
     return successResponse(result, undefined, 200);
   } catch (error) {

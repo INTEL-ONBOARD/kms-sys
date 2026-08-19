@@ -184,15 +184,40 @@ export default function LecturerExamsPage() {
 
           <button
             onClick={() => {
+              if (courses.length === 0) {
+                toast.warning("Action Blocked: You must be assigned to a course by an administrator before scheduling exams.");
+                return;
+              }
               setEditingExam(null);
               setShowModal(true);
             }}
-            className="px-4 py-2.5 bg-purple-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-purple-700 transition flex items-center gap-2 cursor-pointer active:scale-95"
+            disabled={courses.length === 0}
+            title={courses.length === 0 ? "Course assignment required from Admin" : "Schedule New Exam"}
+            className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2 ${
+              courses.length === 0
+                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer active:scale-95"
+            }`}
           >
             <FiPlus className="text-base" /> Schedule New Exam
           </button>
         </div>
       </div>
+
+      {/* Locked Notice if no assigned courses */}
+      {!loading && courses.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 font-bold">
+            🔒
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Exam Scheduling Locked</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              You are not assigned to any courses yet. Once an administrator assigns courses to your profile from the Admin Panel, you will be able to schedule, manage, and publish exam results.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Course Grade Breakdown Exam Components Panel */}
       {activeCourse && (

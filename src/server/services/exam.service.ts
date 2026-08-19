@@ -21,12 +21,22 @@ export async function getLecturerExams(
 ) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
+
+  if (courseIds.length === 0) {
+    return {
+      exams: [],
+      courses: [],
+      pagination: buildPaginationMeta(0, pagination.page, pagination.limit),
+    };
+  }
 
   const query: Record<string, any> = { courseId: { $in: courseIds } };
   if (pagination.search) {
@@ -96,29 +106,20 @@ export async function createExam(
 
   let targetCourseId = courseId;
   if (!targetCourseId) {
-    const nameRegex = createSafeSearchRegex(userName);
     const lecturerCourses = await Course.find({
-      $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+      $or: [
+        { instructorId: userId },
+        ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+      ],
     }).lean();
 
     if (lecturerCourses.length > 0) {
       targetCourseId = lecturerCourses[0]._id.toString();
-    } else {
-      const anyCourse = await Course.findOne().lean();
-      if (anyCourse) {
-        targetCourseId = anyCourse._id.toString();
-      } else {
-        const defaultCourse = await Course.create({
-          title: "General Lecture Course",
-          instructor: userName || "Lecturer",
-          instructorId: userId,
-          category: "General",
-          price: "Free",
-          published: true,
-        });
-        targetCourseId = defaultCourse._id.toString();
-      }
     }
+  }
+
+  if (!targetCourseId) {
+    throw new BadRequestError("You do not have any courses assigned to schedule exams for. Please contact an administrator.");
   }
 
   // Validate that the exam title is an exam component in Course.assessmentItems

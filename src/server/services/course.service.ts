@@ -205,6 +205,7 @@ export async function deleteCourse(id: string) {
 
 /**
  * Retrieves courses assigned to or managed by a lecturer, with student counts, average completion, and assignment statistics.
+ * If a lecturer has no courses assigned yet from admin panel, returns an empty array.
  */
 export async function getLecturerCourses(
   lecturerId: string,
@@ -213,27 +214,25 @@ export async function getLecturerCourses(
 ) {
   await connectToDatabase();
 
-  const safeNameRegex = createSafeSearchRegex(lecturerName);
   const query: Record<string, any> = {
     $or: [
       { instructorId: lecturerId },
-      { instructor: { $regex: safeNameRegex } },
+      ...(lecturerName ? [{ instructor: { $regex: new RegExp(`^${lecturerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
     ],
   };
 
-  let total = await Course.countDocuments(query);
-  let courses = await Course.find(query)
+  const total = await Course.countDocuments(query);
+  const courses = await Course.find(query)
     .skip(pagination.skip)
     .limit(pagination.limit)
     .lean();
 
-  // If no courses found for this lecturer specifically, fallback to all courses
-  if (total === 0) {
-    total = await Course.countDocuments();
-    courses = await Course.find()
-      .skip(pagination.skip)
-      .limit(pagination.limit)
-      .lean();
+  if (courses.length === 0) {
+    return {
+      data: [],
+      courses: [],
+      pagination: buildPaginationMeta(0, pagination.page, pagination.limit),
+    };
   }
 
   const courseIds = courses.map((c) => c._id);

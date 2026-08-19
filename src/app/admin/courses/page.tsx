@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import DashHeader from '@/Components/DashHeader'; 
 import AdminSidebar from '@/Components/AdminSidebar';
-import { FiSearch, FiFilter, FiPlus, FiEdit, FiTrash2, FiEye, FiBook, FiTag, FiX, FiClock, FiMapPin } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiPlus, FiEdit, FiTrash2, FiEye, FiBook, FiTag, FiX, FiClock, FiMapPin, FiUserCheck } from 'react-icons/fi';
 import type { ScheduleSlot } from '@/types/lms';
 
 // Define the Course interface based on your MongoDB structure
@@ -11,6 +11,7 @@ interface CourseData {
   _id: string;
   title: string;
   instructor: string;
+  instructorId?: string;
   category: string;
   price: string;
   status: string;
@@ -19,9 +20,17 @@ interface CourseData {
   schedule?: ScheduleSlot[];
 }
 
+interface LecturerUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export default function CoursesAdminPage() {
   // --- States for Data and UI ---
   const [courses, setCourses] = useState<CourseData[]>([]);
+  const [lecturers, setLecturers] = useState<LecturerUser[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Search & Filter States
@@ -44,12 +53,13 @@ export default function CoursesAdminPage() {
 
   // Form State for Add/Edit Modals
   const [formData, setFormData] = useState({
-    title:      '',
-    instructor: '',
-    category:   'Design',
-    price:      'Free',
-    status:     'draft',
-    colorCode:  '#5A67D8',
+    title:        '',
+    instructor:   '',
+    instructorId: '',
+    category:     'Design',
+    price:        'Free',
+    status:       'draft',
+    colorCode:    '#5A67D8',
   });
 
   // Schedule slots state — separate from formData for easier array management
@@ -72,7 +82,7 @@ export default function CoursesAdminPage() {
       prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s))
     );
 
-  // --- 2. Fetch Courses from Database ---
+  // --- 2. Fetch Courses and Lecturers from Database ---
   const fetchCourses = async () => {
     try {
       setLoading(true);
@@ -88,9 +98,24 @@ export default function CoursesAdminPage() {
     }
   };
 
-  // Run fetchCourses once when the component mounts
+  const fetchLecturers = async () => {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (response.ok) {
+        const data = await response.json();
+        const usersList: LecturerUser[] = data.users || [];
+        const lecturerList = usersList.filter((u) => u.role === 'lecturer');
+        setLecturers(lecturerList);
+      }
+    } catch (error) {
+      console.error("Error fetching lecturers:", error);
+    }
+  };
+
+  // Run initial fetch on mount
   useEffect(() => {
     fetchCourses();
+    fetchLecturers();
   }, []);
 
   // --- 3. Filter & Pagination Logic ---
@@ -131,7 +156,7 @@ export default function CoursesAdminPage() {
       });
       if (res.ok) {
         setIsAddModalOpen(false);
-        setFormData({ title: '', instructor: '', category: 'Design', price: 'Free', status: 'draft', colorCode: '#5A67D8' });
+        setFormData({ title: '', instructor: '', instructorId: '', category: 'Design', price: 'Free', status: 'draft', colorCode: '#5A67D8' });
         setScheduleSlots([]);
         fetchCourses();
       }
@@ -200,7 +225,7 @@ export default function CoursesAdminPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">Course Management</h1>
-              <p className="text-[#A0AEC0] font-medium mt-1">Manage all platform courses, categories, and tags</p>
+              <p className="text-[#A0AEC0] font-medium mt-1">Manage all platform courses, categories, and lecturer assignments</p>
             </div>
             <div className="flex space-x-3 mt-4 md:mt-0">
               <div className="relative flex items-center">
@@ -219,7 +244,11 @@ export default function CoursesAdminPage() {
                 </div>
               </div>
               {/* Open Add Modal Button */}
-              <button onClick={() => setIsAddModalOpen(true)} className="bg-[#5A67D8] hover:bg-[#434190] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300">
+              <button onClick={() => {
+                setFormData({ title: '', instructor: '', instructorId: '', category: 'Design', price: 'Free', status: 'draft', colorCode: '#5A67D8' });
+                setScheduleSlots([]);
+                setIsAddModalOpen(true);
+              }} className="bg-[#5A67D8] hover:bg-[#434190] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300">
                 <FiPlus className="mr-2 text-lg" />
                 New Course
               </button>
@@ -276,7 +305,7 @@ export default function CoursesAdminPage() {
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-4">Course Info</th>
-                    <th className="px-6 py-4">Instructor</th>
+                    <th className="px-6 py-4">Assigned Lecturer</th>
                     <th className="px-6 py-4">Category</th>
                     <th className="px-6 py-4">Price</th>
                     <th className="px-6 py-4">Status</th>
@@ -296,7 +325,12 @@ export default function CoursesAdminPage() {
                           <div className="font-bold text-gray-900">{course.title}</div>
                           <div className="text-xs text-gray-500 mt-0.5">{course.enrollments} Enrollments</div>
                         </td>
-                        <td className="px-6 py-4"><div className="font-medium text-gray-700">{course.instructor}</div></td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-700 flex items-center gap-1.5">
+                            <FiUserCheck className="text-indigo-500 text-xs" />
+                            {course.instructor || <span className="text-gray-400 italic">Unassigned</span>}
+                          </div>
+                        </td>
                         <td className="px-6 py-4"><span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-md text-xs font-bold">{course.category}</span></td>
                         <td className="px-6 py-4"><span className={`font-bold ${course.price === 'Free' ? 'text-green-600' : 'text-gray-700'}`}>{course.price}</span></td>
                         <td className="px-6 py-4"><span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize border ${getStatusBadge(course.status)}`}>{course.status}</span></td>
@@ -309,7 +343,15 @@ export default function CoursesAdminPage() {
                             {/* Edit Button */}
                             <button onClick={() => { 
                                 setSelectedCourse(course); 
-                                setFormData({ title: course.title, instructor: course.instructor, category: course.category, price: course.price, status: course.status, colorCode: course.colorCode || '#5A67D8' }); 
+                                setFormData({ 
+                                  title: course.title, 
+                                  instructor: course.instructor, 
+                                  instructorId: (course as any).instructorId || '',
+                                  category: course.category, 
+                                  price: course.price, 
+                                  status: course.status, 
+                                  colorCode: course.colorCode || '#5A67D8' 
+                                }); 
                                 setScheduleSlots(course.schedule ?? []);
                                 setIsEditModalOpen(true); 
                               }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Edit Course">
@@ -358,8 +400,56 @@ export default function CoursesAdminPage() {
               <form id="add-course-form" onSubmit={handleAddSubmit} className="space-y-4">
 
                 {/* Core Fields */}
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label><input required type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Instructor</label><input required type="text" value={formData.instructor} onChange={(e) => setFormData({...formData, instructor: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
+                  <input required type="text" placeholder="e.g. Interaction Design Principles" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" />
+                </div>
+                
+                {/* Assign Lecturer Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                    <FiUserCheck className="text-indigo-600" /> Assign Lecturer
+                  </label>
+                  {lecturers.length > 0 ? (
+                    <select
+                      value={formData.instructorId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const selectedLecturer = lecturers.find(l => l._id === selectedId);
+                        if (selectedLecturer) {
+                          setFormData({
+                            ...formData,
+                            instructorId: selectedLecturer._id,
+                            instructor: selectedLecturer.name,
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            instructorId: '',
+                            instructor: '',
+                          });
+                        }
+                      }}
+                      className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none bg-white text-sm"
+                    >
+                      <option value="">-- Select Registered Lecturer --</option>
+                      {lecturers.map((lec) => (
+                        <option key={lec._id} value={lec._id}>
+                          {lec.name} ({lec.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="Or enter instructor name manually..."
+                    value={formData.instructor} 
+                    onChange={(e) => setFormData({...formData, instructor: e.target.value})} 
+                    className="w-full border rounded-lg p-2 mt-2 text-sm focus:ring-2 focus:ring-indigo-400 outline-none" 
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Assigning a lecturer ensures only this lecturer can view and manage this course.</p>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -490,8 +580,54 @@ export default function CoursesAdminPage() {
             <div className="overflow-y-auto px-6 py-4 flex-1">
               <form id="edit-course-form" onSubmit={handleEditSubmit} className="space-y-4">
 
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label><input required type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Instructor</label><input required type="text" value={formData.instructor} onChange={(e) => setFormData({...formData, instructor: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" /></div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
+                  <input required type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none" />
+                </div>
+
+                {/* Assign Lecturer Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                    <FiUserCheck className="text-indigo-600" /> Assign Lecturer
+                  </label>
+                  {lecturers.length > 0 ? (
+                    <select
+                      value={formData.instructorId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const selectedLecturer = lecturers.find(l => l._id === selectedId);
+                        if (selectedLecturer) {
+                          setFormData({
+                            ...formData,
+                            instructorId: selectedLecturer._id,
+                            instructor: selectedLecturer.name,
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            instructorId: '',
+                          });
+                        }
+                      }}
+                      className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 outline-none bg-white text-sm"
+                    >
+                      <option value="">-- Select Registered Lecturer --</option>
+                      {lecturers.map((lec) => (
+                        <option key={lec._id} value={lec._id}>
+                          {lec.name} ({lec.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="Instructor Name"
+                    value={formData.instructor} 
+                    onChange={(e) => setFormData({...formData, instructor: e.target.value})} 
+                    className="w-full border rounded-lg p-2 mt-2 text-sm focus:ring-2 focus:ring-indigo-400 outline-none" 
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

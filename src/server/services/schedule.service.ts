@@ -5,8 +5,7 @@ import LiveClass from "@/models/LiveClass";
 import CourseMaterial from "@/models/CourseMaterial";
 import Notification from "@/models/Notification";
 import Enrollment from "@/models/Enrollment";
-import { NotFoundError } from "../core/errors";
-import { createSafeSearchRegex } from "../core/pagination";
+import { BadRequestError, NotFoundError } from "../core/errors";
 
 /**
  * Retrieves scheduled live classes for a lecturer or course.
@@ -18,18 +17,19 @@ export async function getLecturerSchedule(
 ) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
-  let courseIds = courses.map((c) => c._id);
+  const courseIds = courses.map((c) => c._id);
   if (courseIds.length === 0) {
-    const allCourses = await Course.find().lean();
-    courseIds = allCourses.map((c) => c._id);
+    return { schedule: [] };
   }
 
-  const query: Record<string, any> = courseIds.length > 0 ? { courseId: { $in: courseIds } } : {};
+  const query: Record<string, any> = { courseId: { $in: courseIds } };
 
   if (options?.dateParam) {
     const queryDate = new Date(options.dateParam);
@@ -86,9 +86,11 @@ export async function createLiveClass(
 ) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const lecturerCourses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   let targetCourseId = input.courseId;
@@ -97,20 +99,7 @@ export async function createLiveClass(
   }
 
   if (!targetCourseId) {
-    const anyCourse = await Course.findOne().lean();
-    if (anyCourse) {
-      targetCourseId = anyCourse._id.toString();
-    } else {
-      const defaultCourse = await Course.create({
-        title: "General Lecture Course",
-        instructor: userName || "Lecturer",
-        instructorId: userId,
-        category: "General",
-        price: "Free",
-        published: true,
-      });
-      targetCourseId = defaultCourse._id.toString();
-    }
+    throw new BadRequestError("You do not have any courses assigned to schedule live classes for. Please contact an administrator.");
   }
 
   let startTimeDate = new Date();
