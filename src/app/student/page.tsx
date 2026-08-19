@@ -66,6 +66,14 @@ interface MaterialItem {
   createdAt: string;
 }
 
+interface AnnouncementItem {
+  _id: string;
+  message: string;
+  courseId?: { _id: string; title: string };
+  lecturerId?: { _id: string; name: string };
+  createdAt: string;
+}
+
 export default function DashboardPage() {
   const toast = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -75,6 +83,7 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [credits, setCredits] = useState<number>(0);
   const [gpa, setGpa] = useState<string>("0.0");
   const [attendance, setAttendance] = useState<number>(0);
@@ -96,6 +105,21 @@ export default function DashboardPage() {
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
   };
 
+  const timeAgo = (dateStr: string) => {
+    if (!dateStr) return "Recently";
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHour < 24) return `${diffHour}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -114,6 +138,7 @@ export default function DashboardPage() {
           setExams(data.exams || []);
           setLiveClasses(data.liveClasses || []);
           setMaterials(data.materials || []);
+          setAnnouncements(data.announcements || []);
           setCredits(data.credits ?? 0);
           setGpa(data.gpa ?? "0.0");
           setAttendance(data.attendance ?? 0);
@@ -583,7 +608,9 @@ export default function DashboardPage() {
                 <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center">
                   <h3 className="font-bold text-[#2D3748]">Announcements</h3>
                   {courses.length > 0 ? (
-                    <span className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition cursor-pointer">View All</span>
+                    <Link href="/courses" className="text-xs font-semibold text-[#5A67D8] border border-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-50 transition cursor-pointer">
+                      View in Courses
+                    </Link>
                   ) : (
                     <button
                       onClick={() => toast.warning("Section Locked: Announcements will unlock once an administrator assigns your course(s).")}
@@ -594,24 +621,39 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div className="flex flex-col p-2">
-                  <div className="flex items-start p-4 hover:bg-[#F7FAFC] rounded-lg cursor-pointer transition">
-                    <div className="w-10 h-10 rounded-full bg-[#EBF4FF] text-[#5A67D8] flex items-center justify-center mr-4 flex-shrink-0 mt-0.5">
-                      <FiBell className="text-lg" />
+                  {loading ? (
+                    <div className="p-4 text-sm text-gray-400">Loading announcements...</div>
+                  ) : courses.length === 0 ? (
+                    <div className="p-4 text-xs text-gray-400 flex items-center gap-2">
+                      <FiLock className="text-amber-500 text-sm shrink-0" />
+                      No announcements available. Course assignment required.
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-[#2D3748]">Batch event update</h4>
-                      <p className="text-xs font-medium text-[#A0AEC0] mt-1">1 hour ago</p>
+                  ) : announcements.length === 0 ? (
+                    <div className="p-4 text-xs text-gray-400 flex items-center gap-2">
+                      <FiBell className="text-gray-300 text-sm shrink-0" />
+                      No recent announcements posted for your courses.
                     </div>
-                  </div>
-                  <div className="flex items-start p-4 hover:bg-[#F7FAFC] rounded-lg cursor-pointer transition">
-                    <div className="w-10 h-10 rounded-full bg-[#EBF4FF] text-[#5A67D8] flex items-center justify-center mr-4 flex-shrink-0 mt-0.5">
-                      <FiFileText className="text-lg" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-[#2D3748]">Exam Schedule Posted</h4>
-                      <p className="text-xs font-medium text-[#A0AEC0] mt-1">3 days ago</p>
-                    </div>
-                  </div>
+                  ) : (
+                    announcements.slice(0, 5).map((anc) => (
+                      <div key={anc._id} className="flex items-start p-3.5 hover:bg-[#F7FAFC] rounded-xl transition group">
+                        <div className="w-9 h-9 rounded-xl bg-[#EEF2FF] text-[#5A67D8] flex items-center justify-center mr-3.5 flex-shrink-0 mt-0.5 shadow-xs">
+                          <FiBell className="text-base" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-[#2D3748] group-hover:text-[#5A67D8] transition line-clamp-2 leading-snug">
+                            {anc.message}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-[#A0AEC0] font-medium flex-wrap">
+                            <span className="text-[#5A67D8] font-bold truncate max-w-[140px]">
+                              {anc.courseId?.title || "Course"}
+                            </span>
+                            <span>&bull;</span>
+                            <span>{timeAgo(anc.createdAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

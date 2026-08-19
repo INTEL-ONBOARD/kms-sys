@@ -8,6 +8,7 @@ import LiveClass from "@/models/LiveClass";
 import CourseMaterial from "@/models/CourseMaterial";
 import Submission from "@/models/Submission";
 import User from "@/models/User";
+import Announcement from "@/models/Announcement";
 import { BadRequestError, NotFoundError, ConflictError } from "../core/errors";
 import { PaginationParams, buildPaginationMeta } from "../core/pagination";
 import { EnrollCourseInput } from "../dtos/course.dto";
@@ -21,6 +22,7 @@ Assignment;
 Enrollment;
 Submission;
 User;
+Announcement;
 
 /**
  * Retrieves enrollments for admin/super_admin with populated course and user information.
@@ -180,7 +182,20 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 6. Calculate dynamic Credits, Attendance, and GPA
+  // 6. Recent Announcements for enrolled courses
+  const announcements =
+    courseIds.length > 0
+      ? await Announcement.find({
+          courseId: { $in: courseIds },
+        })
+          .populate("courseId", "title")
+          .populate("lecturerId", "name email")
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .lean()
+      : [];
+
+  // 7. Calculate dynamic Credits, Attendance, and GPA
   let credits = 0;
   let attendance = 0;
   let gpa = "0.0";
@@ -219,7 +234,7 @@ export async function getStudentDashboard(userId: string) {
     }
   }
 
-    const currentUser = await User.findById(userObjectId).select("name email reportApproved").lean();
+  const currentUser = await User.findById(userObjectId).select("name email reportApproved").lean();
 
   return {
     enrollments: validEnrollments,
@@ -227,6 +242,7 @@ export async function getStudentDashboard(userId: string) {
     exams,
     liveClasses,
     materials,
+    announcements,
     credits,
     gpa,
     attendance,

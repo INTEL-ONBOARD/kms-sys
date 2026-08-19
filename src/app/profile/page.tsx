@@ -1,9 +1,9 @@
 "use client";
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { FiCalendar, FiCheck, FiLoader } from 'react-icons/fi';
-import Sidebar from '@/Components/Sidebar';
+import { FiCalendar, FiCheck, FiLoader, FiArrowLeft } from 'react-icons/fi';
 import Header from '@/Components/DashHeader';
 
 interface UserProfile {
@@ -138,6 +138,13 @@ export default function ProfilePage() {
   const isStudent = user?.role === 'student';
   const isLecturer = user?.role === 'lecturer' || user?.role === 'instructor';
 
+  const dashboardHref =
+    user?.role === 'admin' || user?.role === 'super_admin'
+      ? '/admin'
+      : user?.role === 'lecturer' || user?.role === 'instructor'
+      ? '/lecturer'
+      : '/student';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
@@ -147,22 +154,30 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
-      <Sidebar />
+    <div className="min-h-screen bg-[#F7F9FC] flex flex-col font-sans text-gray-800">
+      <Header />
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <Header />
-
-        <div className="flex-1 overflow-y-auto px-8 pb-12 pt-6">
-          <div className="mb-6">
-            <h1 className="text-xl font-bold text-[#2D3748] uppercase tracking-widest">Profile</h1>
+      <main className="flex-1 overflow-y-auto px-4 sm:px-8 pb-12 pt-6 max-w-7xl mx-auto w-full">
+        {/* Top Header with Return to Dashboard Button */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <div>
+            <h1 className="text-xl font-extrabold text-[#2D3748] tracking-wide">User Profile</h1>
+            <p className="text-xs text-gray-400 mt-0.5">Manage personal information, contact details, and account settings</p>
           </div>
+          <Link
+            href={dashboardHref}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#5A67D8] font-bold text-xs rounded-xl border border-indigo-100 shadow-xs transition hover:shadow-sm"
+          >
+            <FiArrowLeft className="text-sm" />
+            <span>Return to Dashboard</span>
+          </Link>
+        </div>
 
-          {(message || error) && (
-            <div className={`mb-6 p-4 rounded-lg text-sm font-medium ${error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-              {error || message}
-            </div>
-          )}
+        {(message || error) && (
+          <div className={`mb-6 p-4 rounded-xl text-sm font-medium ${error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
+            {error || message}
+          </div>
+        )}
 
           {/* Top Section: Profile Info and Edit Profile */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
@@ -384,7 +399,6 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-        </div>
       </main>
     </div>
   );
