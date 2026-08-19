@@ -10,6 +10,7 @@ import {
   FiVideo, 
   FiBookOpen, 
   FiClock,
+  FiCalendar,
   FiDownload,
   FiLock,
   FiCheckCircle,
@@ -424,9 +425,13 @@ export default function DashboardPage() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex justify-between text-xs text-[#A0AEC0] font-medium">
-                              <span className="flex items-center gap-1"><FiClock className="text-xs" /> {formatTime(lc.startTime)} - {formatTime(lc.endTime)}</span>
-                              <span className="flex items-center gap-1"><FiBookOpen className="text-xs" /> {lc.courseId?.title || 'General'}</span>
+                            <div className="flex justify-between items-center text-xs text-[#A0AEC0] font-medium gap-2">
+                              <span className="flex items-center gap-1">
+                                <FiCalendar className="text-[11px]" /> {formatDate(lc.startTime)} &middot; <FiClock className="text-[11px]" /> {formatTime(lc.startTime)} - {formatTime(lc.endTime)}
+                              </span>
+                              <span className="flex items-center gap-1 text-[#5A67D8] font-bold truncate max-w-[130px]" title={lc.courseId?.title || 'General'}>
+                                <FiBookOpen className="text-[11px] shrink-0" /> {lc.courseId?.title || 'General'}
+                              </span>
                             </div>
                             
                             <div className="mt-2.5 flex items-center gap-3">
