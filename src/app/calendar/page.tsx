@@ -12,7 +12,9 @@ import {
   FiArrowRight, 
   FiVideo, 
   FiBookOpen, 
-  FiInfo
+  FiInfo,
+  FiFileText,
+  FiExternalLink
 } from 'react-icons/fi';
 import { MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -69,7 +71,7 @@ interface WeekViewProps {
 function WeekView({ events, filterCourse }: WeekViewProps) {
   const filtered = filterCourse === "All" || filterCourse === "all"
     ? events
-    : events.filter((e) => e.courseId === filterCourse || e.title === filterCourse);
+    : events.filter((e) => e.courseId === filterCourse || e.title === filterCourse || e.courseTitle === filterCourse);
 
   const eventMap = useMemo(() => {
     const map: Record<string, Record<number, CalendarEvent>> = {};
@@ -94,8 +96,8 @@ function WeekView({ events, filterCourse }: WeekViewProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-400">
         <FiCalendar className="text-5xl mb-4 text-slate-300" />
-        <p className="font-bold text-slate-600 text-base">No classes scheduled</p>
-        <p className="text-xs text-gray-400 mt-1">Your enrolled courses&apos; timetable slots will appear here automatically.</p>
+        <p className="font-bold text-slate-600 text-base">No classes or exams scheduled</p>
+        <p className="text-xs text-gray-400 mt-1">Your enrolled courses, scheduled live classes, and exams will appear here.</p>
       </div>
     );
   }
@@ -128,32 +130,68 @@ function WeekView({ events, filterCourse }: WeekViewProps) {
                 const ev = eventMap[day]?.[hour];
 
                 if (ev) {
-                  const textColor = getTextColor(ev.colorCode);
-                  const subColor = getSubtleColor(ev.colorCode);
+                  const isExam = ev.eventType === 'exam';
+                  const isLive = ev.eventType === 'live_class';
+                  const bgColor = isExam ? '#7C3AED' : isLive ? '#2563EB' : (ev.colorCode || '#5A67D8');
+                  const textColor = getTextColor(bgColor);
+                  const subColor = getSubtleColor(bgColor);
+
                   return (
                     <td
                       key={day}
                       rowSpan={ev.durationHours}
                       className="border-r border-gray-200 last:border-r-0 p-2.5 align-middle transition hover:brightness-95"
                       style={{
-                        backgroundColor: ev.colorCode,
-                        borderLeft: `4px solid ${ev.colorCode}cc`,
+                        backgroundColor: bgColor,
+                        borderLeft: `4px solid ${bgColor}cc`,
                       }}
                     >
+                      {/* Event Type Badge */}
+                      {isExam ? (
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-purple-900/40 text-purple-100 tracking-wider shadow-xs">
+                            EXAM
+                          </span>
+                        </div>
+                      ) : isLive ? (
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-blue-900/40 text-blue-100 tracking-wider flex items-center gap-1 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                            LIVE CLASS
+                          </span>
+                        </div>
+                      ) : null}
+
                       <div
                         className="font-bold text-[13px] leading-snug"
                         style={{ color: textColor }}
                       >
                         {ev.title}
                       </div>
+
                       <div className="flex items-center justify-center gap-1 text-[11px] mt-1 font-medium" style={{ color: subColor }}>
                         <FiClock className="text-[10px]" />
                         {ev.startTime}–{ev.endTime}
                       </div>
+
                       {ev.location && (
                         <div className="flex items-center justify-center gap-1 text-[11px] mt-0.5 font-medium" style={{ color: subColor }}>
                           <FiMapPin className="text-[10px]" />
                           {ev.location}
+                        </div>
+                      )}
+
+                      {/* Live meeting direct button */}
+                      {isLive && ev.meetingLink && (
+                        <div className="mt-1.5">
+                          <a
+                            href={ev.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white transition shadow-xs"
+                          >
+                            <FiVideo className="text-[10px]" /> Join
+                          </a>
                         </div>
                       )}
                     </td>
@@ -182,7 +220,7 @@ interface MonthlyViewProps {
 function MonthlyView({ events, filterCourse }: MonthlyViewProps) {
   const filtered = filterCourse === "All" || filterCourse === "all"
     ? events
-    : events.filter((e) => e.courseId === filterCourse || e.title === filterCourse);
+    : events.filter((e) => e.courseId === filterCourse || e.title === filterCourse || e.courseTitle === filterCourse);
 
   const grouped = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
@@ -199,8 +237,8 @@ function MonthlyView({ events, filterCourse }: MonthlyViewProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-400">
         <FiCalendar className="text-5xl mb-4 text-slate-300" />
-        <p className="font-bold text-slate-600 text-base">No classes scheduled</p>
-        <p className="text-xs text-gray-400 mt-1">Your enrolled courses&apos; timetable will appear here.</p>
+        <p className="font-bold text-slate-600 text-base">No classes or exams scheduled</p>
+        <p className="text-xs text-gray-400 mt-1">Your enrolled courses, scheduled live classes, and exams will appear here.</p>
       </div>
     );
   }
@@ -220,25 +258,56 @@ function MonthlyView({ events, filterCourse }: MonthlyViewProps) {
               grouped[day]
                 .sort((a, b) => a.startHour - b.startHour)
                 .map((ev) => {
-                  const textColor = getTextColor(ev.colorCode);
-                  const subColor = getSubtleColor(ev.colorCode);
+                  const isExam = ev.eventType === 'exam';
+                  const isLive = ev.eventType === 'live_class';
+                  const bgColor = isExam ? '#7C3AED' : isLive ? '#2563EB' : (ev.colorCode || '#5A67D8');
+                  const textColor = getTextColor(bgColor);
+                  const subColor = getSubtleColor(bgColor);
+
                   return (
                     <div
-                      key={`${ev.courseId}-${ev.startTime}`}
+                      key={ev.id || `${ev.courseId}-${ev.startTime}`}
                       className="rounded-xl p-3 shadow-sm"
-                      style={{ backgroundColor: ev.colorCode }}
+                      style={{ backgroundColor: bgColor }}
                     >
+                      {/* Header Badge */}
+                      {isExam ? (
+                        <span className="inline-block px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-purple-900/40 text-purple-100 tracking-wider mb-1">
+                          EXAM
+                        </span>
+                      ) : isLive ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-blue-900/40 text-blue-100 tracking-wider mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                          LIVE CLASS
+                        </span>
+                      ) : null}
+
                       <div className="font-bold text-[13px] leading-tight" style={{ color: textColor }}>
                         {ev.title}
                       </div>
+
                       <div className="flex items-center gap-1 text-[11px] mt-1.5" style={{ color: subColor }}>
                         <FiClock className="text-[10px]" />
                         {ev.startTime} – {ev.endTime}
                       </div>
+
                       {ev.location && (
                         <div className="flex items-center gap-1 text-[11px] mt-0.5" style={{ color: subColor }}>
                           <FiMapPin className="text-[10px]" />
                           {ev.location}
+                        </div>
+                      )}
+
+                      {isLive && ev.meetingLink && (
+                        <div className="mt-2">
+                          <a
+                            href={ev.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white transition"
+                          >
+                            <FiVideo className="text-[10px]" /> Join Session
+                          </a>
                         </div>
                       )}
                     </div>
@@ -258,37 +327,51 @@ interface ExamItem {
   _id: string;
   title: string;
   courseTitle: string;
+  date: string;
   dateFormatted: string;
+  timeFormatted?: string;
   duration: number;
   location: string;
   type: string;
+  status: string;
+}
+
+interface LiveClassItem {
+  _id: string;
+  title: string;
+  courseTitle: string;
+  instructor?: string;
+  startTime: string;
+  endTime: string;
+  dateFormatted: string;
+  timeFormatted: string;
+  meetingLink?: string;
+  status: string;
 }
 
 export default function CalendarPage() {
   const toast = useToast();
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [exams, setExams] = useState<ExamItem[]>([]);
+  const [liveClasses, setLiveClasses] = useState<LiveClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [timetableMode, setTimetableMode] = useState<'Week' | 'Monthly' | 'List'>('Week');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'lecture' | 'live_class' | 'exam'>('all');
   const [selectedCourse, setSelectedCourse] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchTimetableData = async () => {
     setLoading(true);
     try {
-      const [calRes, liveRes] = await Promise.all([
-        fetch('/api/student/calendar').catch(() => null),
-        fetch('/api/student/live-classes').catch(() => null),
-      ]);
-
-      if (calRes && calRes.ok) {
+      const calRes = await fetch('/api/student/calendar');
+      if (calRes.ok) {
         const calData = await calRes.json();
-        setCalendarEvents(calData.events || []);
-      }
-
-      if (liveRes && liveRes.ok) {
-        const liveData = await liveRes.json();
-        setExams(liveData.exams || []);
+        const payload = calData.data || calData;
+        setCalendarEvents(payload.events || []);
+        setExams(payload.exams || []);
+        setLiveClasses(payload.liveClasses || []);
+      } else {
+        toast.error("Failed to load timetable calendar");
       }
     } catch (err) {
       console.error("Fetch calendar error:", err);
@@ -304,35 +387,55 @@ export default function CalendarPage() {
 
   // Distinct courses for dropdown
   const courseList = useMemo(() => {
-    const list = calendarEvents.map((e) => e.title).filter(Boolean);
-    const examList = exams.map((ex) => ex.courseTitle).filter(Boolean);
-    return Array.from(new Set([...list, ...examList]));
-  }, [calendarEvents, exams]);
+    const fromEvents = calendarEvents.map((e) => e.courseTitle || e.title).filter(Boolean);
+    const fromExams = exams.map((ex) => ex.courseTitle).filter(Boolean);
+    const fromLive = liveClasses.map((lc) => lc.courseTitle).filter(Boolean);
+    return Array.from(new Set([...fromEvents, ...fromExams, ...fromLive]));
+  }, [calendarEvents, exams, liveClasses]);
 
-  // Filtered calendar events & exams
+  // Filtered calendar events based on search, course, and event type
   const filteredEvents = useMemo(() => {
     return calendarEvents.filter((ev) => {
-      if (selectedCourse !== 'All' && ev.title !== selectedCourse && ev.courseId !== selectedCourse) return false;
+      if (eventTypeFilter !== 'all' && ev.eventType !== eventTypeFilter) return false;
+      if (selectedCourse !== 'All' && ev.title !== selectedCourse && ev.courseTitle !== selectedCourse && ev.courseId !== selectedCourse) {
+        return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = ev.title.toLowerCase().includes(q);
+        const matchesCourse = (ev.courseTitle || '').toLowerCase().includes(q);
         const matchesLocation = (ev.location || '').toLowerCase().includes(q);
-        if (!matchesTitle && !matchesLocation) return false;
+        if (!matchesTitle && !matchesCourse && !matchesLocation) return false;
       }
       return true;
     });
-  }, [calendarEvents, selectedCourse, searchQuery]);
+  }, [calendarEvents, eventTypeFilter, selectedCourse, searchQuery]);
 
   const filteredExams = useMemo(() => {
     return exams.filter((ex) => {
       if (selectedCourse !== 'All' && ex.courseTitle !== selectedCourse) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        return ex.title.toLowerCase().includes(q) || ex.courseTitle.toLowerCase().includes(q);
+        return ex.title.toLowerCase().includes(q) || ex.courseTitle.toLowerCase().includes(q) || (ex.location || '').toLowerCase().includes(q);
       }
       return true;
     });
   }, [exams, selectedCourse, searchQuery]);
+
+  const filteredLiveClasses = useMemo(() => {
+    return liveClasses.filter((lc) => {
+      if (selectedCourse !== 'All' && lc.courseTitle !== selectedCourse) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return lc.title.toLowerCase().includes(q) || lc.courseTitle.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [liveClasses, selectedCourse, searchQuery]);
+
+  const lectureEvents = useMemo(() => {
+    return filteredEvents.filter((e) => e.eventType === 'lecture');
+  }, [filteredEvents]);
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
@@ -355,7 +458,7 @@ export default function CalendarPage() {
                 Timetable Calendar
               </h1>
               <p className="text-xs text-[#A0AEC0] mt-1">
-                Comprehensive weekly class schedule, room locations, lecture hours, and academic exam timetable
+                Comprehensive weekly class schedule, scheduled live sessions by lecturers, and term exam timetable
               </p>
             </div>
 
@@ -365,7 +468,7 @@ export default function CalendarPage() {
                 <FiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
                 <input
                   type="text"
-                  placeholder="Search course or room..."
+                  placeholder="Search class, exam, room..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white border border-gray-100 shadow-sm text-xs text-gray-700 rounded-xl py-2.5 pl-9 pr-4 outline-none focus:ring-2 focus:ring-[#5A67D8]"
@@ -437,43 +540,93 @@ export default function CalendarPage() {
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
             
             {/* Timetable Sub-Header & Mode Switcher */}
-            <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center bg-[#F7FAFC] gap-4">
-              <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
-                <button 
-                  onClick={() => setTimetableMode('Week')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
-                    timetableMode === 'Week' 
-                      ? 'bg-[#5A67D8] text-white shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Weekly Timetable Grid
-                </button>
-                <button 
-                  onClick={() => setTimetableMode('Monthly')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
-                    timetableMode === 'Monthly' 
-                      ? 'bg-[#5A67D8] text-white shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Monthly View
-                </button>
-                <button 
-                  onClick={() => setTimetableMode('List')}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
-                    timetableMode === 'List' 
-                      ? 'bg-[#5A67D8] text-white shadow-sm' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Classes & Exams List ({filteredEvents.length + filteredExams.length})
-                </button>
+            <div className="p-5 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-start lg:items-center bg-[#F7FAFC] gap-4">
+              
+              {/* View Modes */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
+                  <button 
+                    onClick={() => setTimetableMode('Week')}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
+                      timetableMode === 'Week' 
+                        ? 'bg-[#5A67D8] text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Weekly Grid
+                  </button>
+                  <button 
+                    onClick={() => setTimetableMode('Monthly')}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
+                      timetableMode === 'Monthly' 
+                        ? 'bg-[#5A67D8] text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Monthly View
+                  </button>
+                  <button 
+                    onClick={() => setTimetableMode('List')}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg transition ${
+                      timetableMode === 'List' 
+                        ? 'bg-[#5A67D8] text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Structured List ({filteredEvents.length})
+                  </button>
+                </div>
+
+                {/* Event Type Filter Pills */}
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-gray-200 text-xs font-semibold text-gray-500 shadow-sm">
+                  <button
+                    onClick={() => setEventTypeFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      eventTypeFilter === 'all' ? 'bg-gray-800 text-white' : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    All ({calendarEvents.length})
+                  </button>
+                  <button
+                    onClick={() => setEventTypeFilter('live_class')}
+                    className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+                      eventTypeFilter === 'live_class' ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-50'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                    Live Classes ({liveClasses.length})
+                  </button>
+                  <button
+                    onClick={() => setEventTypeFilter('exam')}
+                    className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+                      eventTypeFilter === 'exam' ? 'bg-purple-600 text-white' : 'text-purple-600 hover:bg-purple-50'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    Exams ({exams.length})
+                  </button>
+                  <button
+                    onClick={() => setEventTypeFilter('lecture')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      eventTypeFilter === 'lecture' ? 'bg-indigo-600 text-white' : 'text-indigo-600 hover:bg-indigo-50'
+                    }`}
+                  >
+                    Lectures
+                  </button>
+                </div>
               </div>
 
-              <div className="text-xs text-gray-500 font-semibold flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span>Semester 01 Regular Schedule</span>
+              {/* Legend Indicator */}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500 font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#5A67D8]" /> Regular Lectures
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Lecturer Live Classes
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-600" /> Scheduled Exams
+                </span>
               </div>
             </div>
 
@@ -487,84 +640,182 @@ export default function CalendarPage() {
                 <MonthlyView events={filteredEvents} filterCourse={selectedCourse} />
               ) : (
                 /* List Mode */
-                <div className="space-y-6">
-                  {/* Scheduled Classes */}
-                  <div>
-                    <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-3">
-                      Weekly Recurring Classes ({filteredEvents.length})
-                    </h3>
-                    {filteredEvents.length === 0 ? (
-                      <p className="text-xs text-gray-400 italic">No scheduled classes matching your filters.</p>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredEvents.map((ev, i) => (
-                          <div 
-                            key={i}
-                            className="p-4 rounded-2xl border border-gray-100 bg-[#F7FAFC] flex items-center justify-between gap-4"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                                style={{ backgroundColor: `${ev.colorCode}20`, color: ev.colorCode }}
-                              >
-                                <FiCalendar />
-                              </div>
-                              <div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{ev.dayOfWeek}</span>
-                                <h5 className="font-bold text-[#111827] text-xs">{ev.title}</h5>
-                                <p className="text-[11px] text-gray-400 mt-0.5">
-                                  {ev.startTime} - {ev.endTime} {ev.location ? `• ${ev.location}` : ''}
-                                </p>
-                              </div>
-                            </div>
+                <div className="space-y-8">
+                  
+                  {/* 1. Scheduled Exams */}
+                  {(eventTypeFilter === 'all' || eventTypeFilter === 'exam') && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3 border-b border-purple-100 pb-2">
+                        <h3 className="text-xs font-black text-purple-800 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-purple-600" />
+                          Official Exams & Assessments ({filteredExams.length})
+                        </h3>
+                        <span className="text-[11px] text-purple-600 font-semibold">Scheduled by Faculty</span>
+                      </div>
 
-                            <Link
-                              href="/live-classes"
-                              className="px-3.5 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[#5A67D8] transition flex-shrink-0 shadow-sm"
+                      {filteredExams.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic bg-purple-50/40 p-4 rounded-xl border border-purple-100">
+                          No exams scheduled for your courses at this time.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {filteredExams.map((ex) => (
+                            <div 
+                              key={ex._id}
+                              className="p-4 rounded-2xl border border-purple-200 bg-purple-50/60 flex items-center justify-between gap-4 shadow-xs"
                             >
-                              Live Portal
-                            </Link>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                              <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center text-lg flex-shrink-0 shadow-xs">
+                                  <FiCalendar />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-purple-700 uppercase bg-purple-100 px-2 py-0.5 rounded-md">
+                                      {ex.courseTitle}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">
+                                      {ex.type}
+                                    </span>
+                                  </div>
+                                  <h5 className="font-bold text-[#111827] text-xs mt-1">{ex.title}</h5>
+                                  <p className="text-[11px] text-gray-600 mt-0.5 flex flex-wrap items-center gap-2 font-medium">
+                                    <span><FiClock className="inline mr-1 text-purple-600" /> {ex.dateFormatted} {ex.timeFormatted ? `(${ex.timeFormatted})` : ''}</span>
+                                    <span>&bull;</span>
+                                    <span>{ex.duration} Mins</span>
+                                    <span>&bull;</span>
+                                    <span><FiMapPin className="inline mr-1 text-purple-600" /> {ex.location}</span>
+                                  </p>
+                                </div>
+                              </div>
 
-                  {/* Upcoming Exams */}
-                  <div>
-                    <h3 className="text-xs font-black text-purple-700 uppercase tracking-wider mb-3">
-                      Scheduled Exams & Assessments ({filteredExams.length})
-                    </h3>
-                    {filteredExams.length === 0 ? (
-                      <p className="text-xs text-gray-400 italic">No exams scheduled for this term.</p>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredExams.map((ex) => (
-                          <div 
-                            key={ex._id}
-                            className="p-4 rounded-2xl border border-purple-100 bg-purple-50/50 flex items-center justify-between gap-4"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg flex-shrink-0">
-                                <FiCalendar />
-                              </div>
-                              <div>
-                                <span className="text-[10px] font-bold text-purple-600 uppercase">{ex.courseTitle}</span>
-                                <h5 className="font-bold text-[#111827] text-xs">{ex.title}</h5>
-                                <p className="text-[11px] text-gray-500 mt-0.5">
-                                  {ex.dateFormatted} &bull; {ex.duration} Mins &bull; {ex.location}
-                                </p>
-                              </div>
+                              <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-purple-200 text-purple-900 flex-shrink-0 uppercase">
+                                {ex.status}
+                              </span>
                             </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                            <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-purple-100 text-purple-700 flex-shrink-0 uppercase">
-                              Official Exam
-                            </span>
-                          </div>
-                        ))}
+                  {/* 2. Scheduled Live Classes */}
+                  {(eventTypeFilter === 'all' || eventTypeFilter === 'live_class') && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3 border-b border-blue-100 pb-2">
+                        <h3 className="text-xs font-black text-blue-800 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-600" />
+                          Live Classes Scheduled by Lecturers ({filteredLiveClasses.length})
+                        </h3>
+                        <span className="text-[11px] text-blue-600 font-semibold">Real-Time Interactive Sessions</span>
                       </div>
-                    )}
-                  </div>
+
+                      {filteredLiveClasses.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic bg-blue-50/40 p-4 rounded-xl border border-blue-100">
+                          No live classes scheduled by your lecturers at this time.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {filteredLiveClasses.map((lc) => (
+                            <div 
+                              key={lc._id}
+                              className="p-4 rounded-2xl border border-blue-200 bg-blue-50/60 flex items-center justify-between gap-4 shadow-xs"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center text-lg flex-shrink-0 shadow-xs">
+                                  <MdOutlineLiveTv />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-blue-700 uppercase bg-blue-100 px-2 py-0.5 rounded-md">
+                                      {lc.courseTitle}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-gray-500">
+                                      {lc.instructor || "Course Lecturer"}
+                                    </span>
+                                  </div>
+                                  <h5 className="font-bold text-[#111827] text-xs mt-1">{lc.title}</h5>
+                                  <p className="text-[11px] text-gray-600 mt-0.5 font-medium flex items-center gap-1.5">
+                                    <FiClock className="text-blue-600 text-xs" />
+                                    <span>{lc.dateFormatted} &bull; {lc.timeFormatted}</span>
+                                  </p>
+                                </div>
+                              </div>
+
+                              {lc.meetingLink ? (
+                                <a
+                                  href={lc.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition flex-shrink-0 shadow-xs flex items-center gap-1.5"
+                                >
+                                  <FiVideo /> Join Live
+                                </a>
+                              ) : (
+                                <Link
+                                  href="/live-classes"
+                                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-blue-200 bg-white hover:bg-blue-50 text-blue-700 transition flex-shrink-0 shadow-xs"
+                                >
+                                  Class Details
+                                </Link>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. Weekly Recurring Course Lectures */}
+                  {(eventTypeFilter === 'all' || eventTypeFilter === 'lecture') && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                        <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[#5A67D8]" />
+                          Weekly Recurring Lectures ({lectureEvents.length})
+                        </h3>
+                        <span className="text-[11px] text-gray-500 font-semibold">Semester Schedule</span>
+                      </div>
+
+                      {lectureEvents.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          No recurring lectures defined for your current enrolled courses.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {lectureEvents.map((ev, i) => (
+                            <div 
+                              key={i}
+                              className="p-4 rounded-2xl border border-gray-200 bg-[#F7FAFC] flex items-center justify-between gap-4"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div 
+                                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 font-bold"
+                                  style={{ backgroundColor: `${ev.colorCode}20`, color: ev.colorCode }}
+                                >
+                                  <FiBookOpen />
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{ev.dayOfWeek}</span>
+                                  <h5 className="font-bold text-[#111827] text-xs">{ev.title}</h5>
+                                  <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                                    {ev.startTime} - {ev.endTime} {ev.location ? `• ${ev.location}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <Link
+                                href="/courses"
+                                className="px-3.5 py-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[#5A67D8] transition flex-shrink-0 shadow-xs"
+                              >
+                                View Course
+                              </Link>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>

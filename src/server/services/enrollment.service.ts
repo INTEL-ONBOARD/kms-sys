@@ -219,6 +219,8 @@ export async function getStudentDashboard(userId: string) {
     }
   }
 
+    const currentUser = await User.findById(userObjectId).select("name email reportApproved").lean();
+
   return {
     enrollments: validEnrollments,
     assignments,
@@ -228,6 +230,7 @@ export async function getStudentDashboard(userId: string) {
     credits,
     gpa,
     attendance,
+    reportApproved: !!currentUser?.reportApproved,
   };
 }
 
@@ -260,7 +263,7 @@ export async function getStudentCourses(userId: string) {
 }
 
 /**
- * Retrieves calendar schedule for enrolled student courses.
+ * Retrieves calendar schedule, live classes, and exams for enrolled student courses.
  */
 export async function getStudentCalendar(userId: string) {
   await connectToDatabase();
@@ -279,7 +282,251 @@ export async function getStudentCalendar(userId: string) {
     .map((e: any) => e.courseId)
     .filter(Boolean);
 
-  return { courses: validCourses };
+  const courseIds = validCourses.map((c: any) => c._id);
+
+  // 1. Fetch all scheduled Exams for enrolled courses
+  const exams =
+    courseIds.length > 0
+      ? await Exam.find({
+          courseId: { $in: courseIds },
+          status: { $ne: "cancelled" },
+        })
+          .populate("courseId", "title colorCode instructor")
+          .sort({ date: 1 })
+          .lean()
+      : [];
+
+  // 2. Fetch all scheduled Live Classes for enrolled courses
+  const liveClasses =
+    courseIds.length > 0
+      ? await LiveClass.find({
+          courseId: { $in: courseIds },
+          status: { $ne: "cancelled" },
+        })
+          .populate("courseId", "title colorCode instructor")
+          .sort({ startTime: 1 })
+          .lean()
+      : [];
+
+  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const events: any[] = [];
+
+  // Add Recurring Course Schedule Slots
+  validCourses.forEach((c: any) => {
+    const courseIdStr = c._id.toString();
+    const courseTitle = c.title || "Course";
+    const colorCode = c.colorCode || "#5A67D8";
+
+    if (Array.isArray(c.schedule)) {
+      c.schedule.forEach((slot: any, idx: number) => {
+        if (!slot.dayOfWeek || !slot.startTime || !slot.endTime) return;
+
+        let startHour = 9;
+        const timeParts = String(slot.startTime).split(":");
+        if (timeParts.length >= 1) {
+          const parsed = parseInt(timeParts[0], 10);
+          if (!isNaN(parsed)) startHour = parsed;
+        }
+
+        let endHour = startHour + 1;
+        const endParts = String(slot.endTime).split(":");
+        if (endParts.length >= 1) {
+          const parsedEnd = parseInt(endParts[0], 10);
+          if (!isNaN(parsedEnd) && parsedEnd > startHour) {
+            endHour = parsedEnd;
+          }
+        }
+
+        events.push({
+          id: `slot-${courseIdStr}-${idx}`,
+          courseId: courseIdStr,
+          courseTitle,
+          title: courseTitle,
+          dayOfWeek: slot.dayOfWeek,
+          startHour: Math.min(16, Math.max(8, startHour)),
+          durationHours: Math.max(1, Math.min(4, endHour - startHour)),
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          location: slot.location || "Main Lecture Hall",
+          instructor: c.instructor || "Faculty Lecturer",
+          colorCode,
+          category: c.category || "Lecture",
+          eventType: "lecture",
+        });
+      });
+    }
+  });
+
+  // Add Scheduled Live Classes to Timetable
+  liveClasses.forEach((lc: any) => {
+    const c = lc.courseId as any;
+    const courseIdStr = c?._id?.toString() || lc.courseId?.toString() || "";
+    const courseTitle = c?.title || "Live Session";
+    const startDate = new Date(lc.startTime);
+    const endDate = new Date(lc.endTime);
+
+    const dayOfWeek = daysOfWeek[startDate.getDay()] || "Monday";
+    const startHour = startDate.getHours();
+    const durationHours = Math.max(
+      1,
+      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60))
+    );
+
+    const startTimeFormatted = startDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const endTimeFormatted = endDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    events.push({
+      id: `live-${lc._id.toString()}`,
+      courseId: courseIdStr,
+      courseTitle,
+      title: lc.title || `${courseTitle} (Live Class)`,
+      dayOfWeek,
+      startHour: Math.min(16, Math.max(8, startHour)),
+      durationHours: Math.min(4, durationHours),
+      startTime: startTimeFormatted,
+      endTime: endTimeFormatted,
+      location: "Online (Live Stream)",
+      instructor: lc.instructor || c?.instructor || "Course Lecturer",
+      colorCode: "#2563EB",
+      category: "Live Class",
+      eventType: "live_class",
+      meetingLink: lc.meetingLink || "",
+      date: startDate.toISOString(),
+      dateFormatted: startDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      status: lc.status || "upcoming",
+    });
+  });
+
+  // Add Scheduled Exams to Timetable
+  exams.forEach((ex: any) => {
+    const c = ex.courseId as any;
+    const courseIdStr = c?._id?.toString() || ex.courseId?.toString() || "";
+    const courseTitle = c?.title || "Exam";
+    const examDate = new Date(ex.date);
+    const durationMins = Number(ex.duration) || 120;
+    const endDate = new Date(examDate.getTime() + durationMins * 60 * 1000);
+
+    const dayOfWeek = daysOfWeek[examDate.getDay()] || "Monday";
+    const startHour = examDate.getHours();
+    const durationHours = Math.max(1, Math.ceil(durationMins / 60));
+
+    const startTimeFormatted = examDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const endTimeFormatted = endDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    events.push({
+      id: `exam-${ex._id.toString()}`,
+      courseId: courseIdStr,
+      courseTitle,
+      title: ex.title || `${courseTitle} Examination`,
+      dayOfWeek,
+      startHour: Math.min(16, Math.max(8, startHour)),
+      durationHours: Math.min(4, durationHours),
+      startTime: startTimeFormatted,
+      endTime: endTimeFormatted,
+      location: ex.location || "Examination Hall",
+      instructor: c?.instructor || "Exam Committee",
+      colorCode: "#7C3AED",
+      category: "Exam",
+      eventType: "exam",
+      examType: ex.type || "final",
+      duration: durationMins,
+      date: examDate.toISOString(),
+      dateFormatted: examDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      status: ex.status || "scheduled",
+    });
+  });
+
+  // Formatted exam objects for direct list views
+  const formattedExams = exams.map((ex: any) => {
+    const c = ex.courseId as any;
+    const examDate = new Date(ex.date);
+    return {
+      _id: ex._id.toString(),
+      title: ex.title,
+      courseId: c?._id?.toString() || ex.courseId?.toString() || "",
+      courseTitle: c?.title || "Exam Course",
+      date: examDate.toISOString(),
+      dateFormatted: examDate.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      timeFormatted: examDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }),
+      duration: ex.duration || 120,
+      location: ex.location || "Online",
+      type: ex.type || "quiz",
+      status: ex.status || "scheduled",
+    };
+  });
+
+  // Formatted live classes objects for direct list views
+  const formattedLiveClasses = liveClasses.map((lc: any) => {
+    const c = lc.courseId as any;
+    const startDate = new Date(lc.startTime);
+    const endDate = new Date(lc.endTime);
+    return {
+      _id: lc._id.toString(),
+      title: lc.title,
+      courseId: c?._id?.toString() || lc.courseId?.toString() || "",
+      courseTitle: c?.title || "Live Course",
+      instructor: lc.instructor || c?.instructor || "Course Lecturer",
+      startTime: startDate.toISOString(),
+      endTime: endDate.toISOString(),
+      dateFormatted: startDate.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      timeFormatted: `${startDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })} - ${endDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })}`,
+      meetingLink: lc.meetingLink || "",
+      status: lc.status || "upcoming",
+    };
+  });
+
+  return {
+    courses: validCourses,
+    events,
+    exams: formattedExams,
+    liveClasses: formattedLiveClasses,
+  };
 }
 
 /**
