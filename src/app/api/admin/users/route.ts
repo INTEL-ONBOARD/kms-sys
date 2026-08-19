@@ -2,14 +2,20 @@ import { NextRequest } from "next/server";
 import { requireRole } from "@/server/core/auth-context";
 import { validateBody } from "@/server/core/validator";
 import { successResponse, handleApiError } from "@/server/core/api-response";
+import { parsePaginationParams } from "@/server/core/pagination";
 import { createUserSchema } from "@/server/dtos/user.dto";
 import * as UserService from "@/server/services/user.service";
 
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ["super_admin", "admin"]);
-    const { users } = await UserService.getUsers();
-    return successResponse({ users }, undefined, 200);
+    const { searchParams } = new URL(req.url);
+    const role = searchParams.get("role") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const pagination = parsePaginationParams(req, 100, 200);
+
+    const result = await UserService.getUsers(pagination, { role, status });
+    return successResponse(result, undefined, 200);
   } catch (error) {
     return handleApiError(error, "GET /api/admin/users");
   }
