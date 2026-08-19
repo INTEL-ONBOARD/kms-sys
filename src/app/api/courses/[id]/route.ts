@@ -1,89 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { isValidObjectId } from "mongoose";
-import { connectToDatabase } from "@/lib/db";
-import Course from "@/models/Course";
-import type { CourseInput } from "@/types/lms";
+import { NextRequest } from "next/server";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import * as CourseService from "@/server/services/course.service";
 
-type RouteParams = {
-  params: Promise<{ id: string }>;
-};
-
-function validateId(id: string) {
-  if (!isValidObjectId(id)) {
-    return NextResponse.json({ message: "Invalid course id" }, { status: 400 });
-  }
-  return null;
-}
-
-export async function GET(_: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
-  const invalid = validateId(id);
-  if (invalid) return invalid;
-
+export async function GET(
+  _: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    await connectToDatabase();
-    const course = await Course.findById(id).lean();
-    if (!course) {
-      return NextResponse.json({ message: "Course not found" }, { status: 404 });
-    }
-    return NextResponse.json(course, { status: 200 });
+    const { id } = await params;
+    const course = await CourseService.getCourseById(id);
+    return successResponse(course, undefined, 200);
   } catch (error) {
-    return NextResponse.json(
-      { message: "Failed to fetch course", error: String(error) },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/courses/[id]");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
-  const invalid = validateId(id);
-  if (invalid) return invalid;
-
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const payload = (await request.json()) as Partial<CourseInput>;
-    await connectToDatabase();
-
-    const updates: Partial<CourseInput> = {};
-    if (payload.title !== undefined) updates.title = payload.title.trim();
-    if (payload.description !== undefined) updates.description = payload.description.trim();
-    if (payload.instructor !== undefined) updates.instructor = payload.instructor.trim();
-    if (payload.published !== undefined) updates.published = payload.published;
-
-    const course = await Course.findByIdAndUpdate(id, updates, {
-      new: true,
-      runValidators: true
-    }).lean();
-
-    if (!course) {
-      return NextResponse.json({ message: "Course not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(course, { status: 200 });
+    const { id } = await params;
+    const body = await req.json();
+    const course = await CourseService.updateCourse(id, body);
+    return successResponse(course, undefined, 200);
   } catch (error) {
-    return NextResponse.json(
-      { message: "Failed to update course", error: String(error) },
-      { status: 500 }
-    );
+    return handleApiError(error, "PUT /api/courses/[id]");
   }
 }
 
-export async function DELETE(_: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
-  const invalid = validateId(id);
-  if (invalid) return invalid;
-
+export async function DELETE(
+  _: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    await connectToDatabase();
-    const course = await Course.findByIdAndDelete(id).lean();
-    if (!course) {
-      return NextResponse.json({ message: "Course not found" }, { status: 404 });
-    }
-    return NextResponse.json({ message: "Course deleted" }, { status: 200 });
+    const { id } = await params;
+    await CourseService.deleteCourse(id);
+    return successResponse(undefined, "Course deleted", 200);
   } catch (error) {
-    return NextResponse.json(
-      { message: "Failed to delete course", error: String(error) },
-      { status: 500 }
-    );
+    return handleApiError(error, "DELETE /api/courses/[id]");
   }
 }

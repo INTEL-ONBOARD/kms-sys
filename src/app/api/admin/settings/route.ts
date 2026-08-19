@@ -1,78 +1,28 @@
-import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/db";
-import Settings from "@/models/Settings";
+import { NextRequest } from "next/server";
+import { requireRole } from "@/server/core/auth-context";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import * as SettingsService from "@/server/services/settings.service";
 
-/**
- * GET /api/admin/settings
- * Fetches the singleton settings document.
- * If none exists, creates one with defaults and returns it.
- */
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    await connectToDatabase();
-
-    let settings = await Settings.findOne({ _singleton: "global" });
-    if (!settings) {
-      settings = await Settings.create({ _singleton: "global" });
-    }
-
-    return NextResponse.json({ settings }, { status: 200 });
+    const result = await SettingsService.getSettings();
+    return successResponse(result, undefined, 200);
   } catch (error) {
-    console.error("Settings GET error:", error);
-    return NextResponse.json(
-      { message: "Failed to fetch settings." },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/admin/settings");
   }
 }
 
-/**
- * PUT /api/admin/settings
- * Updates the singleton settings document.
- */
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
+    await requireRole(req, ["super_admin", "admin"]);
     const body = await req.json();
-    const { platformName, primaryDomain, supportEmail, timezone, defaultCurrency, activePaymentGateway, features } = body;
+    const result = await SettingsService.updateSettings(body);
 
-    await connectToDatabase();
-
-    const updateData: any = {};
-    if (platformName !== undefined) updateData.platformName = platformName;
-    if (primaryDomain !== undefined) updateData.primaryDomain = primaryDomain;
-    if (supportEmail !== undefined) updateData.supportEmail = supportEmail;
-    if (timezone !== undefined) updateData.timezone = timezone;
-    if (defaultCurrency !== undefined) updateData.defaultCurrency = defaultCurrency;
-    if (activePaymentGateway !== undefined) updateData.activePaymentGateway = activePaymentGateway;
-    
-    if (features) {
-      if (features.discussionForums !== undefined) updateData['features.discussionForums'] = features.discussionForums;
-      if (features.gamification !== undefined) updateData['features.gamification'] = features.gamification;
-      if (features.liveSessions !== undefined) updateData['features.liveSessions'] = features.liveSessions;
-      if (features.certificates !== undefined) updateData['features.certificates'] = features.certificates;
-      if (features.maintenanceMode !== undefined) updateData['features.maintenanceMode'] = features.maintenanceMode;
-    }
-
-    const updated = await Settings.findOneAndUpdate(
-      { _singleton: "global" },
-      { $set: updateData },
-      { new: true, upsert: true }
-    );
-
-    console.log('Updated Settings:', updated);
-
-    return NextResponse.json(
-      { message: "Settings saved successfully.", settings: updated },
-      { status: 200 }
-    );
+    return successResponse(result, "Settings saved successfully.", 200);
   } catch (error) {
-    console.error("Settings PUT error:", error);
-    return NextResponse.json(
-      { message: "Failed to save settings." },
-      { status: 500 }
-    );
+    return handleApiError(error, "PUT /api/admin/settings");
   }
 }

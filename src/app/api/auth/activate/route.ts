@@ -1,55 +1,16 @@
-import { NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { connectToDatabase } from '@/lib/db';
-import User from '@/models/User';
+import { NextRequest } from "next/server";
+import { validateBody } from "@/server/core/validator";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import { activateAccountSchema } from "@/server/dtos/auth.dto";
+import * as AuthService from "@/server/services/auth.service";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { token, password } = await req.json();
+    const body = await validateBody(req, activateAccountSchema);
+    const result = await AuthService.activateAccount(body);
 
-    if (!token) {
-      return NextResponse.json(
-        { message: 'Invalid activation link. Token is missing.' },
-        { status: 400 }
-      );
-    }
-
-    await connectToDatabase();
-
-    const user = await User.findOne({ activationToken: token });
-
-    if (!user) {
-      return NextResponse.json(
-        { message: 'Invalid or expired activation link. Your account might already be activated.' },
-        { status: 400 }
-      );
-    }
-
-    // If a password is provided (invite flow), hash and set it
-    if (password) {
-      if (password.length < 6) {
-        return NextResponse.json(
-          { message: 'Password must be at least 6 characters.' },
-          { status: 400 }
-        );
-      }
-      user.password = await bcrypt.hash(password, 10);
-    }
-
-    user.isActivated = true;
-    user.activationToken = null;
-    await user.save();
-
-    return NextResponse.json(
-      { message: 'Your account has been successfully activated! You can now log in.' },
-      { status: 200 }
-    );
-
+    return successResponse(result, result.message, 200);
   } catch (error) {
-    console.error('Activation API Error:', error);
-    return NextResponse.json(
-      { message: 'An error occurred during account activation.' },
-      { status: 500 }
-    );
+    return handleApiError(error, "POST /api/auth/activate");
   }
 }

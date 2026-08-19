@@ -1,46 +1,16 @@
-import { NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { connectToDatabase } from '@/lib/db';
-import User from '@/models/User';
+import { NextRequest } from "next/server";
+import { validateBody } from "@/server/core/validator";
+import { successResponse, handleApiError } from "@/server/core/api-response";
+import { resetPasswordSchema } from "@/server/dtos/auth.dto";
+import * as AuthService from "@/server/services/auth.service";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { token, password } = await req.json();
+    const body = await validateBody(req, resetPasswordSchema);
+    const result = await AuthService.resetPassword(body);
 
-    if (!token || !password) {
-      return NextResponse.json({ message: 'Invalid request. Missing token or password.' }, { status: 400 });
-    }
-
-    await connectToDatabase();
-
-    // 1. Find user with this token AND check if it hasn't expired
-    
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpire: { $gt: Date.now() } 
-    });
-
-    if (!user) {
-      return NextResponse.json({ message: 'Invalid or expired password reset token.' }, { status: 400 });
-    }
-
-    // 2. Hash the new password securely
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3. Update user details
-    user.password = hashedPassword;
-    
-    // 4. Clear the reset token fields so they can't be used again
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    
-    // Save the changes
-    await user.save();
-
-    return NextResponse.json({ message: 'Password has been reset successfully!' }, { status: 200 });
-
+    return successResponse(result, result.message, 200);
   } catch (error) {
-    console.error('Reset Password API Error:', error);
-    return NextResponse.json({ message: 'An error occurred while resetting the password.' }, { status: 500 });
+    return handleApiError(error, "POST /api/auth/reset-password");
   }
 }
