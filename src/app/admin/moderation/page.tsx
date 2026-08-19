@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import AdminSidebar from '@/Components/AdminSidebar';
 import DashHeader from '@/Components/DashHeader';
-import { FiEye, FiCheck, FiX, FiUserPlus, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiUserPlus, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 
 // Define TypeScript interfaces for the fetched data to ensure type safety
 interface User {
@@ -109,15 +109,6 @@ export default function ModerationPage() {
     }
   };
 
-  // ==========================================
-  // MOCK DATA FOR EXISTING UI COMPONENTS
-  // ==========================================
-
-  const reportedPosts = [
-    { id: 1, content: '"Can someone share the final exam answers here?"', course: 'Animation Studies I', author: 'Emma Watson', reason: 'Cheating/Academic Dishonesty (3 reports)' },
-    { id: 2, content: '"This lecture was completely useless and the teacher is an idiot."', course: 'Design Principles', author: 'John Doe', reason: 'Harassment/Abusive Language (5 reports)' },
-  ];
-
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
       
@@ -134,8 +125,8 @@ export default function ModerationPage() {
           
           {/* Page Title & Description */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">Content Moderation</h1>
-            <p className="text-[#A0AEC0] font-medium mt-1">Review courses, moderate forums, and manage manual enrollments</p>
+            <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">Manual Course Enrollment</h1>
+            <p className="text-[#A0AEC0] font-medium mt-1">Assign courses directly to registered students and manage enrollment access</p>
           </div>
 
           {/* ========================================= */}
@@ -145,7 +136,7 @@ export default function ModerationPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
               <FiUserPlus className="mr-2 text-indigo-600" /> Manual Course Enrollment
             </h2>
-            <p className="text-sm text-gray-500 mb-6">Assign a specific course to a student. This action will be securely logged in the audit registry.</p>
+            <p className="text-sm text-gray-500 mb-6">Assign a specific course to a student. This action will immediately grant the student access to course materials, assignments, and timetable schedules.</p>
 
             {/* Display Success/Error Feedback Messages */}
             {message.text && (
@@ -201,51 +192,6 @@ export default function ModerationPage() {
                 {isAssigning ? 'Assigning...' : 'Assign Course'}
               </button>
             </form>
-          </div>
-
-
-          {/* ========================================= */}
-          {/* SECTION: REPORTED FORUM POSTS */}
-          {/* ========================================= */}
-          <div>
-            <h2 className="text-lg font-bold text-[#2D3748] mb-4 flex items-center">
-              <span className="bg-orange-50 text-orange-500 p-1.5 rounded mr-2"><FiAlertCircle /></span>
-              Reported Forum Posts
-              <span className="ml-3 bg-orange-50 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">2 Reports</span>
-            </h2>
-            
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <table className="w-full text-left text-sm text-gray-600">
-                <thead className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4">Post Content & Course</th>
-                    <th className="px-6 py-4">Author</th>
-                    <th className="px-6 py-4">Reason For Report</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {reportedPosts.map(post => (
-                    <tr key={post.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-gray-800 mb-1">{post.content}</p>
-                        <p className="text-xs text-indigo-500 font-medium">{post.course}</p>
-                      </td>
-                      <td className="px-6 py-4">{post.author}</td>
-                      <td className="px-6 py-4">
-                        <span className="text-orange-600 flex items-center text-xs font-bold">
-                          <FiAlertCircle className="mr-1" /> {post.reason}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-3">
-                        <button className="text-gray-500 font-medium hover:text-gray-700 transition">Dismiss</button>
-                        <button className="text-red-600 font-bold bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition">Delete Post</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
 
         </div>
