@@ -25,7 +25,7 @@ import {
  */
 export async function getUsers(
   pagination?: PaginationParams,
-  filters?: { role?: string; status?: string }
+  filters?: { role?: string; status?: string; department?: string }
 ) {
   await connectToDatabase();
 
@@ -36,6 +36,9 @@ export async function getUsers(
   }
   if (filters?.status) {
     query.status = filters.status;
+  }
+  if (filters?.department) {
+    query.department = { $regex: new RegExp(`^${filters.department}$`, 'i') };
   }
   if (pagination?.search) {
     const searchRegex = createSafeSearchRegex(pagination.search);

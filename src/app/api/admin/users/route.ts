@@ -9,12 +9,15 @@ import * as UserService from "@/server/services/user.service";
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ["super_admin", "admin"]);
-    const { searchParams } = new URL(req.url);
+    
+    const pagination = parsePaginationParams(req, 100, 200);
+    const searchParams = req.nextUrl.searchParams;
     const role = searchParams.get("role") || undefined;
     const status = searchParams.get("status") || undefined;
-    const pagination = parsePaginationParams(req, 100, 200);
+    const department = searchParams.get("department") || undefined;
 
-    const result = await UserService.getUsers(pagination, { role, status });
+    const result = await UserService.getUsers(pagination, { role, status, department });
+    
     return successResponse(result, undefined, 200);
   } catch (error) {
     return handleApiError(error, "GET /api/admin/users");

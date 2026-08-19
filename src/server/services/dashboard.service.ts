@@ -44,8 +44,8 @@ export async function getAdminDashboardStats() {
   let totalRevenue = 0;
   enrollments.forEach((enrollment) => {
     const course = enrollment.courseId as any;
-    if (course && course.price) {
-      const priceStr = course.price.replace(/[^0-9.-]+/g, "");
+    if (course && course.price !== undefined && course.price !== null) {
+      const priceStr = String(course.price).replace(/[^0-9.-]+/g, "");
       const priceNum = parseFloat(priceStr);
       if (!isNaN(priceNum)) {
         totalRevenue += priceNum;
@@ -96,8 +96,8 @@ export async function getAdminDashboardStats() {
 
   recentEnrollments.forEach((enrollment: any) => {
     const course = enrollment.courseId as any;
-    if (course && course.price) {
-      const priceNum = parseFloat(course.price.replace(/[^0-9.-]+/g, ""));
+    if (course && course.price !== undefined && course.price !== null) {
+      const priceNum = parseFloat(String(course.price).replace(/[^0-9.-]+/g, ""));
       if (!isNaN(priceNum)) {
         const dayName = new Date(enrollment.createdAt).toLocaleDateString("en-US", {
           weekday: "short",
