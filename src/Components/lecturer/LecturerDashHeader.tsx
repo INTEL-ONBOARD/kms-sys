@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { 
-  FiSearch, 
-  FiMail, 
   FiBell, 
   FiChevronDown, 
   FiUser, 
@@ -160,17 +158,7 @@ export default function LecturerDashHeader() {
 
   return (
     <>
-      <header className="bg-white px-8 py-4 flex justify-between items-center border-b border-gray-100 shadow-md relative z-30 font-sans">
-        {/* Search Input Area */}
-        <div className="relative w-full max-w-md">
-          <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-          <input
-            type="text"
-            placeholder="Search courses, assignments, students..."
-            className="w-full bg-[#F7FAFC] text-xs text-gray-700 rounded-full py-2.5 pl-12 pr-4 outline-none focus:ring-1 focus:ring-[#5A67D8] transition placeholder-gray-400"
-          />
-        </div>
-
+      <header className="bg-white px-8 py-4 flex justify-end items-center border-b border-gray-100 shadow-md relative z-30 font-sans">
         {/* User Controls and Notification Area */}
         <div className="flex items-center space-x-6">
           {/* Quick Action Trigger with Dropdown */}
@@ -222,9 +210,6 @@ export default function LecturerDashHeader() {
           </div>
 
           <div className="flex items-center space-x-4 text-gray-400">
-            <button className="hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-50">
-              <FiMail className="text-xl" />
-            </button>
 
             {/* Notification Bell Dropdown */}
             <div className="relative" ref={notifRef}>
