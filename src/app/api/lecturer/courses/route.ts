@@ -63,6 +63,20 @@ export async function GET(req: NextRequest) {
       return {
         ...course,
         _id: course._id.toString(),
+        assessmentItems: course.assessmentItems && course.assessmentItems.length > 0
+          ? course.assessmentItems
+          : [
+              { name: "Assignments", type: "assignment", weight: course.gradingBreakdown?.assignmentsWeight ?? 20 },
+              { name: "Course work 1", type: "coursework", weight: course.gradingBreakdown?.courseWorkWeight ?? 30 },
+              { name: "Final exam", type: "exam", weight: course.gradingBreakdown?.finalExamWeight ?? 40 },
+              { name: "Attendance", type: "attendance", weight: course.gradingBreakdown?.attendanceWeight ?? 10 },
+            ],
+        gradingBreakdown: course.gradingBreakdown || {
+          assignmentsWeight: 20,
+          courseWorkWeight: 30,
+          finalExamWeight: 40,
+          attendanceWeight: 10,
+        },
         studentCount: stats.count,
         avgCompletion: stats.avgProgress,
         assignmentCount: courseAssignments,

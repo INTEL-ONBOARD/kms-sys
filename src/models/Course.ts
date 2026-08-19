@@ -15,6 +15,31 @@ const scheduleSlotSchema = new Schema(
   { _id: false } // no separate _id for each slot
 );
 
+// Sub-schema: Dynamic assessment and assignment breakdown items configured by the lecturer
+const assessmentItemSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    type: { 
+      type: String, 
+      enum: ["assignment", "exam", "coursework", "attendance", "quiz", "project", "other"], 
+      default: "assignment" 
+    },
+    weight: { type: Number, required: true, default: 20 }, // Allocated marks / percentage
+  },
+  { _id: true }
+);
+
+// Sub-schema: Assessment and grading breakdown allocated by the lecturer (legacy compatibility)
+const gradingBreakdownSchema = new Schema(
+  {
+    assignmentsWeight: { type: Number, default: 20 },
+    courseWorkWeight:  { type: Number, default: 30 },
+    finalExamWeight:   { type: Number, default: 40 },
+    attendanceWeight:  { type: Number, default: 10 },
+  },
+  { _id: false }
+);
+
 const courseSchema = new Schema(
   {
     title:       { type: String, required: true, trim: true },
@@ -26,6 +51,28 @@ const courseSchema = new Schema(
     status:      { type: String, default: "draft" },
     published:   { type: Boolean, default: false },
     enrollments: { type: Number, default: 0 },
+
+    // Lecturer-configured dynamic assessment items & assignments
+    assessmentItems: {
+      type: [assessmentItemSchema],
+      default: () => [
+        { name: "Assignments", type: "assignment", weight: 20 },
+        { name: "Course work 1", type: "coursework", weight: 30 },
+        { name: "Final exam", type: "exam", weight: 40 },
+        { name: "Attendance", type: "attendance", weight: 10 },
+      ],
+    },
+
+    // Lecturer-configured assessment grade breakdown (for legacy compatibility)
+    gradingBreakdown: {
+      type: gradingBreakdownSchema,
+      default: () => ({
+        assignmentsWeight: 20,
+        courseWorkWeight: 30,
+        finalExamWeight: 40,
+        attendanceWeight: 10,
+      }),
+    },
 
     // Weekly recurring timetable slots for this course
     schedule:  { type: [scheduleSlotSchema], default: [] },
