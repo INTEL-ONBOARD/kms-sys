@@ -35,7 +35,10 @@ const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
 /**
  * Generates an authenticated pre-signed Cloudflare R2 / S3 upload URL.
  */
-export async function generateUploadUrl(input: GenerateUploadUrlInput) {
+export async function generateUploadUrl(
+  input: GenerateUploadUrlInput,
+  user?: { id: string; role: string; name?: string }
+) {
   if (!ALLOWED_MIME_TYPES.has(input.fileType.toLowerCase())) {
     throw new BadRequestError(
       `File type '${input.fileType}' is not supported. Please upload PDF, PPT, DOC, ZIP, or media files.`
@@ -44,6 +47,20 @@ export async function generateUploadUrl(input: GenerateUploadUrlInput) {
 
   if (input.fileSize && input.fileSize > MAX_FILE_SIZE) {
     throw new BadRequestError("File exceeds maximum allowed size of 250MB.");
+  }
+
+  if (user?.role === "lecturer") {
+    await connectToDatabase();
+    const course = await Course.findById(input.courseId).lean();
+    if (!course) {
+      throw new NotFoundError("Course not found");
+    }
+    const isAssigned =
+      course.instructorId?.toString() === user.id ||
+      (user.name && course.instructor?.toLowerCase() === user.name.toLowerCase());
+    if (!isAssigned) {
+      throw new ForbiddenError("You are not assigned to this course. File upload is blocked.");
+    }
   }
 
   const sanitizedOriginalName = input.fileName

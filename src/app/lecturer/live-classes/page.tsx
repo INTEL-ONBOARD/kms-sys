@@ -38,6 +38,7 @@ export default function LecturerLiveClassesPage() {
   const toast = useToast();
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [liveClasses, setLiveClasses] = useState<LiveClassItem[]>([]);
+  const [hasCourses, setHasCourses] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'recorded'>('all');
 
@@ -51,9 +52,19 @@ export default function LecturerLiveClassesPage() {
   const fetchClasses = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/lecturer/schedule?all=true");
-      if (res.ok) {
-        const data = await res.json();
+      const [scheduleRes, coursesRes] = await Promise.all([
+        fetch("/api/lecturer/schedule?all=true"),
+        fetch("/api/lecturer/courses?limit=1")
+      ]);
+      
+      if (coursesRes.ok) {
+        const cData = await coursesRes.json();
+        const count = cData.pagination?.total ?? (cData.data?.length || 0);
+        setHasCourses(count > 0);
+      }
+
+      if (scheduleRes.ok) {
+        const data = await scheduleRes.json();
         setLiveClasses(data.schedule || []);
       }
     } catch (err) {
@@ -155,13 +166,40 @@ export default function LecturerLiveClassesPage() {
             <FiRefreshCw className={`text-sm ${loading ? "animate-spin text-[#5A67D8]" : ""}`} />
           </button>
           <button
-            onClick={() => setShowScheduleModal(true)}
-            className="px-4 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl shadow-md hover:bg-[#434190] transition flex items-center gap-2"
+            onClick={() => {
+              if (!hasCourses) {
+                toast.warning("Schedule Blocked: You must be assigned to a course by an administrator before scheduling live classes.");
+                return;
+              }
+              setShowScheduleModal(true);
+            }}
+            disabled={!hasCourses}
+            title={!hasCourses ? "Course assignment required from Admin" : "Schedule Live Class"}
+            className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 ${
+              hasCourses
+                ? "bg-[#5A67D8] text-white hover:bg-[#434190] cursor-pointer"
+                : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+            }`}
           >
             <FiPlus className="text-base" /> Schedule Live Class
           </button>
         </div>
       </div>
+
+      {/* Locked Notice if no assigned courses */}
+      {!loading && !hasCourses && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0 font-bold">
+            🔒
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Live Classes Locked</h3>
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              You are not assigned to any courses yet. Once an administrator assigns courses to your profile from the Admin Panel, you will be able to schedule live lectures, stream sessions, and upload recordings.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm max-w-md">

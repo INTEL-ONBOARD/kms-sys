@@ -24,6 +24,7 @@ const mockGradesData = {
   studentId: "12345",
   gpa: "3.8",
   cgpa: "3.8",
+  reportApproved: true,
   availableSemesters: ["Semester 01", "Semester 02"],
   availableCourses: ["Animation Studies I", "Principles of Script Writing"],
   allGrades: [
@@ -38,6 +39,8 @@ const mockGradesData = {
       grade: "A",
       gradeColor: "text-green-500 bg-green-50",
       semester: "Semester 01",
+      allAssessmentsCompleted: true,
+      totalPoints: 89,
     },
     {
       id: "2",
@@ -50,6 +53,8 @@ const mockGradesData = {
       grade: "B +",
       gradeColor: "text-orange-400 bg-orange-50",
       semester: "Semester 02",
+      allAssessmentsCompleted: false,
+      totalPoints: 81,
     },
   ],
 };
@@ -68,30 +73,50 @@ describe('GradesPage component', () => {
     jest.restoreAllMocks();
   });
 
-  it('renders Grades page title and Download Report button', async () => {
+  it('renders Grades page title and Export Report button', async () => {
     render(<GradesPage />);
-    expect(screen.getByRole('heading', { level: 1, name: /GRADES/i })).toBeInTheDocument();
-    expect(screen.getByText(/Download Report/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /Course Grades & Academic Performance/i })).toBeInTheDocument();
+    expect(screen.getByText(/Export Report/i)).toBeInTheDocument();
   });
 
-  it('opens download options modal when Download Report button is clicked', async () => {
+  it('opens download options modal when Export Report button is clicked and report is approved', async () => {
     render(<GradesPage />);
     await waitFor(() => {
-      expect(screen.getByRole('cell', { name: /Animation Studies I/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
     });
 
-    const downloadBtn = screen.getByRole('button', { name: /Download Report/i });
+    const downloadBtn = screen.getByRole('button', { name: /Export Report/i });
     fireEvent.click(downloadBtn);
 
-    expect(screen.getByText(/Download Grade Report/i)).toBeInTheDocument();
+    expect(screen.getByText(/Export Academic Performance Report/i)).toBeInTheDocument();
     expect(screen.getByText(/CSV Spreadsheet/i)).toBeInTheDocument();
-    expect(screen.getByText(/PDF Academic Transcript/i)).toBeInTheDocument();
+    expect(screen.getByText(/Printable PDF Transcript/i)).toBeInTheDocument();
   });
 
-  it('filters grade entries in table when selecting semester', async () => {
+  it('shows admin approval modal when Export Report is clicked and report is not approved', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ...mockGradesData, reportApproved: false }),
+      })
+    ) as jest.Mock;
+
     render(<GradesPage />);
     await waitFor(() => {
-      expect(screen.getByRole('cell', { name: /Animation Studies I/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /Export Report/i });
+    fireEvent.click(downloadBtn);
+
+    expect(screen.getByText(/Admin Approval Required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Request Admin Approval/i })).toBeInTheDocument();
+  });
+
+  it('filters grade entries when selecting semester', async () => {
+    render(<GradesPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
     });
 
     const selects = screen.getAllByRole('combobox');
@@ -99,7 +124,7 @@ describe('GradesPage component', () => {
 
     fireEvent.change(semesterSelect, { target: { value: 'Semester 01' } });
 
-    expect(screen.getByRole('cell', { name: /Animation Studies I/i })).toBeInTheDocument();
-    expect(screen.queryByRole('cell', { name: /Principles of Script Writing/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: /Animation Studies I/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3, name: /Principles of Script Writing/i })).not.toBeInTheDocument();
   });
 });

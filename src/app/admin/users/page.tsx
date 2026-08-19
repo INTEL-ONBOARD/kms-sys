@@ -13,6 +13,7 @@ interface UserData {
   status: string;
   createdAt: string;
   department?: string;
+  reportApproved?: boolean;
 }
 
 export default function UserAdminPage() {
@@ -44,7 +45,8 @@ export default function UserAdminPage() {
     email: '', 
     password: 'Demo@1234', // Default Demo Password
     role: 'student', 
-    status: 'active' 
+    status: 'active',
+    reportApproved: false,
   });
 
   const [inviteFormData, setInviteFormData] = useState({
@@ -116,7 +118,7 @@ export default function UserAdminPage() {
       if (res.ok) {
         setIsAddModalOpen(false);
         // Reset form data and re-apply Demo Password
-        setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active' });
+        setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active', reportApproved: false });
         fetchUsers(); 
         alert(`User successfully added!\nPlease remind them to log in with password: Demo@1234 and update their profile.`);
       } else {
@@ -188,6 +190,23 @@ export default function UserAdminPage() {
       }
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  // Handle Toggle Report Download Approval
+  const handleToggleReportApproval = async (user: UserData) => {
+    try {
+      const nextState = !user.reportApproved;
+      const res = await fetch(`/api/admin/users/${user._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportApproved: nextState }),
+      });
+      if (res.ok) {
+        setUsers(users.map(u => u._id === user._id ? { ...u, reportApproved: nextState } : u));
+      }
+    } catch (err) {
+      console.error("Failed to toggle report approval:", err);
     }
   };
 
@@ -309,6 +328,7 @@ export default function UserAdminPage() {
                     <th className="px-6 py-4">Role</th>
                     <th className="px-6 py-4">Department</th>
                     <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Report Access</th>
                     <th className="px-6 py-4">Joined Date</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -316,9 +336,9 @@ export default function UserAdminPage() {
                 <tbody className="divide-y divide-gray-100">
                   
                   {loading ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
                   ) : users.length === 0 ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
                   ) : (
                     users.map((user) => (
                       <tr key={user._id} className="hover:bg-gray-50 transition duration-150">
@@ -347,13 +367,36 @@ export default function UserAdminPage() {
                             {user.status || 'inactive'}
                           </span>
                         </td>
+                        <td className="px-6 py-4">
+                          {user.role === 'student' ? (
+                            <button
+                              onClick={() => handleToggleReportApproval(user)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                user.reportApproved
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                              }`}
+                              title="Click to toggle official report download permission"
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${user.reportApproved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                              <span>{user.reportApproved ? 'Approved' : 'Locked'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-gray-500">{formatDate(user.createdAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end space-x-2">
                             <button 
                               onClick={() => {
                                 setSelectedUser(user);
-                                setFormData({ ...formData, role: user.role, status: user.status || 'active' });
+                                setFormData({
+                                  ...formData,
+                                  role: user.role,
+                                  status: user.status || 'active',
+                                  reportApproved: !!user.reportApproved,
+                                });
                                 setIsEditModalOpen(true);
                               }}
                               className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
@@ -492,6 +535,22 @@ export default function UserAdminPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+
+              {selectedUser.role === 'student' && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="modal-reportApproved"
+                    checked={formData.reportApproved}
+                    onChange={(e) => setFormData({ ...formData, reportApproved: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                  />
+                  <label htmlFor="modal-reportApproved" className="text-xs font-bold text-gray-700 cursor-pointer">
+                    Approve Official Academic Report Download
+                  </label>
+                </div>
+              )}
+
               <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Save Changes</button>
             </form>
           </div>

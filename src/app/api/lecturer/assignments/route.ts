@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
     return paginatedResponse(result.assignments, result.pagination, undefined, {
       assignments: result.assignments,
+      courses: result.courses,
     });
   } catch (error) {
     return handleApiError(error, "GET /api/lecturer/assignments");

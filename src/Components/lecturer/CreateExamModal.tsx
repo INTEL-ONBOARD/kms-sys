@@ -24,7 +24,11 @@ interface CreateExamModalProps {
 export default function CreateExamModal({ initialExam, onClose, onSuccess }: CreateExamModalProps) {
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
-  const [courses, setCourses] = useState<Array<{ _id: string; title: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ 
+    _id: string; 
+    title: string; 
+    assessmentItems?: Array<{ name: string; type: string; weight: number }>;
+  }>>([]);
 
   const isEdit = Boolean(initialExam && initialExam._id);
 
@@ -56,6 +60,11 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
           setCourses(data.data || []);
           if (!courseId && data.data && data.data.length > 0) {
             setCourseId(data.data[0]._id);
+            const firstExamItems = (data.data[0].assessmentItems || []).filter((i: any) => i.type === "exam");
+            if (firstExamItems.length > 0 && !title) {
+              setTitle(firstExamItems[0].name);
+              setType(firstExamItems[0].name.toLowerCase().includes("final") ? "final" : "midterm");
+            }
           }
         }
       } catch (err) {
@@ -63,12 +72,22 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
       }
     };
     fetchCourses();
-  }, [courseId]);
+  }, [courseId, title]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      toast.warning("Exam title is required");
+      toast.warning("Please select an exam component from the Course Grade Breakdown");
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (!date) {
+      toast.warning("Exam date is required");
+      return;
+    }
+    if (date < todayStr) {
+      toast.error("Exam date cannot be in the past. Please select a valid future date.");
       return;
     }
 
@@ -128,6 +147,9 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
     }
   };
 
+  const selectedCourseObj = courses.find((c) => c._id === courseId);
+  const examBreakdownItems = (selectedCourseObj?.assessmentItems || []).filter((i: any) => i.type === "exam");
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in font-sans">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100">
@@ -149,7 +171,7 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
             <p className="text-xs text-[#A0AEC0]">
               {isEdit
                 ? "Update exam title, schedule, duration, or venue details"
-                : "Set up exam parameters, location, and schedule for students"}
+                : "Schedule exam from Course Assessment & Grade Breakdown"}
             </p>
           </div>
         </div>
@@ -161,7 +183,18 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
               <label className="block text-xs font-semibold text-gray-700 mb-1">Target Course</label>
               <select
                 value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
+                onChange={(e) => {
+                  const newCId = e.target.value;
+                  setCourseId(newCId);
+                  const matchedC = courses.find(c => c._id === newCId);
+                  const exItems = (matchedC?.assessmentItems || []).filter((i: any) => i.type === "exam");
+                  if (exItems.length > 0) {
+                    setTitle(exItems[0].name);
+                    setType(exItems[0].name.toLowerCase().includes("final") ? "final" : "midterm");
+                  } else {
+                    setTitle("");
+                  }
+                }}
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
               >
                 {courses.map((c) => (
@@ -173,18 +206,52 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
             </div>
           )}
 
-          {/* Exam Title */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Exam Title</label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Midterm Software Architecture Examination"
-              className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
-            />
-          </div>
+          {/* Exam Title / Selection from Grade Breakdown */}
+          {!isEdit ? (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Exam Component <span className="text-purple-600 font-bold">(From Course Grade Breakdown)</span>
+              </label>
+
+              {examBreakdownItems.length === 0 ? (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                  <p className="font-bold">No exam components configured in Grade Breakdown.</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Please add an Exam component in Course Assessment & Grade Breakdown under Course Management.
+                  </p>
+                </div>
+              ) : (
+                <select
+                  required
+                  value={title}
+                  onChange={(e) => {
+                    const selName = e.target.value;
+                    setTitle(selName);
+                    setType(selName.toLowerCase().includes("final") ? "final" : "midterm");
+                  }}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-[#1E293B] outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC] cursor-pointer"
+                >
+                  <option value="">-- Select Configured Exam Item --</option>
+                  {examBreakdownItems.map((item, idx) => (
+                    <option key={idx} value={item.name}>
+                      {item.name} ({item.weight}% Grade Weight &bull; Exam)
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Exam Title</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             {/* Exam Type */}
@@ -208,6 +275,7 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
               <input
                 type="date"
                 required
+                min={new Date().toISOString().split("T")[0]}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"

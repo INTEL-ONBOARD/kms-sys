@@ -6,6 +6,7 @@ import * as EnrollmentService from "@/server/services/enrollment.service";
 export interface CalendarEvent {
   id: string;
   courseId: string;
+  courseTitle?: string;
   title: string;
   dayOfWeek: string;
   startHour: number;
@@ -16,6 +17,13 @@ export interface CalendarEvent {
   instructor?: string;
   colorCode: string;
   category?: string;
+  eventType?: "lecture" | "live_class" | "exam";
+  meetingLink?: string;
+  date?: string;
+  dateFormatted?: string;
+  examType?: string;
+  duration?: number;
+  status?: string;
 }
 
 export async function GET(req: NextRequest) {

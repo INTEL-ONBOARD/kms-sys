@@ -11,6 +11,7 @@ import {
   FiFileText,
   FiFilm,
   FiPackage,
+  FiLock,
 } from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
 
@@ -73,6 +74,28 @@ export default function MaterialUploadModal({
     loadCourses();
   }, [selectedCourseId]);
 
+  if (!loadingCourses && courses.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+            <FiLock />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Upload Materials Blocked</h2>
+          <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+            You do not have any assigned courses. All material uploads and sharing are blocked until an administrator assigns courses to your account from the Admin Panel.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleFileSelect = (file: File) => {
     // 250MB limit
     if (file.size > 250 * 1024 * 1024) {
@@ -128,36 +151,38 @@ export default function MaterialUploadModal({
       setUploadState("generating_url");
       setUploadProgress(5);
 
-      // STEP 1: Request Pre-signed Upload URL from Next.js API
-      const presignRes = await fetch("/api/materials/generate-upload-url", {
+      // Step 1: Request pre-signed upload URL from R2
+      const urlRes = await fetch("/api/materials/generate-upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          courseId: selectedCourseId,
           fileName: selectedFile.name,
           fileType: selectedFile.type || "application/octet-stream",
           fileSize: selectedFile.size,
-          courseId: selectedCourseId,
         }),
       });
 
-      if (!presignRes.ok) {
-        const errorData = await presignRes.json();
-        throw new Error(errorData.error || "Failed to generate upload URL");
+      if (!urlRes.ok) {
+        const errJson = await urlRes.json();
+        throw new Error(errJson.error || "Failed to authorize upload");
       }
 
-      const { uploadUrl, fileKey, publicUrl } = await presignRes.json();
+      const urlData = await urlRes.json();
+      const { uploadUrl, fileKey, publicUrl } = urlData.data;
 
-      // STEP 2: Upload File directly to Cloudflare R2 using XMLHttpRequest with progress
+      // Step 2: Upload binary directly to Cloudflare R2
       setUploadState("uploading_r2");
+      setUploadProgress(20);
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl, true);
+        xhr.open("PUT", uploadUrl);
         xhr.setRequestHeader("Content-Type", selectedFile.type || "application/octet-stream");
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.round((evt.loaded / evt.total) * 70) + 20; // Scale from 20% to 90%
             setUploadProgress(percent);
           }
         };
@@ -166,19 +191,17 @@ export default function MaterialUploadModal({
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Storage upload failed with HTTP status ${xhr.status}`));
+            reject(new Error(`Storage service error (${xhr.status})`));
           }
         };
 
-        xhr.onerror = () => {
-          reject(new Error("Network error during file upload to Cloudflare R2. Check CORS configuration."));
-        };
-
+        xhr.onerror = () => reject(new Error("Network error during file transfer"));
         xhr.send(selectedFile);
       });
 
-      // STEP 3: Save metadata to MongoDB
+      // Step 3: Save metadata to MongoDB
       setUploadState("saving_metadata");
+      setUploadProgress(95);
 
       const metaRes = await fetch("/api/materials", {
         method: "POST",
@@ -197,164 +220,165 @@ export default function MaterialUploadModal({
       });
 
       if (!metaRes.ok) {
-        const metaError = await metaRes.json();
-        throw new Error(metaError.error || "Failed to save material metadata");
+        const errJson = await metaRes.json();
+        throw new Error(errJson.error || "Failed to save material record");
       }
 
       setUploadState("success");
-      toast.success(`"${title}" published to course successfully!`);
+      setUploadProgress(100);
+      toast.success(`"${title}" uploaded and published to students!`);
 
       setTimeout(() => {
         if (onSuccess) onSuccess();
         onClose();
-      }, 1000);
-    } catch (err: unknown) {
-      console.error("Upload error:", err);
-      const msg = err instanceof Error ? err.message : "An unexpected error occurred during upload.";
-      setErrorMessage(msg);
+      }, 900);
+    } catch (err: any) {
+      console.error("Upload workflow failed:", err);
       setUploadState("error");
-      toast.error(msg);
+      setErrorMessage(err.message || "An unexpected error occurred during upload.");
+      toast.error(err.message || "Material upload failed.");
     }
   };
 
-  const getFileIcon = () => {
-    if (!selectedFile) return <FiFile className="w-6 h-6 text-gray-400" />;
-    const type = selectedFile.type.toLowerCase();
-    if (type.includes("pdf") || type.includes("word") || type.includes("presentation")) {
-      return <FiFileText className="w-6 h-6 text-[#5A67D8]" />;
-    }
-    if (type.includes("video")) {
-      return <FiFilm className="w-6 h-6 text-purple-600" />;
-    }
-    if (type.includes("zip") || type.includes("rar")) {
-      return <FiPackage className="w-6 h-6 text-amber-600" />;
-    }
-    return <FiFile className="w-6 h-6 text-emerald-600" />;
-  };
-
-  const isUploading = uploadState === "generating_url" || uploadState === "uploading_r2" || uploadState === "saving_metadata";
+  const isUploading =
+    uploadState === "generating_url" ||
+    uploadState === "uploading_r2" ||
+    uploadState === "saving_metadata";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in font-sans">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 max-h-[90vh] overflow-hidden flex flex-col">
-        
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          disabled={isUploading}
-          className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 p-1 transition disabled:opacity-40"
-        >
-          <FiX className="text-xl" />
-        </button>
-
-        {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-[#5A67D8] flex items-center justify-center text-xl shrink-0">
-            <FiUploadCloud />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#EEF2FF] text-[#5A67D8] flex items-center justify-center font-bold text-sm">
+              <FiUploadCloud />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-800">Upload Course Material</h2>
+              <p className="text-[11px] text-[#A0AEC0]">
+                Publish notes, slides, tutorials, or video recordings for enrolled students
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-extrabold text-[#2D3748]">Upload Course Material</h3>
-            <p className="text-xs text-[#A0AEC0]">Distribute lecture notes and resources to enrolled students</p>
-          </div>
+          <button
+            onClick={onClose}
+            disabled={isUploading}
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition disabled:opacity-40"
+          >
+            <FiX className="text-lg" />
+          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleUploadAndSubmit} className="space-y-4 overflow-y-auto pr-1">
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleUploadAndSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
           
           {/* Target Course Selector */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Target Course <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Select Course <span className="text-red-500">*</span>
             </label>
-            <select
-              value={selectedCourseId}
-              onChange={(e) => setSelectedCourseId(e.target.value)}
-              disabled={isUploading || loadingCourses}
-              className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC] disabled:opacity-50"
-            >
-              {loadingCourses ? (
-                <option value="">Loading courses...</option>
-              ) : courses.length === 0 ? (
-                <option value="">No teaching courses found</option>
-              ) : (
-                courses.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.title}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Type and Title */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Category
-              </label>
+            {loadingCourses ? (
+              <div className="h-9 bg-gray-100 rounded-lg animate-pulse" />
+            ) : (
               <select
-                value={materialType}
-                onChange={(e) => setMaterialType(e.target.value as any)}
+                value={selectedCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
                 disabled={isUploading}
-                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
-              >
-                <option value="notes">Lecture Notes</option>
-                <option value="slides">Slides / PPT</option>
-                <option value="tutorial">Tutorial</option>
-                <option value="assignment">Assignment</option>
-                <option value="video">Recording</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
                 required
-                placeholder="e.g. Week 4 - Relational Databases & SQL"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={isUploading}
-                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
-              />
+                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-[#5A67D8] focus:border-transparent transition"
+              >
+                {courses.map((course) => (
+                  <option key={course._id} value={course._id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Material Category Type */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Material Category <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {[
+                { id: "notes", label: "Lecture Notes", icon: FiFileText },
+                { id: "slides", label: "Slides", icon: FiPackage },
+                { id: "tutorial", label: "Tutorial", icon: FiFile },
+                { id: "assignment", label: "Assignment", icon: FiFileText },
+                { id: "video", label: "Recording", icon: FiFilm },
+                { id: "other", label: "Other", icon: FiPackage },
+              ].map((cat) => {
+                const Icon = cat.icon;
+                const isSelected = materialType === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => setMaterialType(cat.id as any)}
+                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition ${
+                      isSelected
+                        ? "bg-[#EEF2FF] border-[#5A67D8] text-[#5A67D8] font-bold shadow-xs"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+                    }`}
+                  >
+                    <Icon className="text-base mb-1" />
+                    <span className="text-[10px] truncate w-full">{cat.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Description */}
+          {/* Material Title */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Description / Instructions (Optional)
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Material Title <span className="text-red-500">*</span>
             </label>
-            <textarea
-              rows={2}
-              placeholder="Instructions or supplementary reading notes for students..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+            <input
+              type="text"
+              required
               disabled={isUploading}
-              className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] resize-none"
+              placeholder="e.g. Lecture 04: Animation Timing & Motion Curves"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-[#5A67D8] focus:border-transparent transition"
             />
           </div>
 
-          {/* File Attachment Dropzone */}
+          {/* Description (Optional) */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              File Attachment <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Description / Instructions <span className="text-gray-400 font-normal">(Optional)</span>
             </label>
+            <textarea
+              rows={2}
+              disabled={isUploading}
+              placeholder="Provide context, required readings, or chapter references for students..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-[#5A67D8] focus:border-transparent transition resize-none"
+            />
+          </div>
 
+          {/* Drag & Drop File Upload Area */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Attach File <span className="text-red-500">*</span>
+            </label>
             <input
               ref={fileInputRef}
               type="file"
+              disabled={isUploading}
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   handleFileSelect(e.target.files[0]);
                 }
               }}
-              disabled={isUploading}
               className="hidden"
-              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.mp4"
             />
 
             {!selectedFile ? (
@@ -363,29 +387,27 @@ export default function MaterialUploadModal({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition ${
                   isDragging
-                    ? "border-[#5A67D8] bg-indigo-50/50"
-                    : "border-gray-200 hover:border-[#5A67D8] bg-[#F7FAFC]"
+                    ? "border-[#5A67D8] bg-[#EEF2FF]/50"
+                    : "border-gray-200 hover:border-gray-300 bg-gray-50/50 hover:bg-gray-50"
                 }`}
               >
-                <div className="flex flex-col items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-full bg-white text-[#5A67D8] shadow-xs flex items-center justify-center text-lg">
-                    <FiUploadCloud />
-                  </div>
-                  <p className="text-xs font-bold text-gray-700">
-                    Click to browse or drag & drop file
-                  </p>
-                  <p className="text-[10px] text-gray-400">
-                    PDF, PowerPoint (PPTX), Word (DOCX), ZIP, MP4 up to 250MB
-                  </p>
+                <div className="w-10 h-10 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-2 text-lg">
+                  <FiUploadCloud />
                 </div>
+                <p className="text-xs font-bold text-gray-700">
+                  Click to browse or drag and drop your file here
+                </p>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Supported: PDF, PPTX, DOCX, ZIP, MP4, MP3 &middot; Max size: 250 MB
+                </p>
               </div>
             ) : (
-              <div className="p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-2.5 overflow-hidden">
-                  <div className="p-2 bg-white rounded-lg shadow-2xs shrink-0">
-                    {getFileIcon()}
+              <div className="flex items-center justify-between p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-100 text-[#5A67D8] flex items-center justify-center text-base shrink-0 font-bold">
+                    <FiFile />
                   </div>
                   <div className="truncate">
                     <p className="text-xs font-bold text-gray-800 truncate">

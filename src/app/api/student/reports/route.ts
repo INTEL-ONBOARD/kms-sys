@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/server/core/auth-context";
 import { successResponse, handleApiError } from "@/server/core/api-response";
+import { ForbiddenError } from "@/server/core/errors";
 import { generateCSVReport } from "@/lib/reportGenerator";
 import * as ReportService from "@/server/services/report.service";
 
@@ -21,6 +22,12 @@ export async function GET(req: NextRequest) {
     );
 
     if (format === "csv") {
+      if (!reportData.reportApproved) {
+        throw new ForbiddenError(
+          "Official academic report export is locked. Administrator approval is required before you can download or export this report."
+        );
+      }
+
       const csvContent = generateCSVReport(reportData as any);
       return new NextResponse("\uFEFF" + csvContent, {
         status: 200,

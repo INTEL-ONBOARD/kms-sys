@@ -109,10 +109,15 @@ export default function CoursesPage() {
   const [activeCourseTab, setActiveCourseTab] = useState<'about' | 'materials' | 'modules' | 'assignments' | 'classes'>('about');
   const [expandedModule, setExpandedModule] = useState<string | null>("01");
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (query = searchQuery, status = statusFilter, sort = sortBy) => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/student/my-courses');
+      const params = new URLSearchParams();
+      if (query.trim()) params.set('search', query.trim());
+      if (status && status !== 'All') params.set('status', status);
+      if (sort) params.set('sort', sort);
+
+      const response = await fetch(`/api/student/my-courses?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setCourses(data.courses || []);
@@ -127,44 +132,13 @@ export default function CoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchCourses(searchQuery, statusFilter, sortBy);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery, statusFilter, sortBy]);
 
-  // Filter and Sort courses dynamically
-  const filteredAndSortedCourses = useMemo(() => {
-    let result = [...courses];
-
-    // 1. Search Query filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (c) =>
-          c.title.toLowerCase().includes(q) ||
-          (c.category && c.category.toLowerCase().includes(q)) ||
-          (c.instructor && c.instructor.toLowerCase().includes(q))
-      );
-    }
-
-    // 2. Status Filter
-    if (statusFilter === 'Active') {
-      result = result.filter((c) => (c.progress ?? 0) < 100);
-    } else if (statusFilter === 'Completed') {
-      result = result.filter((c) => (c.progress ?? 0) >= 100);
-    }
-
-    // 3. Sorting
-    if (sortBy === 'Newest') {
-      // default array order
-    } else if (sortBy === 'Oldest') {
-      result.reverse();
-    } else if (sortBy === 'A-Z') {
-      result.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sortBy === 'Progress') {
-      result.sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
-    }
-
-    return result;
-  }, [courses, searchQuery, statusFilter, sortBy]);
+  const filteredAndSortedCourses = courses;
 
   const getBannerStyle = (index: number, title: string) => {
     const styles = [
@@ -223,7 +197,7 @@ export default function CoursesPage() {
             </div>
 
             <button
-              onClick={fetchCourses}
+              onClick={() => fetchCourses()}
               title="Refresh courses"
               className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:border-[#5A67D8] hover:text-[#5A67D8] rounded-xl shadow-sm transition"
             >

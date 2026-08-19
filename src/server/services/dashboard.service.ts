@@ -8,6 +8,15 @@ import Submission from "@/models/Submission";
 import Announcement from "@/models/Announcement";
 import { createSafeSearchRegex } from "../core/pagination";
 
+// Ensure models are registered
+User;
+Enrollment;
+Course;
+Assignment;
+LiveClass;
+Submission;
+Announcement;
+
 /**
  * Retrieves aggregate statistics for the Admin Dashboard.
  */
@@ -155,14 +164,56 @@ export async function getAdminDashboardStats() {
 
 /**
  * Retrieves aggregate data for the Lecturer Dashboard.
+ * If lecturer is not assigned to any courses, returns zero-state statistics safely.
  */
 export async function getLecturerDashboard(userId: string, userName: string) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
+
+  if (courses.length === 0) {
+    return {
+      stats: {
+        activeCourses: 0,
+        totalStudents: 0,
+        pendingGrades: 0,
+        todaysClasses: 0,
+      },
+      courses: [],
+      schedule: [],
+      gradingQueue: [],
+      recentActivity: [],
+      performance: {
+        barChart: [],
+        lineChart: [],
+        donutChart: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        assignmentDonut: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        finalDonut: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        assignmentGradesSummary: {
+          totalEvaluated: 0,
+          averageScore: 0,
+          passingRate: 0,
+          distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        },
+        finalGradesSummary: {
+          totalEnrolled: 0,
+          completedCount: 0,
+          inProgressCount: 0,
+          completionRate: 0,
+          averageFinalGrade: 0,
+          passingRate: 0,
+          distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+        },
+        students: [],
+        coursesPerformance: [],
+      },
+    };
+  }
 
   const courseIds = courses.map((c) => c._id);
 
@@ -185,13 +236,21 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     gradedSubmissions,
     allCourseEnrollments,
     allSubmissionsForPerf,
+    allEnrollments,
   ] = await Promise.all([
+    // Total enrolled students across lecturer courses
     Enrollment.countDocuments({ courseId: { $in: courseIds } }),
+
+    // Pending grades count
     Submission.countDocuments({ courseId: { $in: courseIds }, grade: null }),
+
+    // Today's classes count
     LiveClass.countDocuments({
       courseId: { $in: courseIds },
       startTime: { $gte: todayStart, $lte: todayEnd },
     }),
+
+    // Today's schedule list populated with course title
     LiveClass.find({
       courseId: { $in: courseIds },
       startTime: { $gte: todayStart, $lte: todayEnd },
@@ -199,7 +258,11 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       .populate("courseId", "title")
       .sort({ startTime: 1 })
       .lean(),
+
+    // Assignments for lecturer courses
     Assignment.find({ courseId: { $in: courseIds } }).lean(),
+
+    // Pending grading queue items
     Submission.find({ courseId: { $in: courseIds }, grade: null })
       .populate("assignmentId", "title dueDate maxPoints")
       .populate("studentId", "name email")
@@ -207,18 +270,24 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       .sort({ submittedAt: 1 })
       .limit(10)
       .lean(),
+
+    // Recent submissions in last 7 days for activity feed
     Submission.find({ courseId: { $in: courseIds }, createdAt: { $gte: sevenDaysAgo } })
       .populate("studentId", "name")
       .populate("courseId", "title")
       .sort({ createdAt: -1 })
       .limit(10)
       .lean(),
+
+    // Recent announcements in last 7 days for activity feed
     Announcement.find({ courseId: { $in: courseIds }, createdAt: { $gte: sevenDaysAgo } })
       .populate("lecturerId", "name")
       .populate("courseId", "title")
       .sort({ createdAt: -1 })
       .limit(10)
       .lean(),
+
+    // Recent graded actions in last 7 days
     Submission.find({
       courseId: { $in: courseIds },
       grade: { $ne: null },
@@ -229,15 +298,28 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       .sort({ updatedAt: -1 })
       .limit(10)
       .lean(),
+
+    // Enrollments per course to calculate student counts
     Enrollment.aggregate([
       { $match: { courseId: { $in: courseIds } } },
       { $group: { _id: "$courseId", count: { $sum: 1 }, avgProgress: { $avg: "$progress" } } },
     ]),
+
+    // All submissions for performance aggregation (with assignment maxPoints)
     Submission.find({ courseId: { $in: courseIds } })
-      .populate("assignmentId", "title maxPoints")
+      .populate("assignmentId", "title maxPoints dueDate")
+      .populate("studentId", "name email")
+      .lean(),
+
+    // All enrollments with populated user and course info for student-level performance tracking
+    Enrollment.find({ courseId: { $in: courseIds } })
+      .populate("userId", "name email image")
+      .populate("courseId", "title")
+      .sort({ createdAt: -1 })
       .lean(),
   ]);
 
+  // Format Course cards with stats
   const courseStatsMap = new Map();
   allCourseEnrollments.forEach((e: any) => {
     courseStatsMap.set(e._id.toString(), {
@@ -261,6 +343,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     };
   });
 
+  // Format Grading Queue (prioritize overdue)
   const formattedGradingQueue = pendingSubmissionsList.map((sub: any) => {
     const dueDate = sub.assignmentId?.dueDate
       ? new Date(sub.assignmentId.dueDate)
@@ -280,6 +363,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     };
   });
 
+  // Format Activity Feed on-the-fly (union submissions, announcements, graded)
   const activities: any[] = [];
   recentSubmissions.forEach((sub: any) => {
     activities.push({
@@ -314,6 +398,12 @@ export async function getLecturerDashboard(userId: string, userName: string) {
   activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const formattedActivity = activities.slice(0, 10);
 
+  // 1. ASSIGNMENT GRADES CALCULATION & DISTRIBUTION
+  const assignmentGradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  let totalAssignmentScorePct = 0;
+  let totalGradedAssignmentsCount = 0;
+  let passingAssignmentsCount = 0;
+
   const courseGradesMap = new Map<string, { totalScore: number; count: number; name: string }>();
   courses.forEach((c: any) => {
     courseGradesMap.set(c._id.toString(), { totalScore: 0, count: 0, name: c.title });
@@ -321,19 +411,212 @@ export async function getLecturerDashboard(userId: string, userName: string) {
 
   allSubmissionsForPerf.forEach((sub: any) => {
     if (sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade))) {
+      const rawGrade = Number(sub.grade);
+      const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
+      let percentage = rawGrade;
+      if (maxPts > 0 && maxPts !== 100 && rawGrade <= maxPts) {
+        percentage = (rawGrade / maxPts) * 100;
+      }
+
+      totalAssignmentScorePct += percentage;
+      totalGradedAssignmentsCount += 1;
+
+      if (percentage >= 80) assignmentGradeBuckets.A += 1;
+      else if (percentage >= 70) assignmentGradeBuckets.B += 1;
+      else if (percentage >= 60) assignmentGradeBuckets.C += 1;
+      else if (percentage >= 50) assignmentGradeBuckets.D += 1;
+      else assignmentGradeBuckets.F += 1;
+
+      if (percentage >= 50) {
+        passingAssignmentsCount += 1;
+      }
+
       const cId = sub.courseId?.toString();
       if (cId && courseGradesMap.has(cId)) {
         const current = courseGradesMap.get(cId)!;
-        const rawGrade = Number(sub.grade);
-        const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
-        let scorePct = rawGrade;
-        if (maxPts > 0 && maxPts !== 100 && rawGrade <= maxPts) {
-          scorePct = (rawGrade / maxPts) * 100;
-        }
-        current.totalScore += scorePct;
+        current.totalScore += percentage;
         current.count += 1;
       }
     }
+  });
+
+  const assignmentAverage =
+    totalGradedAssignmentsCount > 0
+      ? Math.round(totalAssignmentScorePct / totalGradedAssignmentsCount)
+      : 0;
+
+  const assignmentPassingRate =
+    totalGradedAssignmentsCount > 0
+      ? Math.round((passingAssignmentsCount / totalGradedAssignmentsCount) * 100)
+      : 0;
+
+  // 2. STUDENT-BY-STUDENT PERFORMANCE & FINAL GRADE CALCULATION
+  const finalGradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  let completedStudentsTotalFinalScore = 0;
+  let completedStudentsCount = 0;
+  let completedPassingCount = 0;
+
+  const studentsPerformance = (allEnrollments || []).map((enrollment: any) => {
+    const student = enrollment.userId;
+    const studentIdStr = student?._id ? student._id.toString() : enrollment.userId?.toString() || "";
+    const course = enrollment.courseId;
+    const courseIdStr = course?._id ? course._id.toString() : enrollment.courseId?.toString() || "";
+    const courseTitle = course?.title || "Course";
+
+    const courseAssignments = assignmentsList.filter(
+      (a: any) => a.courseId?.toString() === courseIdStr
+    );
+    const totalCourseAssignments = courseAssignments.length;
+
+    const studentSubmissions = allSubmissionsForPerf.filter((s: any) => {
+      const sStudentId = s.studentId?._id ? s.studentId._id.toString() : s.studentId?.toString();
+      const sCourseId = s.courseId?._id ? s.courseId._id.toString() : s.courseId?.toString();
+      return sStudentId === studentIdStr && sCourseId === courseIdStr;
+    });
+
+    let studentTotalEarnedPct = 0;
+    let studentGradedCount = 0;
+
+    const assignmentScores = courseAssignments.map((assign: any) => {
+      const assignIdStr = assign._id.toString();
+      const sub = studentSubmissions.find((s: any) => {
+        const sAssignId = s.assignmentId?._id ? s.assignmentId._id.toString() : s.assignmentId?.toString();
+        return sAssignId === assignIdStr;
+      });
+
+      const isGraded = sub && sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade));
+      const rawScore = isGraded ? Number(sub.grade) : null;
+      const maxPts = Number(assign.maxPoints) || 100;
+      const pct = isGraded ? Math.round((rawScore! / maxPts) * 100) : null;
+
+      if (isGraded && pct !== null) {
+        studentTotalEarnedPct += pct;
+        studentGradedCount += 1;
+      }
+
+      return {
+        assignmentId: assignIdStr,
+        title: assign.title,
+        maxPoints: maxPts,
+        dueDate: assign.dueDate,
+        score: rawScore,
+        percentage: pct,
+        status: isGraded ? "graded" : sub ? "submitted" : "pending",
+        feedback: sub?.feedback || "",
+      };
+    });
+
+    const assignmentAverageScore =
+      studentGradedCount > 0 ? Math.round(studentTotalEarnedPct / studentGradedCount) : null;
+
+    const allAssignmentsCompleted = totalCourseAssignments > 0 && studentGradedCount === totalCourseAssignments;
+
+    let finalGrade: number | null = null;
+    let finalLetterGrade = "In Progress";
+    let finalGradeColor = "text-amber-700 bg-amber-50 border-amber-200";
+    let gpaPoint: number | null = null;
+    let status = "In Progress";
+
+    if (allAssignmentsCompleted) {
+      finalGrade = Math.round(studentTotalEarnedPct / totalCourseAssignments);
+      completedStudentsCount += 1;
+      completedStudentsTotalFinalScore += finalGrade;
+
+      if (finalGrade >= 80) {
+        finalLetterGrade = "A";
+        finalGradeColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
+        gpaPoint = 4.0;
+        finalGradeBuckets.A += 1;
+        completedPassingCount += 1;
+      } else if (finalGrade >= 70) {
+        finalLetterGrade = "B";
+        finalGradeColor = "text-blue-700 bg-blue-50 border-blue-200";
+        gpaPoint = 3.0;
+        finalGradeBuckets.B += 1;
+        completedPassingCount += 1;
+      } else if (finalGrade >= 60) {
+        finalLetterGrade = "C";
+        finalGradeColor = "text-amber-700 bg-amber-50 border-amber-200";
+        gpaPoint = 2.0;
+        finalGradeBuckets.C += 1;
+        completedPassingCount += 1;
+      } else if (finalGrade >= 50) {
+        finalLetterGrade = "D";
+        finalGradeColor = "text-purple-700 bg-purple-50 border-purple-200";
+        gpaPoint = 1.0;
+        finalGradeBuckets.D += 1;
+        completedPassingCount += 1;
+      } else {
+        finalLetterGrade = "F";
+        finalGradeColor = "text-rose-700 bg-rose-50 border-rose-200";
+        gpaPoint = 0.0;
+        finalGradeBuckets.F += 1;
+      }
+      status = "Completed";
+    }
+
+    return {
+      enrollmentId: enrollment._id.toString(),
+      studentId: studentIdStr,
+      name: student?.name || "Student",
+      email: student?.email || "",
+      image: student?.image || "",
+      courseId: courseIdStr,
+      courseTitle,
+      progress: enrollment.progress || 0,
+      totalAssignments: totalCourseAssignments,
+      completedAssignments: studentGradedCount,
+      pendingAssignments: Math.max(0, totalCourseAssignments - studentGradedCount),
+      allAssignmentsCompleted,
+      assignmentScores,
+      assignmentAverageScore,
+      finalGrade,
+      finalLetterGrade,
+      finalGradeColor,
+      gpaPoint,
+      status,
+    };
+  });
+
+  const finalGradeAverage =
+    completedStudentsCount > 0 ? Math.round(completedStudentsTotalFinalScore / completedStudentsCount) : 0;
+
+  const finalPassingRate =
+    completedStudentsCount > 0 ? Math.round((completedPassingCount / completedStudentsCount) * 100) : 0;
+
+  const inProgressStudentsCount = studentsPerformance.length - completedStudentsCount;
+
+  const coursesPerformance = formattedCourses.map((c: any) => {
+    const courseStudents = studentsPerformance.filter((s: any) => s.courseId === c._id);
+    const completedCourseStudents = courseStudents.filter((s: any) => s.allAssignmentsCompleted);
+
+    const courseFinalAvg =
+      completedCourseStudents.length > 0
+        ? Math.round(
+            completedCourseStudents.reduce((acc: number, s: any) => acc + (s.finalGrade || 0), 0) /
+              completedCourseStudents.length
+          )
+        : null;
+
+    const courseAssignScores = courseStudents
+      .map((s: any) => s.assignmentAverageScore)
+      .filter((score: number | null) => score !== null) as number[];
+
+    const courseAssignAvg =
+      courseAssignScores.length > 0
+        ? Math.round(courseAssignScores.reduce((acc: number, val: number) => acc + val, 0) / courseAssignScores.length)
+        : 0;
+
+    return {
+      courseId: c._id,
+      courseTitle: c.title,
+      studentCount: courseStudents.length,
+      totalAssignments: c.assignmentCount,
+      completedStudentsCount: completedCourseStudents.length,
+      inProgressStudentsCount: courseStudents.length - completedCourseStudents.length,
+      assignmentAvg: courseAssignAvg,
+      finalGradeAvg: courseFinalAvg,
+    };
   });
 
   const barChartData = Array.from(courseGradesMap.values()).map((c) => ({
@@ -363,24 +646,6 @@ export async function getLecturerDashboard(userId: string, userName: string) {
 
   const lineChartData = daysArr.map((d) => ({ label: d.dateStr, count: d.count }));
 
-  const gradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-  allSubmissionsForPerf.forEach((sub: any) => {
-    if (sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade))) {
-      const rawGrade = Number(sub.grade);
-      const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
-      let percentage = rawGrade;
-      if (maxPts > 0 && maxPts !== 100 && rawGrade <= maxPts) {
-        percentage = (rawGrade / maxPts) * 100;
-      }
-
-      if (percentage >= 80) gradeBuckets.A += 1;
-      else if (percentage >= 70) gradeBuckets.B += 1;
-      else if (percentage >= 60) gradeBuckets.C += 1;
-      else if (percentage >= 50) gradeBuckets.D += 1;
-      else gradeBuckets.F += 1;
-    }
-  });
-
   return {
     stats: {
       activeCourses: courses.length,
@@ -395,7 +660,29 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     performance: {
       barChart: barChartData,
       lineChart: lineChartData,
-      donutChart: gradeBuckets,
+      donutChart: assignmentGradeBuckets,
+      assignmentDonut: assignmentGradeBuckets,
+      finalDonut: finalGradeBuckets,
+      assignmentGradesSummary: {
+        totalEvaluated: totalGradedAssignmentsCount,
+        averageScore: assignmentAverage,
+        passingRate: assignmentPassingRate,
+        distribution: assignmentGradeBuckets,
+      },
+      finalGradesSummary: {
+        totalEnrolled: studentsPerformance.length,
+        completedCount: completedStudentsCount,
+        inProgressCount: inProgressStudentsCount,
+        completionRate:
+          studentsPerformance.length > 0
+            ? Math.round((completedStudentsCount / studentsPerformance.length) * 100)
+            : 0,
+        averageFinalGrade: finalGradeAverage,
+        passingRate: finalPassingRate,
+        distribution: finalGradeBuckets,
+      },
+      students: studentsPerformance,
+      coursesPerformance,
     },
   };
 }
@@ -406,12 +693,18 @@ export async function getLecturerDashboard(userId: string, userName: string) {
 export async function getLecturerActivity(userId: string, userName: string) {
   await connectToDatabase();
 
-  const nameRegex = createSafeSearchRegex(userName);
   const courses = await Course.find({
-    $or: [{ instructorId: userId }, { instructor: { $regex: nameRegex } }],
+    $or: [
+      { instructorId: userId },
+      ...(userName ? [{ instructor: { $regex: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } }] : []),
+    ],
   }).lean();
 
   const courseIds = courses.map((c) => c._id);
+  if (courseIds.length === 0) {
+    return { activity: [] };
+  }
+
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [recentSubmissions, recentAnnouncements, gradedSubmissions] = await Promise.all([

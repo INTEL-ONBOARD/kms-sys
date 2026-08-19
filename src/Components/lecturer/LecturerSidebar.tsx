@@ -3,23 +3,52 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-import { FiBook, FiCalendar, FiBarChart2, FiUsers, FiVideo, FiFileText, FiPieChart } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { 
+  FiBook, 
+  FiCalendar, 
+  FiBarChart2, 
+  FiUsers, 
+  FiVideo, 
+  FiFileText, 
+  FiPieChart, 
+  FiLock 
+} from "react-icons/fi";
 import { MdDashboard, MdOutlineAssignment } from "react-icons/md";
+import { useToast } from "@/Components/ToastProvider";
 
 export default function LecturerSidebar() {
   const pathname = usePathname();
+  const toast = useToast();
+  const [courseCount, setCourseCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function checkAssignedCourses() {
+      try {
+        const res = await fetch("/api/lecturer/courses?limit=1");
+        if (res.ok) {
+          const data = await res.json();
+          setCourseCount(data.pagination?.total ?? (data.data?.length || 0));
+        }
+      } catch (err) {
+        console.error("Failed to check assigned courses:", err);
+      }
+    }
+    checkAssignedCourses();
+  }, [pathname]);
+
+  const hasAssignedCourses = courseCount === null || courseCount > 0;
 
   const navItems = [
-    { label: "Dashboard", href: "/lecturer", icon: MdDashboard },
-    { label: "Courses", href: "/lecturer/courses", icon: FiBook },
-    { label: "Materials", href: "/lecturer/materials", icon: FiFileText },
-    { label: "Students", href: "/lecturer/students", icon: FiUsers },
-    { label: "Assignments", href: "/lecturer/assignments", icon: MdOutlineAssignment },
-    { label: "Exams", href: "/lecturer/exams", icon: FiFileText },
-    { label: "Live Classes", href: "/lecturer/live-classes", icon: FiVideo },
-    { label: "Gradebook", href: "/lecturer/grades", icon: FiBarChart2 },
-    { label: "Analytics", href: "/lecturer/analytics", icon: FiPieChart },
+    { label: "Dashboard", href: "/lecturer", icon: MdDashboard, locked: false },
+    { label: "Courses", href: "/lecturer/courses", icon: FiBook, locked: !hasAssignedCourses },
+    { label: "Materials", href: "/lecturer/materials", icon: FiFileText, locked: !hasAssignedCourses },
+    { label: "Students", href: "/lecturer/students", icon: FiUsers, locked: !hasAssignedCourses },
+    { label: "Assignments", href: "/lecturer/assignments", icon: MdOutlineAssignment, locked: !hasAssignedCourses },
+    { label: "Exams", href: "/lecturer/exams", icon: FiFileText, locked: !hasAssignedCourses },
+    { label: "Live Classes", href: "/lecturer/live-classes", icon: FiVideo, locked: !hasAssignedCourses },
+    { label: "Gradebook", href: "/lecturer/grades", icon: FiBarChart2, locked: !hasAssignedCourses },
+    { label: "Analytics", href: "/lecturer/analytics", icon: FiPieChart, locked: !hasAssignedCourses },
   ];
 
   return (
@@ -47,6 +76,25 @@ export default function LecturerSidebar() {
               ? pathname === "/lecturer"
               : pathname.startsWith(item.href);
 
+          if (item.locked) {
+            return (
+              <div
+                key={item.href}
+                onClick={() => {
+                  toast.warning("Section Locked: You must be assigned to a course by an administrator before accessing this section.");
+                }}
+                className="flex items-center justify-between px-4 py-3 rounded-r-xl border-l-4 border-transparent text-gray-300 hover:text-gray-400 hover:bg-gray-50/60 font-medium cursor-not-allowed transition select-none"
+                title="Awaiting Course Assignment by Admin"
+              >
+                <div className="flex items-center">
+                  <Icon className="mr-4 text-xl text-gray-300" />
+                  <span>{item.label}</span>
+                </div>
+                <FiLock className="text-xs text-amber-500/80 ml-2" />
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
@@ -58,12 +106,20 @@ export default function LecturerSidebar() {
               }`}
             >
               <Icon className="mr-4 text-xl" />
-              {item.label}
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
+
+      {!hasAssignedCourses && (
+        <div className="p-4 m-3 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+          <FiLock className="text-sm text-amber-600 mt-0.5 shrink-0" />
+          <p className="leading-snug">
+            <strong>Pending Setup:</strong> Features unlock once an admin assigns your courses.
+          </p>
+        </div>
+      )}
     </aside>
   );
 }
-
