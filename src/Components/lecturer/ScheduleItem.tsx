@@ -182,7 +182,7 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
             onClick={() => setShowRecordingModal(true)}
             className="w-full px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
           >
-            <FiUploadCloud /> {recordingUrl ? "Update Recording" : "Upload Missed Lecture Recording"}
+            <FiUploadCloud /> {recordingUrl ? "Update Recording Link" : "Attach Missed Lecture Recording Link"}
           </button>
         )}
       </div>
@@ -192,7 +192,7 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-extrabold text-[#111827]">Upload Lecture Recording</h3>
+              <h3 className="text-base font-extrabold text-[#111827]">Attach Lecture Recording Link</h3>
               <button
                 onClick={() => setShowRecordingModal(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -203,17 +203,25 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
             
             <form onSubmit={handleSaveRecording} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Video Recording URL / Cloud Link <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-gray-700">
+                    Recording Link / Google Drive Link <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-2 py-0.5 rounded-full">
+                    Link Only
+                  </span>
+                </div>
                 <input
-                  type="text"
+                  type="url"
                   required
                   value={recordingUrl}
                   onChange={(e) => setRecordingUrl(e.target.value)}
-                  placeholder="https://youtu.be/... or Google Drive / Zoom link"
+                  placeholder="https://drive.google.com/file/d/... or Zoom / YouTube link"
                   className="w-full bg-[#F7FAFC] border border-gray-200 text-gray-800 text-xs rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-600"
                 />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Paste your Google Drive link, Zoom Cloud recording, or YouTube video link. Direct file upload is disabled.
+                </p>
               </div>
 
               <div>
@@ -242,7 +250,7 @@ export default function ScheduleItem({ item }: ScheduleItemProps) {
                   disabled={isSubmittingRecording}
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center gap-1.5"
                 >
-                  <FiUploadCloud /> {isSubmittingRecording ? "Saving..." : "Publish Recording"}
+                  <FiUploadCloud /> {isSubmittingRecording ? "Saving..." : "Save Recording Link"}
                 </button>
               </div>
             </form>
