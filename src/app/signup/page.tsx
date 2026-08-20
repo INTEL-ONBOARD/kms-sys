@@ -28,18 +28,27 @@ export default function SignupPage() {
     department: '',
     expertise: '',
     qualification: '',
-    linkedin: ''
+    linkedin: '',
+    otp: ''
   });
 
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpMessage, setOtpMessage] = useState('');
 
   // Handle dynamic input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  // Calculate max date for Date of Birth (must be at least 15 years old)
+  const maxDobDate = new Date();
+  maxDobDate.setFullYear(maxDobDate.getFullYear() - 15);
+  const maxDobString = maxDobDate.toISOString().split('T')[0];
 
   // Move to the next step
   const handleNext = (e: React.FormEvent) => {
@@ -63,10 +72,11 @@ export default function SignupPage() {
         
         if (formData.dob) {
            const selectedDate = new Date(formData.dob);
-           const today = new Date();
-           today.setHours(0, 0, 0, 0);
-           if (selectedDate > today) {
-             errors.dob = "Date of birth cannot be in the future.";
+           const minAgeDate = new Date();
+           minAgeDate.setFullYear(minAgeDate.getFullYear() - 15);
+           
+           if (selectedDate > minAgeDate) {
+             errors.dob = "You must be at least 15 years old to register.";
            }
         }
       }
@@ -100,6 +110,9 @@ export default function SignupPage() {
       if (formData.password !== formData.confirmPassword) {
         errors.confirmPassword = "Passwords do not match.";
       }
+      if (formData.otp.length !== 6) {
+        errors.otp = "Please enter the 6-digit OTP sent to your email.";
+      }
 
       if (Object.keys(errors).length > 0) {
         setFieldErrors(errors);
@@ -124,6 +137,40 @@ export default function SignupPage() {
     setStep(2); // Automatically move to step 2 after selecting a role
   };
 
+  const handleSendOtp = async () => {
+    if (!formData.email) {
+      setFieldErrors({ ...fieldErrors, email: "Please enter your email first." });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setFieldErrors({ ...fieldErrors, email: "Please enter a valid email address." });
+      return;
+    }
+    
+    setSendingOtp(true);
+    setError('');
+    setOtpMessage('');
+    
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to send OTP');
+      
+      setOtpSent(true);
+      setOtpMessage('OTP sent to your email!');
+      setTimeout(() => setOtpMessage(''), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error sending OTP');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   // Final API Submission Logic
   const submitRegistration = async () => {
     setLoading(true);
@@ -136,8 +183,6 @@ export default function SignupPage() {
         fullName: `${formData.firstName} ${formData.lastName}` // Combine for backward compatibility
       };
       
-      console.log("Submitting payload:", payload);
-
       // Make the actual fetch call to our backend signup route
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -251,7 +296,7 @@ export default function SignupPage() {
                     <>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Date of Birth</label>
-                        <input type="date" name="dob" max={new Date().toISOString().split('T')[0]} value={formData.dob} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.dob ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                        <input type="date" name="dob" max={maxDobString} value={formData.dob} onChange={handleChange} required className={`w-full px-4 py-3 border ${fieldErrors.dob ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
                         {fieldErrors.dob && <p className="text-red-500 text-xs mt-1">{fieldErrors.dob}</p>}
                       </div>
                       <div className="md:col-span-2">
@@ -312,9 +357,25 @@ export default function SignupPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter your email" className={`w-full px-4 py-3 border ${fieldErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                    <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2">
+                      <div className="flex-1">
+                        <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter your email" className={`w-full px-4 py-3 border ${fieldErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
+                      </div>
+                      <button type="button" onClick={handleSendOtp} disabled={sendingOtp} className="whitespace-nowrap bg-blue-600 text-white px-6 py-3 rounded font-bold hover:bg-blue-700 transition duration-300 disabled:opacity-70">
+                        {sendingOtp ? 'SENDING...' : 'SEND OTP'}
+                      </button>
+                    </div>
                     {fieldErrors.email && <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>}
+                    {otpMessage && <p className="text-green-600 text-sm mt-2 font-medium">{otpMessage}</p>}
                   </div>
+                  
+                  {otpSent && (
+                    <div className="animate-fade-in-up">
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">6-Digit OTP</label>
+                      <input type="text" name="otp" maxLength={6} value={formData.otp} onChange={handleChange} required placeholder="Enter OTP from your email" className={`w-full px-4 py-3 border ${fieldErrors.otp ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition text-center tracking-widest text-xl`} />
+                      {fieldErrors.otp && <p className="text-red-500 text-xs mt-1">{fieldErrors.otp}</p>}
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
                     <input type="password" name="password" value={formData.password} onChange={handleChange} required minLength={8} placeholder="Create a strong password" className={`w-full px-4 py-3 border ${fieldErrors.password ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'} rounded outline-none transition`} />
@@ -333,7 +394,7 @@ export default function SignupPage() {
                 <button type="button" onClick={handleBack} className="w-1/3 bg-gray-100 text-gray-700 py-3 rounded text-sm font-bold tracking-wide hover:bg-gray-200 transition duration-300">
                   BACK
                 </button>
-                <button type="submit" disabled={loading} className="w-2/3 bg-black text-white py-3 rounded text-sm font-bold tracking-wide hover:bg-gray-800 transition duration-300 disabled:opacity-70">
+                <button type="submit" disabled={loading || (step === 3 && !otpSent)} className="w-2/3 bg-black text-white py-3 rounded text-sm font-bold tracking-wide hover:bg-gray-800 transition duration-300 disabled:opacity-70 disabled:cursor-not-allowed">
                   {step === 2 ? 'CONTINUE' : loading ? 'CREATING...' : 'COMPLETE SIGNUP'}
                 </button>
               </div>
