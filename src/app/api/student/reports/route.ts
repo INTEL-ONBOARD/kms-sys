@@ -14,11 +14,13 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const format = searchParams.get("format");
     const requestedSemester = searchParams.get("semester") || "All";
+    const courseFilter = searchParams.get("courseId") || searchParams.get("course") || undefined;
 
     const reportData = await ReportService.getStudentReport(
       authUser.id,
       authUser.name || "",
-      requestedSemester
+      requestedSemester,
+      courseFilter
     );
 
     if (format === "csv") {

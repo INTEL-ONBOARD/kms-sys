@@ -126,6 +126,10 @@ export async function POST(req: NextRequest) {
       throw new BadRequestError("Missing required material metadata");
     }
 
+    if (fileSize > 50 * 1024 * 1024) {
+      throw new BadRequestError("File exceeds maximum allowed lecturer upload limit of 50MB");
+    }
+
     await connectToDatabase();
 
     const course = await Course.findById(courseId);

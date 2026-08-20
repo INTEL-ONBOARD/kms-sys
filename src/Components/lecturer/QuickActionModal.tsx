@@ -141,8 +141,8 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   }
 
   const handleFileSelect = (file: File) => {
-    if (file.size > 250 * 1024 * 1024) {
-      toast.error("File exceeds maximum allowed size of 250MB");
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("File exceeds maximum allowed lecturer upload limit of 50MB");
       return;
     }
     setMaterialFile(file);
@@ -648,7 +648,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                   }`}>
                     <FiUploadCloud className="text-2xl text-blue-600 mb-1" />
                     <p className="text-xs font-bold text-gray-700">Click to upload Assignment PDF / Rubric</p>
-                    <p className="text-[10px] text-gray-400">PDF, DOCX, or ZIP files up to 250MB</p>
+                    <p className="text-[10px] text-gray-400">PDF, DOCX, or ZIP files up to 50MB</p>
                     <input
                       type="file"
                       disabled={isMaxLimitReached}
@@ -656,7 +656,12 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
-                          setAssignmentPdfFile(e.target.files[0]);
+                          const f = e.target.files[0];
+                          if (f.size > 50 * 1024 * 1024) {
+                            toast.error("File exceeds maximum allowed lecturer upload limit of 50MB");
+                            return;
+                          }
+                          setAssignmentPdfFile(f);
                         }
                       }}
                     />
@@ -794,7 +799,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                   />
                   <FiUploadCloud className="text-2xl text-gray-400 mx-auto mb-1" />
                   <p className="text-xs font-bold text-gray-700">Click or drag & drop lecture slides or PDF notes</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Supports PDF, PPTX, DOCX, ZIP up to 250MB</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Supports PDF, PPTX, DOCX, ZIP up to 50MB</p>
                 </div>
               ) : (
                 <div className="p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl space-y-2.5">

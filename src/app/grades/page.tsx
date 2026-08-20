@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   FiChevronDown, 
   FiDownload, 
@@ -62,9 +63,13 @@ interface CourseGrade {
   };
 }
 
-export default function GradesPage() {
+function GradesContent() {
+  const searchParams = useSearchParams();
+  const initialCourseParam = searchParams.get('courseId') || searchParams.get('course') || '';
+
   const [selectedSemester, setSelectedSemester] = useState('All');
   const [selectedCourse, setSelectedCourse] = useState('All');
+  const [activeCourseFilter, setActiveCourseFilter] = useState(initialCourseParam);
   const [activeTab, setActiveTab] = useState<'all' | 'completed' | 'in_progress'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -92,13 +97,19 @@ export default function GradesPage() {
     cgpa: "0.0",
   });
 
-  const fetchGrades = async () => {
+  const fetchGrades = async (targetCourseFilter?: string) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/student/reports');
+      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
+      const url = filterToUse && filterToUse !== 'All'
+        ? `/api/student/reports?courseId=${encodeURIComponent(filterToUse)}`
+        : '/api/student/reports';
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setGradesData(data.allGrades || data.grades || []);
+        const gradesList: CourseGrade[] = data.allGrades || data.grades || [];
+        setGradesData(gradesList);
         setAvailableSemesters(data.availableSemesters || ["Semester 01", "Semester 02"]);
         setAvailableCourses(data.availableCourses || []);
         setReportApproved(!!data.reportApproved);
@@ -108,6 +119,10 @@ export default function GradesPage() {
           gpa: data.gpa || "0.0",
           cgpa: data.cgpa || "0.0",
         });
+
+        if (filterToUse && gradesList.length > 0) {
+          setSelectedCourse(gradesList[0].title);
+        }
       }
     } catch (err) {
       console.error("Failed to load grades data:", err);
@@ -118,7 +133,7 @@ export default function GradesPage() {
 
   useEffect(() => {
     fetchGrades();
-  }, []);
+  }, [activeCourseFilter]);
 
   // Filter grades based on Semester, Course, Active Tab, and Search Query
   const filteredGrades = useMemo(() => {
@@ -274,7 +289,7 @@ export default function GradesPage() {
 
             <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
               <button
-                onClick={fetchGrades}
+                onClick={() => fetchGrades()}
                 title="Refresh Grades"
                 className="p-2.5 text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 border border-gray-200 rounded-xl transition cursor-pointer"
               >
@@ -390,6 +405,38 @@ export default function GradesPage() {
             </div>
 
           </div>
+
+          {/* Active Course Workspace Filter Banner */}
+          {activeCourseFilter && activeCourseFilter !== "All" && (
+            <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                  <FiBookOpen />
+                </div>
+                <div>
+                  <span className="font-extrabold text-[#1E293B]">Course Workspace Filter:</span>{" "}
+                  <span className="text-blue-600 font-bold">
+                    {gradesData.length > 0 ? gradesData[0].title : activeCourseFilter}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Displaying grade breakdown and verified evaluations for this course workspace.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.history.replaceState({}, '', '/grades');
+                  setActiveCourseFilter('');
+                  setSelectedCourse('All');
+                  fetchGrades('All');
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1.5"
+              >
+                <FiX /> Show All Courses
+              </button>
+            </div>
+          )}
 
           {/* Filter, Search & View Controls Bar */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
@@ -900,5 +947,19 @@ export default function GradesPage() {
       )}
 
     </div>
+  );
+}
+
+export default function GradesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+    >
+      <GradesContent />
+    </Suspense>
   );
 }

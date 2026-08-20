@@ -557,7 +557,7 @@ export default function CoursesPage() {
                       </button>
 
                       <Link 
-                        href="/assignments"
+                        href={`/assignments?courseId=${selectedCourse.course?._id || ''}&course=${encodeURIComponent(selectedCourse.course?.title || '')}`}
                         className="p-4 bg-white border border-gray-200 hover:border-[#5A67D8] hover:shadow-md rounded-2xl transition group flex flex-col justify-between"
                       >
                         <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#ED8936] flex items-center justify-center text-lg mb-2">
@@ -573,7 +573,7 @@ export default function CoursesPage() {
                       </Link>
 
                       <Link 
-                        href="/calendar"
+                        href={`/calendar?courseId=${selectedCourse.course?._id || ''}&course=${encodeURIComponent(selectedCourse.course?.title || '')}`}
                         className="p-4 bg-white border border-gray-200 hover:border-[#5A67D8] hover:shadow-md rounded-2xl transition group flex flex-col justify-between"
                       >
                         <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#3182CE] flex items-center justify-center text-lg mb-2">
@@ -589,7 +589,7 @@ export default function CoursesPage() {
                       </Link>
 
                       <Link 
-                        href="/grades"
+                        href={`/grades?courseId=${selectedCourse.course?._id || ''}&course=${encodeURIComponent(selectedCourse.course?.title || '')}`}
                         className="p-4 bg-white border border-gray-200 hover:border-[#5A67D8] hover:shadow-md rounded-2xl transition group flex flex-col justify-between"
                       >
                         <div className="w-9 h-9 rounded-xl bg-indigo-50 text-[#5A67D8] flex items-center justify-center text-lg mb-2">
@@ -833,7 +833,7 @@ export default function CoursesPage() {
                           </div>
 
                           <Link
-                            href={`/assignments?briefId=${a._id}`}
+                            href={`/assignments?briefId=${a._id}&courseId=${selectedCourse.course?._id || ''}&course=${encodeURIComponent(selectedCourse.course?.title || '')}`}
                             className="px-4 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-[#434190] transition flex items-center gap-1 flex-shrink-0"
                           >
                             <FiBookOpen /> View Brief
