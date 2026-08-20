@@ -5,7 +5,6 @@ import AdminSidebar from '@/Components/AdminSidebar';
 import DashHeader from '@/Components/DashHeader';
 import { FiUserPlus, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 
-// Define TypeScript interfaces for the fetched data to ensure type safety
 interface User {
   _id: string;
   name: string;
@@ -19,43 +18,28 @@ interface Course {
 }
 
 export default function ModerationPage() {
-  // ==========================================
-  // STATE MANAGEMENT FOR COURSE ASSIGNMENT
-  // ==========================================
-  
-  // States to store fetched data for dropdowns
   const [students, setStudents] = useState<User[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   
-  // States to hold the user's current selections
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   
-  // UI states for loading indicators and feedback messages
   const [isAssigning, setIsAssigning] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
-  // ==========================================
-  // FETCH DATA ON COMPONENT MOUNT
-  // ==========================================
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        // 1. Fetch Users Data
-        const usersRes = await fetch('/api/admin/users');
+        const usersRes = await fetch('/api/admin/users?role=student&limit=1000');
         if (usersRes.ok) {
           const usersData = await usersRes.json();
-          // Extract users array gracefully, supporting both direct arrays and wrapped objects
           const usersList = Array.isArray(usersData) ? usersData : usersData.users || [];
-          // Filter to only include users with the 'student' role
           setStudents(usersList.filter((u: User) => u.role === 'student'));
         }
 
-        // 2. Fetch Courses Data
         const coursesRes = await fetch('/api/admin/courses');
         if (coursesRes.ok) {
           const coursesData = await coursesRes.json();
-          // Extract courses array gracefully
           const coursesList = Array.isArray(coursesData) ? coursesData : coursesData.courses || [];
           setCourses(coursesList);
         }
@@ -65,80 +49,64 @@ export default function ModerationPage() {
     };
 
     fetchDropdownData();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-  // ==========================================
-  // FORM SUBMISSION HANDLER
-  // ==========================================
   const handleAssignCourse = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent default form reload
+    e.preventDefault();
     
-    // Validate that both fields are selected
     if (!selectedStudent || !selectedCourse) {
       setMessage({ text: 'Please select both a student and a course.', type: 'error' });
       return;
     }
 
     setIsAssigning(true);
-    setMessage({ text: '', type: '' }); // Clear previous messages
+    setMessage({ text: '', type: '' });
 
     try {
-      // Send a POST request to our Enrollment API
       const res = await fetch('/api/admin/enrollments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: selectedStudent, courseId: selectedCourse })
       });
-
       const data = await res.json();
-
-      // Handle successful assignment
+      
       if (res.ok) {
         setMessage({ text: 'Course assigned successfully!', type: 'success' });
-        // Reset dropdowns to default state after success
         setSelectedStudent('');
         setSelectedCourse('');
       } else {
-        // Handle API errors (e.g., student already enrolled)
         setMessage({ text: data.message || 'Failed to assign course.', type: 'error' });
       }
     } catch (error) {
       setMessage({ text: 'An unexpected error occurred. Please try again.', type: 'error' });
     } finally {
-      setIsAssigning(false); // Stop loading state
+      setIsAssigning(false);
     }
   };
 
+
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
-      
-      {/* Left Sidebar */}
       <AdminSidebar />
-
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        
-        {/* Top Navigation Header */}
         <DashHeader />
-
-        {/* Scrollable Main Content Area */}
+        
         <div className="flex-1 overflow-y-auto px-8 pb-12 pt-6">
-          
-          {/* Page Title & Description */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">Manual Course Enrollment</h1>
             <p className="text-[#A0AEC0] font-medium mt-1">Assign courses directly to registered students and manage enrollment access</p>
           </div>
 
-          {/* ========================================= */}
-          {/* SECTION: MANUAL COURSE ASSIGNMENT */}
-          {/* ========================================= */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-              <FiUserPlus className="mr-2 text-indigo-600" /> Manual Course Enrollment
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">Assign a specific course to a student. This action will immediately grant the student access to course materials, assignments, and timetable schedules.</p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 flex items-center">
+                  <FiUserPlus className="mr-2 text-indigo-600" /> Manual Course Enrollment
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">Assign a specific course to an individual student.</p>
+              </div>
+            </div>
 
-            {/* Display Success/Error Feedback Messages */}
             {message.text && (
               <div className={`p-4 rounded-lg mb-6 flex items-center text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                 {message.type === 'success' ? <FiCheckCircle className="mr-2 text-lg" /> : <FiAlertCircle className="mr-2 text-lg" />}
@@ -146,10 +114,8 @@ export default function ModerationPage() {
               </div>
             )}
 
-            {/* Assignment Form */}
             <form onSubmit={handleAssignCourse} className="flex flex-col md:flex-row gap-4 items-end">
               
-              {/* Student Selection Dropdown */}
               <div className="flex-1 w-full">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Student</label>
                 <select 
@@ -166,7 +132,6 @@ export default function ModerationPage() {
                 </select>
               </div>
 
-              {/* Course Selection Dropdown */}
               <div className="flex-1 w-full">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Course</label>
                 <select 
@@ -183,13 +148,12 @@ export default function ModerationPage() {
                 </select>
               </div>
 
-              {/* Submit Button */}
               <button 
                 type="submit" 
                 disabled={isAssigning}
                 className="bg-[#5551FF] hover:bg-[#433fd8] text-white font-bold py-3 px-6 rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
-                {isAssigning ? 'Assigning...' : 'Assign Course'}
+                {isAssigning ? 'Processing...' : 'Assign Course'}
               </button>
             </form>
           </div>
