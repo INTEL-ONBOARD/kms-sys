@@ -13,7 +13,8 @@ import User from "@/models/User";
 export async function getStudentReport(
   userId: string,
   userName: string,
-  requestedSemester = "All"
+  requestedSemester = "All",
+  courseFilter?: string
 ) {
   await connectToDatabase();
 
@@ -194,12 +195,27 @@ export async function getStudentReport(
   const availableSemesters = Array.from(new Set(allGrades.map((g) => g.semester))).sort();
   const availableCourses = Array.from(new Set(allGrades.map((g) => g.title))).sort();
 
-  const filteredGrades =
+  let filteredGrades =
     requestedSemester === "All" ||
     requestedSemester === "All Semesters" ||
     requestedSemester === "Select"
       ? allGrades
       : allGrades.filter((g) => g.semester === requestedSemester);
+
+  if (courseFilter && courseFilter !== "All" && courseFilter !== "all") {
+    const filterLower = courseFilter.toLowerCase();
+    filteredGrades = filteredGrades.filter((g: any) => {
+      const cId = g.courseId?.toString();
+      const title = (g.title || "").toLowerCase();
+      const code = (g.code || "").toLowerCase();
+      return (
+        cId === courseFilter ||
+        title === filterLower ||
+        title.includes(filterLower) ||
+        code === filterLower
+      );
+    });
+  }
 
   const completedCourses = allGrades.filter(
     (g: any) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"

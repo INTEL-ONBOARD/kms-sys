@@ -126,6 +126,30 @@ export default function LecturerExamsPage() {
     });
   };
 
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const formatTimeRange = (dateStr: string, durationMins: number = 120) => {
+    const start = new Date(dateStr);
+    const end = new Date(start.getTime() + (durationMins || 120) * 60 * 1000);
+    const startFormatted = start.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const endFormatted = end.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${startFormatted} – ${endFormatted}`;
+  };
+
   // Filtered exams
   const filteredExams = useMemo(() => {
     return exams.filter((e) => {
@@ -409,10 +433,10 @@ export default function LecturerExamsPage() {
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 font-semibold bg-gray-50/70 p-3 rounded-xl border border-gray-100">
-                    <span className="flex items-center gap-1.5"><FiCalendar className="text-purple-600" /> {formatDate(e.date)}</span>
-                    <span className="flex items-center gap-1.5"><FiClock className="text-purple-600" /> {e.duration} mins</span>
-                    <span className="flex items-center gap-1.5"><FiMapPin className="text-purple-600" /> {e.location || "Online"}</span>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600 font-semibold bg-gray-50/70 p-3 rounded-xl border border-gray-100">
+                    <span className="flex items-center gap-1.5" title="Exam Date"><FiCalendar className="text-purple-600" /> {formatDate(e.date)}</span>
+                    <span className="flex items-center gap-1.5" title="Exam Time Window"><FiClock className="text-purple-600" /> {formatTimeRange(e.date, e.duration)}</span>
+                    <span className="flex items-center gap-1.5" title="Venue / Location"><FiMapPin className="text-purple-600" /> {e.location || "Online"}</span>
                   </div>
                 </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   FiCalendar, 
@@ -14,7 +15,8 @@ import {
   FiBookOpen, 
   FiInfo,
   FiFileText,
-  FiExternalLink
+  FiExternalLink,
+  FiX
 } from 'react-icons/fi';
 import { MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -349,8 +351,11 @@ interface LiveClassItem {
   status: string;
 }
 
-export default function CalendarPage() {
+function CalendarContent() {
   const toast = useToast();
+  const searchParams = useSearchParams();
+  const initialCourseParam = searchParams.get('courseId') || searchParams.get('course') || '';
+
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [exams, setExams] = useState<ExamItem[]>([]);
   const [liveClasses, setLiveClasses] = useState<LiveClassItem[]>([]);
@@ -358,12 +363,18 @@ export default function CalendarPage() {
   const [timetableMode, setTimetableMode] = useState<'Week' | 'Monthly' | 'List'>('Week');
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'lecture' | 'live_class' | 'exam'>('all');
   const [selectedCourse, setSelectedCourse] = useState('All');
+  const [activeCourseFilter, setActiveCourseFilter] = useState(initialCourseParam);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchTimetableData = async () => {
+  const fetchTimetableData = async (targetCourseFilter?: string) => {
     setLoading(true);
     try {
-      const calRes = await fetch('/api/student/calendar');
+      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
+      const url = filterToUse && filterToUse !== 'All'
+        ? `/api/student/calendar?courseId=${encodeURIComponent(filterToUse)}`
+        : '/api/student/calendar';
+
+      const calRes = await fetch(url);
       if (calRes.ok) {
         const calData = await calRes.json();
         const payload = calData.data || calData;
@@ -383,7 +394,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetchTimetableData();
-  }, []);
+  }, [activeCourseFilter]);
 
   // Distinct courses for dropdown
   const courseList = useMemo(() => {
@@ -492,7 +503,7 @@ export default function CalendarPage() {
               </div>
 
               <button
-                onClick={fetchTimetableData}
+                onClick={() => fetchTimetableData()}
                 title="Refresh Timetable"
                 className="p-2.5 text-gray-400 hover:text-[#5A67D8] bg-white border border-gray-100 hover:border-[#5A67D8] rounded-xl shadow-sm transition"
               >
@@ -500,6 +511,38 @@ export default function CalendarPage() {
               </button>
             </div>
           </div>
+
+          {/* Active Course Workspace Filter Banner */}
+          {activeCourseFilter && activeCourseFilter !== "All" && (
+            <div className="mb-5 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#5A67D8] text-white flex items-center justify-center text-xs font-bold">
+                  <FiBookOpen />
+                </div>
+                <div>
+                  <span className="font-extrabold text-[#2D3748]">Course Schedule Filter:</span>{" "}
+                  <span className="text-[#5A67D8] font-bold">
+                    {courseList.length > 0 ? courseList[0] : activeCourseFilter}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Showing lectures, live classes, and exams strictly for this course workspace.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.history.replaceState({}, '', '/calendar');
+                  setActiveCourseFilter('');
+                  setSelectedCourse('All');
+                  fetchTimetableData('All');
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-[#5A67D8] border border-indigo-200 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1.5"
+              >
+                <FiX /> Show All Courses
+              </button>
+            </div>
+          )}
 
           {/* Quick Navigation Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -826,5 +869,19 @@ export default function CalendarPage() {
       </main>
 
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-[#5A67D8] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+    >
+      <CalendarContent />
+    </Suspense>
   );
 }

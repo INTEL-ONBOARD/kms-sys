@@ -30,7 +30,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/webp",
 ]);
 
-const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
+const MAX_STUDENT_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_LECTURER_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 /**
  * Generates an authenticated pre-signed Cloudflare R2 / S3 upload URL.
@@ -45,8 +46,12 @@ export async function generateUploadUrl(
     );
   }
 
-  if (input.fileSize && input.fileSize > MAX_FILE_SIZE) {
-    throw new BadRequestError("File exceeds maximum allowed size of 250MB.");
+  const isStudent = user?.role === "student";
+  const maxAllowedSize = isStudent ? MAX_STUDENT_FILE_SIZE : MAX_LECTURER_FILE_SIZE;
+  const maxAllowedLabel = isStudent ? "10MB for students" : "50MB for lecturers";
+
+  if (input.fileSize && input.fileSize > maxAllowedSize) {
+    throw new BadRequestError(`File exceeds maximum allowed size of ${maxAllowedLabel}.`);
   }
 
   if (user?.role === "lecturer") {
@@ -170,6 +175,15 @@ export async function getMaterialFileUrl(
     if (!isEnrolled) {
       throw new ForbiddenError("Access denied: You are not enrolled in this course");
     }
+  }
+
+  // External link (e.g. Google Drive recording link) bypasses R2 signed URL
+  if (
+    material.fileUrl &&
+    (material.fileUrl.startsWith("http://") || material.fileUrl.startsWith("https://")) &&
+    (material.fileKey?.startsWith("external-link") || material.materialType === "video")
+  ) {
+    return { signedUrl: material.fileUrl, material };
   }
 
   const cleanFileName = (material.fileName || "material").replace(/["\\]/g, "");

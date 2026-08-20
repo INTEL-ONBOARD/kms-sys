@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   FiPlay, 
@@ -44,21 +45,34 @@ interface LiveSession {
   isPast: boolean;
 }
 
-export default function RecordingsPage() {
+function RecordingsContent() {
   const toast = useToast();
+  const searchParams = useSearchParams();
+  const initialCourseParam = searchParams.get('courseId') || searchParams.get('course') || '';
+
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState('All');
+  const [activeCourseFilter, setActiveCourseFilter] = useState(initialCourseParam);
   const [searchQuery, setSearchQuery] = useState('');
   const [watchingRecording, setWatchingRecording] = useState<LiveSession | null>(null);
 
-  const fetchRecordings = async () => {
+  const fetchRecordings = async (targetCourseFilter?: string) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/student/live-classes');
+      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
+      const url = filterToUse && filterToUse !== 'All'
+        ? `/api/student/live-classes?courseId=${encodeURIComponent(filterToUse)}`
+        : '/api/student/live-classes';
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setSessions(data.allSessions || []);
+        const list = data.allSessions || [];
+        setSessions(list);
+        if (filterToUse && list.length > 0) {
+          setSelectedCourse(list[0].courseTitle);
+        }
       } else {
         toast.error("Failed to load lecture recordings");
       }
@@ -72,7 +86,7 @@ export default function RecordingsPage() {
 
   useEffect(() => {
     fetchRecordings();
-  }, []);
+  }, [activeCourseFilter]);
 
   // Distinct courses with recorded sessions
   const pastSessions = useMemo(() => {
@@ -154,7 +168,7 @@ export default function RecordingsPage() {
               </div>
 
               <button
-                onClick={fetchRecordings}
+                onClick={() => fetchRecordings()}
                 title="Refresh recordings"
                 className="p-2.5 text-gray-400 hover:text-purple-600 bg-white border border-gray-100 hover:border-purple-300 rounded-xl shadow-sm transition"
               >
@@ -162,6 +176,38 @@ export default function RecordingsPage() {
               </button>
             </div>
           </div>
+
+          {/* Active Course Workspace Filter Banner */}
+          {activeCourseFilter && activeCourseFilter !== "All" && (
+            <div className="mb-6 p-3.5 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-bold">
+                  <FiBookOpen />
+                </div>
+                <div>
+                  <span className="font-extrabold text-[#2D3748]">Course Workspace Filter:</span>{" "}
+                  <span className="text-purple-600 font-bold">
+                    {pastSessions.length > 0 ? pastSessions[0].courseTitle : activeCourseFilter}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Displaying lecture archives and cloud recordings strictly for this course.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.history.replaceState({}, '', '/recordings');
+                  setActiveCourseFilter('');
+                  setSelectedCourse('All');
+                  fetchRecordings('All');
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-600 border border-purple-200 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1.5"
+              >
+                <FiX /> Show All Courses
+              </button>
+            </div>
+          )}
 
           {/* Context Banner */}
           <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-purple-900 text-xs mb-8">
@@ -292,6 +338,9 @@ export default function RecordingsPage() {
                 const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
                 const embedUrl = ytMatch && ytMatch[1] ? `https://www.youtube.com/embed/${ytMatch[1]}` : null;
 
+                const driveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
+                const driveEmbedUrl = driveMatch && driveMatch[1] ? `https://drive.google.com/file/d/${driveMatch[1]}/preview` : null;
+
                 if (embedUrl) {
                   return (
                     <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-lg border border-gray-800">
@@ -302,6 +351,32 @@ export default function RecordingsPage() {
                         allowFullScreen
                         className="w-full h-full border-0"
                       />
+                    </div>
+                  );
+                }
+
+                if (driveEmbedUrl) {
+                  return (
+                    <div className="space-y-2">
+                      <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-lg border border-gray-800">
+                        <iframe
+                          src={driveEmbedUrl}
+                          title={watchingRecording.title}
+                          allow="autoplay; encrypted-media; picture-in-picture"
+                          allowFullScreen
+                          className="w-full h-full border-0"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <a
+                          href={watchingRecording.recordingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1 transition"
+                        >
+                          <FiExternalLink /> Open in Google Drive
+                        </a>
+                      </div>
                     </div>
                   );
                 }
@@ -319,7 +394,7 @@ export default function RecordingsPage() {
                       rel="noopener noreferrer"
                       className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
                     >
-                      <FiExternalLink className="text-sm" /> Open Lecture Video Stream
+                      <FiExternalLink className="text-sm" /> Open Lecture Recording Link
                     </a>
                   </div>
                 );
@@ -387,5 +462,19 @@ export default function RecordingsPage() {
       )}
 
     </div>
+  );
+}
+
+export default function RecordingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+    >
+      <RecordingsContent />
+    </Suspense>
   );
 }

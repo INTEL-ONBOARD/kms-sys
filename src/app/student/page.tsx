@@ -599,7 +599,7 @@ export default function DashboardPage() {
                             {exam.title}
                           </div>
                           <span className="text-xs text-[#A0AEC0] ml-5 mt-0.5">
-                            {daysUntil(exam.date)} &middot; {formatDate(exam.date)} &middot; {exam.duration} min &middot; {exam.location}
+                            {daysUntil(exam.date)} &middot; {formatDate(exam.date)} ({formatTime(exam.date)} – {formatTime(new Date(new Date(exam.date).getTime() + (exam.duration || 120) * 60000).toISOString())}) &middot; {exam.location}
                           </span>
                         </div>
                       </div>

@@ -43,6 +43,7 @@ export default function MaterialUploadModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [materialType, setMaterialType] = useState<"notes" | "slides" | "tutorial" | "assignment" | "video" | "other">("notes");
+  const [recordingLink, setRecordingLink] = useState("");
   
   // File & Upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,9 +98,9 @@ export default function MaterialUploadModal({
   }
 
   const handleFileSelect = (file: File) => {
-    // 250MB limit
-    if (file.size > 250 * 1024 * 1024) {
-      setErrorMessage("File exceeds the maximum limit of 250MB.");
+    // 50MB lecturer limit
+    if (file.size > 50 * 1024 * 1024) {
+      setErrorMessage("File exceeds the maximum lecturer upload limit of 50MB.");
       return;
     }
     setSelectedFile(file);
@@ -138,6 +139,55 @@ export default function MaterialUploadModal({
 
     if (!title.trim()) {
       toast.error("Please enter a material title");
+      return;
+    }
+
+    // Link-only for lecture recordings
+    if (materialType === "video") {
+      if (!recordingLink.trim()) {
+        toast.error("Please provide a valid recording link (e.g. Google Drive link)");
+        return;
+      }
+
+      try {
+        setErrorMessage("");
+        setUploadState("saving_metadata");
+        setUploadProgress(70);
+
+        const metaRes = await fetch("/api/materials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            description: description.trim(),
+            courseId: selectedCourseId,
+            materialType: "video",
+            fileName: title.trim() + " (Recording Link)",
+            fileKey: `external-link-${Date.now()}`,
+            fileUrl: recordingLink.trim(),
+            fileSize: 0,
+            mimeType: "video/mp4",
+          }),
+        });
+
+        if (!metaRes.ok) {
+          const errJson = await metaRes.json();
+          throw new Error(errJson.message || errJson.error || "Failed to save recording link");
+        }
+
+        setUploadState("success");
+        setUploadProgress(100);
+        toast.success(`Lecture recording link for "${title}" published successfully!`);
+
+        setTimeout(() => {
+          if (onSuccess) onSuccess();
+          onClose();
+        }, 800);
+      } catch (err: any) {
+        setUploadState("error");
+        setErrorMessage(err.message || "An unexpected error occurred.");
+        toast.error(err.message || "Failed to save recording link");
+      }
       return;
     }
 
@@ -364,76 +414,101 @@ export default function MaterialUploadModal({
             />
           </div>
 
-          {/* Drag & Drop File Upload Area */}
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
-              Attach File <span className="text-red-500">*</span>
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              disabled={isUploading}
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  handleFileSelect(e.target.files[0]);
-                }
-              }}
-              className="hidden"
-            />
-
-            {!selectedFile ? (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition ${
-                  isDragging
-                    ? "border-[#5A67D8] bg-[#EEF2FF]/50"
-                    : "border-gray-200 hover:border-gray-300 bg-gray-50/50 hover:bg-gray-50"
-                }`}
-              >
-                <div className="w-10 h-10 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-2 text-lg">
-                  <FiUploadCloud />
-                </div>
-                <p className="text-xs font-bold text-gray-700">
-                  Click to browse or drag and drop your file here
-                </p>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Supported: PDF, PPTX, DOCX, ZIP, MP4, MP3 &middot; Max size: 250 MB
-                </p>
+          {/* Drag & Drop File Upload Area OR Recording Link Input */}
+          {materialType === "video" ? (
+            <div className="space-y-2 p-4 bg-purple-50/50 border border-purple-100 rounded-2xl animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-[#1E293B]">
+                  Lecture Recording Link <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
+                  Link Only (Drive / Zoom / YouTube)
+                </span>
               </div>
-            ) : (
-              <div className="flex items-center justify-between p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-9 h-9 rounded-lg bg-indigo-100 text-[#5A67D8] flex items-center justify-center text-base shrink-0 font-bold">
-                    <FiFile />
-                  </div>
-                  <div className="truncate">
-                    <p className="text-xs font-bold text-gray-800 truncate">
-                      {selectedFile.name}
-                    </p>
-                    <p className="text-[10px] text-gray-400">
-                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB &middot; {selectedFile.type || "file"}
-                    </p>
-                  </div>
-                </div>
+              <input
+                type="url"
+                required
+                disabled={isUploading}
+                placeholder="https://drive.google.com/file/d/... or Zoom / YouTube link"
+                value={recordingLink}
+                onChange={(e) => setRecordingLink(e.target.value)}
+                className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2.5 text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+              />
+              <p className="text-[10px] text-purple-700 font-medium leading-relaxed">
+                ℹ️ Lecture recordings are attached via cloud links only (e.g. Google Drive, Zoom Cloud, YouTube, OneDrive). Direct video file upload is disabled.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Attach File <span className="text-red-500">*</span>
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                disabled={isUploading}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleFileSelect(e.target.files[0]);
+                  }
+                }}
+                className="hidden"
+              />
 
-                {!isUploading && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                    className="p-1 text-gray-400 hover:text-red-500 rounded-md transition"
-                  >
-                    <FiX className="text-base" />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              {!selectedFile ? (
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition ${
+                    isDragging
+                      ? "border-[#5A67D8] bg-[#EEF2FF]/50"
+                      : "border-gray-200 hover:border-gray-300 bg-gray-50/50 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-2 text-lg">
+                    <FiUploadCloud />
+                  </div>
+                  <p className="text-xs font-bold text-gray-700">
+                    Click to browse or drag and drop your file here
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Supported: PDF, PPTX, DOCX, ZIP &middot; Max size: 50 MB
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-[#F7FAFC] border border-gray-200 rounded-xl">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-100 text-[#5A67D8] flex items-center justify-center text-base shrink-0 font-bold">
+                      <FiFile />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-xs font-bold text-gray-800 truncate">
+                        {selectedFile.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB &middot; {selectedFile.type || "file"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isUploading && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 rounded-md transition"
+                    >
+                      <FiX className="text-base" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Upload Progress Status */}
           {isUploading && (

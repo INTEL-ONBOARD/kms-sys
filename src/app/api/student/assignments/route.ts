@@ -6,7 +6,17 @@ import * as AssignmentService from "@/server/services/assignment.service";
 export async function GET(req: NextRequest) {
   try {
     const authUser = await requireAuth(req);
-    const result = await AssignmentService.getStudentAssignments(authUser.id);
+    const { searchParams } = new URL(req.url);
+    const courseFilter = searchParams.get("courseId") || searchParams.get("course") || undefined;
+    const search = searchParams.get("search") || searchParams.get("q") || undefined;
+    const status = searchParams.get("status") || searchParams.get("tab") || undefined;
+
+    const result = await AssignmentService.getStudentAssignments(
+      authUser.id,
+      courseFilter,
+      search,
+      status
+    );
     return successResponse(result, undefined, 200);
   } catch (error) {
     return handleApiError(error, "GET /api/student/assignments");

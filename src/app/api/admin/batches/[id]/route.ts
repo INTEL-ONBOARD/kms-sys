@@ -7,14 +7,16 @@ import { BadRequestError, NotFoundError } from "@/server/core/errors";
 import mongoose from "mongoose";
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  params: Promise<{
+    id: string;
+  }>;
 }
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     await requireRole(req, ["super_admin", "admin"]);
     
-    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestError("Invalid batch ID format");
     }
@@ -31,16 +33,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     
     return successResponse({ batch }, undefined, 200);
   } catch (error) {
-    const p = await params.catch(() => ({ id: "unknown" }));
-    return handleApiError(error, `GET /api/admin/batches/${p.id}`);
+    return handleApiError(error, `GET /api/admin/batches/${id}`);
   }
 }
 
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     await requireRole(req, ["super_admin", "admin"]);
     
-    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestError("Invalid batch ID format");
     }
@@ -69,16 +70,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     
     return successResponse({ batch: updatedBatch }, "Batch updated successfully", 200);
   } catch (error) {
-    const p = await params.catch(() => ({ id: "unknown" }));
-    return handleApiError(error, `PUT /api/admin/batches/${p.id}`);
+    return handleApiError(error, `PUT /api/admin/batches/${id}`);
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     await requireRole(req, ["super_admin", "admin"]);
     
-    const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new BadRequestError("Invalid batch ID format");
     }
@@ -93,7 +93,6 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     
     return successResponse({ id }, "Batch deleted successfully", 200);
   } catch (error) {
-    const p = await params.catch(() => ({ id: "unknown" }));
-    return handleApiError(error, `DELETE /api/admin/batches/${p.id}`);
+    return handleApiError(error, `DELETE /api/admin/batches/${id}`);
   }
 }
