@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
 import Otp from "@/models/Otp";
+import Batch from "@/models/Batch";
 import { BadRequestError, NotFoundError, ConflictError } from "../core/errors";
 import {
   SignupInput,
@@ -41,6 +42,41 @@ export async function signup(input: SignupInput) {
   });
 
   await Otp.deleteOne({ _id: otpRecord._id });
+
+  // --- Auto-Batching Logic ---
+  if (newUser.role === "student") {
+    let activeBatch = await Batch.findOne({ isActive: true });
+
+    if (!activeBatch) {
+      const batchCount = await Batch.countDocuments();
+      activeBatch = await Batch.create({
+        name: `Batch ${batchCount + 1}`,
+        description: "Auto-generated batch",
+        isActive: true,
+        maxCapacity: 50,
+        students: []
+      });
+    }
+
+    activeBatch.students.push(newUser._id);
+
+    if (activeBatch.students.length >= (activeBatch.maxCapacity || 50)) {
+      activeBatch.isActive = false;
+      await activeBatch.save();
+
+      // Rollover: Create the next active batch immediately
+      const batchCount = await Batch.countDocuments();
+      await Batch.create({
+        name: `Batch ${batchCount + 1}`,
+        description: "Auto-generated batch",
+        isActive: true,
+        maxCapacity: 50,
+        students: []
+      });
+    } else {
+      await activeBatch.save();
+    }
+  }
 
   return {
     _id: newUser._id,
