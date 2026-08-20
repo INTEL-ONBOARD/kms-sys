@@ -141,7 +141,7 @@ export async function createExam(
   }
 
   if (!date) {
-    throw new BadRequestError("Exam date is required");
+    throw new BadRequestError("Exam date and start time are required");
   }
 
   const examDate = new Date(date);
@@ -149,11 +149,9 @@ export async function createExam(
     throw new BadRequestError("Invalid date format");
   }
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  if (examDate < startOfToday) {
-    throw new BadRequestError("Exam date cannot be in the past. Please select a valid future date.");
+  // Allow 5 minutes clock skew buffer for network / form submission
+  if (examDate.getTime() < Date.now() - 5 * 60 * 1000) {
+    throw new BadRequestError("Exam date and start time cannot be in the past. Please select a valid future schedule.");
   }
 
   const exam = await Exam.create({
@@ -171,10 +169,27 @@ export async function createExam(
   if (enrollments.length > 0) {
     const course = await Course.findById(targetCourseId).lean();
     const courseTitle = course?.title || "Course";
+    const durMins = Number(duration) || 120;
+    const endExamDate = new Date(examDate.getTime() + durMins * 60 * 1000);
+    const dateFormatted = examDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const startTimeFormatted = examDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const endTimeFormatted = endExamDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
     const notifications = enrollments.map((e) => ({
       userId: e.userId,
       type: "exam",
-      message: `New Exam Scheduled: "${title}" in ${courseTitle} on ${examDate.toLocaleDateString()}`,
+      message: `New Exam Scheduled: "${title}" in ${courseTitle} on ${dateFormatted} (${startTimeFormatted} – ${endTimeFormatted})`,
       link: "/calendar",
     }));
     await Notification.insertMany(notifications);
@@ -202,7 +217,13 @@ export async function updateExam(
 
   const updateFields: Record<string, any> = {};
   if (input.title) updateFields.title = input.title.trim();
-  if (input.date) updateFields.date = new Date(input.date);
+  if (input.date) {
+    const updatedDate = new Date(input.date);
+    if (isNaN(updatedDate.getTime())) {
+      throw new BadRequestError("Invalid date format");
+    }
+    updateFields.date = updatedDate;
+  }
   if (input.duration) updateFields.duration = Number(input.duration);
   if (input.location) updateFields.location = input.location.trim();
   if (input.type) updateFields.type = input.type;
