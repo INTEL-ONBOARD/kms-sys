@@ -19,7 +19,7 @@ export default function AdminSidebar() {
   const adminLinks = [
     { name: 'Dashboard', href: '/admin', icon: <FiHome className="mr-4 text-xl" /> },
     { name: 'User Admin', href: '/admin/users', icon: <FiUsers className="mr-4 text-xl" /> },
-    { name: 'Moderation', href: '/admin/moderation', icon: <FiShield className="mr-4 text-xl" /> },
+    { name: 'Enrollments', href: '/admin/moderation', icon: <FiShield className="mr-4 text-xl" /> },
     { name: 'Courses', href: '/admin/courses', icon: <FiBookOpen className="mr-4 text-xl" /> },
     { name: 'Settings', href: '/admin/settings', icon: <FiSettings className="mr-4 text-xl" /> },
   ];

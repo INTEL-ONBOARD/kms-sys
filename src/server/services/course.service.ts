@@ -138,38 +138,6 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
       finalExamWeight: examSum,
       attendanceWeight: attSum,
     };
-
-    // Automatically sync assessment items into the Assignment collection
-    for (const item of updatePayload.assessmentItems) {
-      const itemType = item.type || "assignment";
-      if (["assignment", "coursework", "quiz", "project"].includes(itemType)) {
-        const existing = await Assignment.findOne({
-          courseId: id,
-          title: item.name,
-        });
-
-        if (!existing) {
-          const categoryName = 
-            itemType === "quiz" 
-              ? "Quiz" 
-              : itemType === "project" 
-              ? "Project" 
-              : itemType === "coursework" 
-              ? "Coursework" 
-              : "Homework";
-
-          await Assignment.create({
-            title: item.name,
-            description: `Continuous assessment component (${item.weight}% Course Weight) as defined in Course Assessment & Grade Breakdown.`,
-            courseId: id,
-            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-            maxPoints: 100,
-            category: categoryName,
-            status: "open",
-          });
-        }
-      }
-    }
   } else if (input.gradingBreakdown !== undefined) {
     updatePayload.gradingBreakdown = {
       assignmentsWeight: typeof input.gradingBreakdown.assignmentsWeight === "number" ? input.gradingBreakdown.assignmentsWeight : 20,

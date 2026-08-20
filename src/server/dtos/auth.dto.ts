@@ -16,6 +16,7 @@ export const signupSchema = z.object({
   expertise: z.string().optional(),
   qualification: z.string().optional(),
   linkedin: z.string().optional(),
+  otp: z.string().length(6, "OTP must be 6 digits"),
 });
 
 export const forgotPasswordSchema = z.object({

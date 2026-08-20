@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
+import Otp from "@/models/Otp";
 import Batch from "@/models/Batch";
 import { BadRequestError, NotFoundError, ConflictError } from "../core/errors";
 import {
@@ -16,6 +17,11 @@ import {
  */
 export async function signup(input: SignupInput) {
   await connectToDatabase();
+
+  const otpRecord = await Otp.findOne({ email: input.email.toLowerCase(), otp: input.otp });
+  if (!otpRecord) {
+    throw new BadRequestError("Invalid or expired OTP.");
+  }
 
   const existingUser = await User.findOne({ email: input.email.toLowerCase() });
   if (existingUser) {
@@ -35,10 +41,12 @@ export async function signup(input: SignupInput) {
     isActivated: true, // Direct signup accounts are auto-activated
   });
 
+  await Otp.deleteOne({ _id: otpRecord._id });
+
   // --- Auto-Batching Logic ---
   if (newUser.role === "student") {
     let activeBatch = await Batch.findOne({ isActive: true });
-    
+
     if (!activeBatch) {
       const batchCount = await Batch.countDocuments();
       activeBatch = await Batch.create({
@@ -51,7 +59,7 @@ export async function signup(input: SignupInput) {
     }
 
     activeBatch.students.push(newUser._id);
-    
+
     if (activeBatch.students.length >= (activeBatch.maxCapacity || 50)) {
       activeBatch.isActive = false;
       await activeBatch.save();

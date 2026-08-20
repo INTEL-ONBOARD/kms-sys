@@ -8,6 +8,7 @@ import LiveClass from "@/models/LiveClass";
 import CourseMaterial from "@/models/CourseMaterial";
 import Submission from "@/models/Submission";
 import User from "@/models/User";
+import Announcement from "@/models/Announcement";
 import { BadRequestError, NotFoundError, ConflictError } from "../core/errors";
 import { PaginationParams, buildPaginationMeta } from "../core/pagination";
 import { EnrollCourseInput } from "../dtos/course.dto";
@@ -21,6 +22,7 @@ Assignment;
 Enrollment;
 Submission;
 User;
+Announcement;
 
 /**
  * Retrieves enrollments for admin/super_admin with populated course and user information.
@@ -122,14 +124,18 @@ export async function getStudentDashboard(userId: string) {
   const courseIds = validEnrollments
     .map((e: any) => e.courseId?._id?.toString())
     .filter(Boolean);
+  const courseObjectIds = courseIds.map((id: string) =>
+    mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+  );
+  const allCourseIds = Array.from(new Set([...courseIds, ...courseObjectIds]));
 
   const now = new Date();
 
   // 2. Upcoming assignments for enrolled courses
   const assignments =
-    courseIds.length > 0
+    allCourseIds.length > 0
       ? await Assignment.find({
-          courseId: { $in: courseIds },
+          courseId: { $in: allCourseIds },
           dueDate: { $gte: now },
           status: "open",
         })
@@ -141,9 +147,9 @@ export async function getStudentDashboard(userId: string) {
 
   // 3. Upcoming exams for enrolled courses
   const exams =
-    courseIds.length > 0
+    allCourseIds.length > 0
       ? await Exam.find({
-          courseId: { $in: courseIds },
+          courseId: { $in: allCourseIds },
           date: { $gte: now },
           status: { $in: ["scheduled", "ongoing"] },
         })
@@ -155,13 +161,16 @@ export async function getStudentDashboard(userId: string) {
 
   // 4. Live / Upcoming classes for enrolled courses
   const liveClasses =
-    courseIds.length > 0
+    allCourseIds.length > 0
       ? await LiveClass.find({
-          courseId: { $in: courseIds },
-          endTime: { $gte: now },
-          status: { $in: ["upcoming", "live"] },
+          courseId: { $in: allCourseIds },
+          status: { $ne: "cancelled" },
+          $or: [
+            { status: { $in: ["upcoming", "live"] } },
+            { endTime: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } },
+          ],
         })
-          .populate("courseId", "title")
+          .populate("courseId", "title category instructor")
           .sort({ startTime: 1 })
           .limit(10)
           .lean()
@@ -169,9 +178,9 @@ export async function getStudentDashboard(userId: string) {
 
   // 5. Recent course materials
   const materials =
-    courseIds.length > 0
+    allCourseIds.length > 0
       ? await CourseMaterial.find({
-          courseId: { $in: courseIds },
+          courseId: { $in: allCourseIds },
           isPublished: true,
         })
           .populate("courseId", "title")
@@ -180,7 +189,20 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 6. Calculate dynamic Credits, Attendance, and GPA
+  // 6. Recent Announcements for enrolled courses
+  const announcements =
+    allCourseIds.length > 0
+      ? await Announcement.find({
+          courseId: { $in: allCourseIds },
+        })
+          .populate("courseId", "title")
+          .populate("lecturerId", "name email")
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .lean()
+      : [];
+
+  // 7. Calculate dynamic Credits, Attendance, and GPA
   let credits = 0;
   let attendance = 0;
   let gpa = "0.0";
@@ -219,7 +241,7 @@ export async function getStudentDashboard(userId: string) {
     }
   }
 
-    const currentUser = await User.findById(userObjectId).select("name email reportApproved").lean();
+  const currentUser = await User.findById(userObjectId).select("name email reportApproved").lean();
 
   return {
     enrollments: validEnrollments,
@@ -227,6 +249,7 @@ export async function getStudentDashboard(userId: string) {
     exams,
     liveClasses,
     materials,
+    announcements,
     credits,
     gpa,
     attendance,
@@ -543,14 +566,59 @@ export async function getStudentLiveClasses(userId: string) {
     $or: [{ userId: userObjectId }, { userId }],
   }).lean();
 
-  const courseIds = enrollments.map((e) => e.courseId);
+  const courseIds = enrollments.map((e) => e.courseId).filter(Boolean);
+  const courseObjectIds = courseIds.map((id: any) =>
+    typeof id === "string" && mongoose.Types.ObjectId.isValid(id)
+      ? new mongoose.Types.ObjectId(id)
+      : id
+  );
+  const allCourseIds = Array.from(new Set([...courseIds, ...courseObjectIds]));
 
   const classes = await LiveClass.find({
-    courseId: { $in: courseIds },
+    courseId: { $in: allCourseIds },
+    status: { $ne: "cancelled" },
   })
-    .populate("courseId", "title instructor")
-    .sort({ startTime: -1 })
+    .populate("courseId", "title category instructor")
+    .populate("materialId", "title fileName fileUrl fileSize mimeType materialType")
+    .populate("materials", "title fileName fileUrl fileSize mimeType materialType")
+    .sort({ startTime: 1 })
     .lean();
 
-  return { classes, liveClasses: classes };
+  const now = new Date();
+  const allSessions = classes.map((c: any) => {
+    const start = new Date(c.startTime);
+    const end = new Date(c.endTime);
+    const isLiveNow = c.status === "live" || (now >= start && now <= end && c.status !== "ended");
+    const isPast = c.status === "ended" || (!isLiveNow && now > end);
+
+    return {
+      _id: c._id.toString(),
+      title: c.title,
+      description: c.description || "",
+      courseId: c.courseId?._id?.toString() || c.courseId?.toString() || "",
+      courseTitle: c.courseId?.title || "Untitled Course",
+      courseCategory: c.courseId?.category || "General",
+      instructor: c.instructor || c.courseId?.instructor || "Course Lecturer",
+      startTime: c.startTime,
+      endTime: c.endTime,
+      startTimeFormatted: start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      endTimeFormatted: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      dateFormatted: start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      dayOfWeek: start.toLocaleDateString("en-US", { weekday: "long" }),
+      meetingLink: c.meetingLink || "",
+      recordingUrl: c.recordingUrl || "",
+      material: c.materialId,
+      materials: c.materials || (c.materialId ? [c.materialId] : []),
+      resources: c.resources || [],
+      status: isLiveNow ? "live" : isPast ? "ended" : (c.status || "upcoming"),
+      isLiveNow,
+      isPast,
+    };
+  });
+
+  return {
+    classes: allSessions,
+    liveClasses: allSessions,
+    allSessions,
+  };
 }
