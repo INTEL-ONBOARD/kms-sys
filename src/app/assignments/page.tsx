@@ -88,13 +88,32 @@ function AssignmentsContent() {
   const [uploadProgressText, setUploadProgressText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAssignments = async (targetCourseFilter?: string) => {
+  const fetchAssignments = async (
+    targetCourseFilter?: string,
+    targetSearch?: string,
+    targetStatus?: string
+  ) => {
     setLoading(true);
     try {
-      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
-      const url = filterToUse && filterToUse !== 'All'
-        ? `/api/student/assignments?courseId=${encodeURIComponent(filterToUse)}`
-        : '/api/student/assignments';
+      const courseToUse = targetCourseFilter !== undefined 
+        ? targetCourseFilter 
+        : (activeCourseFilter || (selectedCourse !== 'All' ? selectedCourse : ''));
+      const searchToUse = targetSearch !== undefined ? targetSearch : searchQuery;
+      const statusToUse = targetStatus !== undefined ? targetStatus : activeTab;
+
+      const params = new URLSearchParams();
+      if (courseToUse && courseToUse !== 'All') {
+        params.set('courseId', courseToUse);
+      }
+      if (searchToUse && searchToUse.trim()) {
+        params.set('search', searchToUse.trim());
+      }
+      if (statusToUse && statusToUse !== 'All') {
+        params.set('status', statusToUse);
+      }
+
+      const queryString = params.toString();
+      const url = `/api/student/assignments${queryString ? `?${queryString}` : ''}`;
 
       const res = await fetch(url);
       if (res.ok) {
@@ -120,38 +139,21 @@ function AssignmentsContent() {
     }
   };
 
+  // Debounced backend search and filter fetch
   useEffect(() => {
-    fetchAssignments();
-  }, [initialBriefId, activeCourseFilter]);
+    const timer = setTimeout(() => {
+      fetchAssignments();
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [initialBriefId, activeCourseFilter, selectedCourse, searchQuery, activeTab]);
 
   // Distinct courses for dropdown
   const courseList = useMemo(() => {
     return Array.from(new Set(assignments.map((a) => a.course).filter(Boolean)));
   }, [assignments]);
 
-  // Filtered assignments based on Tab, Course Filter, and Search
-  const filteredAssignments = useMemo(() => {
-    return assignments.filter((a) => {
-      // 1. Tab filter
-      if (activeTab === 'Pending' && (a.status === 'Submitted' || a.status === 'Graded')) return false;
-      if (activeTab === 'Submitted' && a.status !== 'Submitted') return false;
-      if (activeTab === 'Graded' && a.status !== 'Graded') return false;
-
-      // 2. Course filter
-      if (selectedCourse !== 'All' && a.course !== selectedCourse) return false;
-
-      // 3. Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = a.title.toLowerCase().includes(q);
-        const matchesCourse = a.course.toLowerCase().includes(q);
-        const matchesCategory = a.category.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesCourse && !matchesCategory) return false;
-      }
-
-      return true;
-    });
-  }, [assignments, activeTab, selectedCourse, searchQuery]);
+  const filteredAssignments = assignments;
 
   // Split into Upcoming and Overdue
   const overdueAssignments = useMemo(() => {

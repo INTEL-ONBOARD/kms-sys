@@ -442,7 +442,12 @@ export async function gradeSubmission(input: GradeSubmissionInput) {
  * Retrieves assignments and student submission status for enrolled student courses.
  * Optionally filters by a specific course (ID, title, or category).
  */
-export async function getStudentAssignments(userId: string, courseFilter?: string) {
+export async function getStudentAssignments(
+  userId: string,
+  courseFilter?: string,
+  searchQuery?: string,
+  statusFilter?: string
+) {
   await connectToDatabase();
 
   const userObjectId = mongoose.Types.ObjectId.isValid(userId)
@@ -494,10 +499,36 @@ export async function getStudentAssignments(userId: string, courseFilter?: strin
     }
   }
 
-  const assignments = await Assignment.find({
+  // Construct MongoDB assignment query
+  const assignmentQuery: any = {
     courseId: { $in: courseObjectIds },
     category: { $nin: ["Exam", "Final Exam", "Midterm Exam"] },
-  })
+  };
+
+  // Backend search filter across title, category, description, and course title
+  if (searchQuery && searchQuery.trim()) {
+    const escapedSearch = searchQuery.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchRegex = new RegExp(escapedSearch, "i");
+
+    const matchingCourses = await Course.find({
+      $or: [
+        { title: { $regex: searchRegex } },
+        { category: { $regex: searchRegex } },
+        { code: { $regex: searchRegex } },
+        { instructor: { $regex: searchRegex } },
+      ],
+    }).select("_id").lean();
+    const matchingCourseIds = matchingCourses.map((c: any) => c._id);
+
+    assignmentQuery.$or = [
+      { title: { $regex: searchRegex } },
+      { category: { $regex: searchRegex } },
+      { description: { $regex: searchRegex } },
+      { courseId: { $in: matchingCourseIds } },
+    ];
+  }
+
+  const assignments = await Assignment.find(assignmentQuery)
     .populate({
       path: "courseId",
       select: "title category instructor assessmentItems",
@@ -620,9 +651,17 @@ export async function getStudentAssignments(userId: string, courseFilter?: strin
     };
   });
 
+  let finalAssignments = formattedAssignments;
+  if (statusFilter && statusFilter !== "All" && statusFilter !== "all") {
+    finalAssignments = formattedAssignments.filter((a: any) => {
+      if (statusFilter === "Pending") return a.status === "Pending" || a.status === "Overdue";
+      return a.status.toLowerCase() === statusFilter.toLowerCase();
+    });
+  }
+
   return {
-    assignments: formattedAssignments,
-    total: formattedAssignments.length,
+    assignments: finalAssignments,
+    total: finalAssignments.length,
   };
 }
 
