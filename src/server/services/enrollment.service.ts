@@ -288,7 +288,7 @@ export async function getStudentCourses(userId: string) {
 /**
  * Retrieves calendar schedule, live classes, and exams for enrolled student courses.
  */
-export async function getStudentCalendar(userId: string) {
+export async function getStudentCalendar(userId: string, courseFilter?: string) {
   await connectToDatabase();
 
   const userObjectId = mongoose.Types.ObjectId.isValid(userId)
@@ -298,12 +298,29 @@ export async function getStudentCalendar(userId: string) {
   const enrollments = await Enrollment.find({
     $or: [{ userId: userObjectId }, { userId }],
   })
-    .populate("courseId", "title instructor category schedule colorCode")
+    .populate("courseId", "title instructor category schedule colorCode code")
     .lean();
 
-  const validCourses = enrollments
+  let validCourses = enrollments
     .map((e: any) => e.courseId)
     .filter(Boolean);
+
+  if (courseFilter && courseFilter !== "All" && courseFilter !== "all") {
+    validCourses = validCourses.filter((c: any) => {
+      const cId = c._id?.toString();
+      const title = (c.title || "").toLowerCase();
+      const cat = (c.category || "").toLowerCase();
+      const code = (c.code || "").toLowerCase();
+      const filterLower = courseFilter.toLowerCase();
+      return (
+        cId === courseFilter ||
+        title === filterLower ||
+        title.includes(filterLower) ||
+        cat === filterLower ||
+        code === filterLower
+      );
+    });
+  }
 
   const courseIds = validCourses.map((c: any) => c._id);
 
@@ -555,7 +572,7 @@ export async function getStudentCalendar(userId: string) {
 /**
  * Retrieves live classes and recordings for enrolled courses.
  */
-export async function getStudentLiveClasses(userId: string) {
+export async function getStudentLiveClasses(userId: string, courseFilter?: string) {
   await connectToDatabase();
 
   const userObjectId = mongoose.Types.ObjectId.isValid(userId)
@@ -572,7 +589,34 @@ export async function getStudentLiveClasses(userId: string) {
       ? new mongoose.Types.ObjectId(id)
       : id
   );
-  const allCourseIds = Array.from(new Set([...courseIds, ...courseObjectIds]));
+  let allCourseIds = Array.from(new Set([...courseIds, ...courseObjectIds]));
+
+  // Backend filtering by course if specified
+  if (courseFilter && courseFilter !== "All" && courseFilter !== "all") {
+    let targetIds: any[] = [];
+    if (mongoose.Types.ObjectId.isValid(courseFilter)) {
+      targetIds = [new mongoose.Types.ObjectId(courseFilter)];
+    } else {
+      const escaped = courseFilter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matched = await Course.find({
+        $or: [
+          { title: { $regex: new RegExp(`^${escaped}$`, "i") } },
+          { category: { $regex: new RegExp(`^${escaped}$`, "i") } },
+          { code: { $regex: new RegExp(`^${escaped}$`, "i") } },
+        ],
+      }).select("_id").lean();
+      targetIds = matched.map((m: any) => m._id);
+    }
+
+    if (targetIds.length > 0) {
+      allCourseIds = allCourseIds.filter((cid: any) =>
+        targetIds.some((tid) => tid.toString() === cid.toString())
+      );
+      if (allCourseIds.length === 0) {
+        allCourseIds = targetIds;
+      }
+    }
+  }
 
   const classes = await LiveClass.find({
     courseId: { $in: allCourseIds },

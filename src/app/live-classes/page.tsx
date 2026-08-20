@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   FiVideo, 
@@ -46,21 +47,34 @@ interface LiveSession {
   isPast: boolean;
 }
 
-export default function LiveClassesPage() {
+function LiveClassesContent() {
   const toast = useToast();
+  const searchParams = useSearchParams();
+  const initialCourseParam = searchParams.get('courseId') || searchParams.get('course') || '';
+
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState('All');
+  const [activeCourseFilter, setActiveCourseFilter] = useState(initialCourseParam);
   const [searchQuery, setSearchQuery] = useState('');
   const [joiningSession, setJoiningSession] = useState<LiveSession | null>(null);
 
-  const fetchLiveClasses = async () => {
+  const fetchLiveClasses = async (targetCourseFilter?: string) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/student/live-classes');
+      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
+      const url = filterToUse && filterToUse !== 'All'
+        ? `/api/student/live-classes?courseId=${encodeURIComponent(filterToUse)}`
+        : '/api/student/live-classes';
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setSessions(data.allSessions || []);
+        const list = data.allSessions || [];
+        setSessions(list);
+        if (filterToUse && list.length > 0) {
+          setSelectedCourse(list[0].courseTitle);
+        }
       } else {
         toast.error("Failed to load live sessions");
       }
@@ -74,7 +88,7 @@ export default function LiveClassesPage() {
 
   useEffect(() => {
     fetchLiveClasses();
-  }, []);
+  }, [activeCourseFilter]);
 
   // Distinct courses
   const courseList = useMemo(() => {
@@ -166,7 +180,7 @@ export default function LiveClassesPage() {
               </div>
 
               <button
-                onClick={fetchLiveClasses}
+                onClick={() => fetchLiveClasses()}
                 title="Refresh schedule"
                 className="p-2.5 text-gray-400 hover:text-[#5A67D8] bg-white border border-gray-100 hover:border-[#5A67D8] rounded-xl shadow-sm transition"
               >
@@ -174,6 +188,38 @@ export default function LiveClassesPage() {
               </button>
             </div>
           </div>
+
+          {/* Active Course Workspace Filter Banner */}
+          {activeCourseFilter && activeCourseFilter !== "All" && (
+            <div className="mb-6 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#5A67D8] text-white flex items-center justify-center text-xs font-bold">
+                  <FiBookOpen />
+                </div>
+                <div>
+                  <span className="font-extrabold text-[#2D3748]">Course Workspace Filter:</span>{" "}
+                  <span className="text-[#5A67D8] font-bold">
+                    {sessions.length > 0 ? sessions[0].courseTitle : activeCourseFilter}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Displaying live class schedules and streams strictly for this course workspace.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.history.replaceState({}, '', '/live-classes');
+                  setActiveCourseFilter('');
+                  setSelectedCourse('All');
+                  fetchLiveClasses('All');
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-[#5A67D8] border border-indigo-200 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1.5"
+              >
+                <FiX /> Show All Courses
+              </button>
+            </div>
+          )}
 
           {/* Quick Metrics & Links Banner */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -457,5 +503,19 @@ export default function LiveClassesPage() {
       )}
 
     </div>
+  );
+}
+
+export default function LiveClassesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-[#5A67D8] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+    >
+      <LiveClassesContent />
+    </Suspense>
   );
 }

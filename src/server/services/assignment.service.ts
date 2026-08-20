@@ -304,20 +304,31 @@ export async function getGradingQueue(userId: string, userName: string) {
   const courseIds = courses.map((c) => c._id);
 
   if (courseIds.length === 0) {
-    return { queue: [] };
+    return { queue: [], pendingQueue: [], gradedQueue: [], stats: { pendingCount: 0, gradedCount: 0, totalSubmissions: 0 } };
   }
 
-  const pendingSubmissions = await Submission.find({
-    courseId: { $in: courseIds },
-    grade: null,
-  })
-    .populate("assignmentId", "title description dueDate maxPoints")
-    .populate("studentId", "name email")
-    .populate("courseId", "title")
-    .sort({ submittedAt: 1 })
-    .lean();
+  const [pendingSubmissions, gradedSubmissions] = await Promise.all([
+    Submission.find({
+      courseId: { $in: courseIds },
+      grade: null,
+    })
+      .populate("assignmentId", "title description dueDate maxPoints")
+      .populate("studentId", "name email")
+      .populate("courseId", "title")
+      .sort({ submittedAt: 1 })
+      .lean(),
+    Submission.find({
+      courseId: { $in: courseIds },
+      grade: { $ne: null },
+    })
+      .populate("assignmentId", "title description dueDate maxPoints")
+      .populate("studentId", "name email")
+      .populate("courseId", "title")
+      .sort({ updatedAt: -1, submittedAt: -1 })
+      .lean(),
+  ]);
 
-  const sortedQueue = pendingSubmissions
+  const sortedPendingQueue = pendingSubmissions
     .map((sub: any) => {
       const dueDate = sub.assignmentId?.dueDate
         ? new Date(sub.assignmentId.dueDate)
@@ -341,6 +352,9 @@ export async function getGradingQueue(userId: string, userName: string) {
         submittedAt: sub.submittedAt,
         content: sub.content || "",
         files: sub.files || [],
+        grade: null,
+        feedback: "",
+        status: sub.status || (isOverdue ? "late" : "submitted"),
       };
     })
     .sort((a, b) => {
@@ -349,7 +363,42 @@ export async function getGradingQueue(userId: string, userName: string) {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
 
-  return { queue: sortedQueue };
+  const formattedGraded = gradedSubmissions.map((sub: any) => {
+    const dueDate = sub.assignmentId?.dueDate
+      ? new Date(sub.assignmentId.dueDate)
+      : new Date();
+    const isLate = sub.submittedAt && dueDate.getTime() < new Date(sub.submittedAt).getTime();
+
+    return {
+      _id: sub._id.toString(),
+      assignmentTitle: sub.assignmentId?.title || "Untitled Assignment",
+      assignmentDescription: sub.assignmentId?.description || "",
+      maxPoints: sub.assignmentId?.maxPoints || 100,
+      courseTitle: sub.courseId?.title || "General Course",
+      studentName: sub.studentId?.name || "Student",
+      studentEmail: sub.studentId?.email || "",
+      dueDate: dueDate.toISOString(),
+      isOverdue: isLate,
+      submittedAt: sub.submittedAt,
+      content: sub.content || "",
+      files: sub.files || [],
+      grade: sub.grade,
+      feedback: sub.feedback || "",
+      status: "graded",
+      gradedAt: sub.updatedAt || sub.submittedAt,
+    };
+  });
+
+  return {
+    queue: sortedPendingQueue,
+    pendingQueue: sortedPendingQueue,
+    gradedQueue: formattedGraded,
+    stats: {
+      pendingCount: sortedPendingQueue.length,
+      gradedCount: formattedGraded.length,
+      totalSubmissions: sortedPendingQueue.length + formattedGraded.length,
+    },
+  };
 }
 
 /**
@@ -391,8 +440,9 @@ export async function gradeSubmission(input: GradeSubmissionInput) {
 
 /**
  * Retrieves assignments and student submission status for enrolled student courses.
+ * Optionally filters by a specific course (ID, title, or category).
  */
-export async function getStudentAssignments(userId: string) {
+export async function getStudentAssignments(userId: string, courseFilter?: string) {
   await connectToDatabase();
 
   const userObjectId = mongoose.Types.ObjectId.isValid(userId)
@@ -412,9 +462,37 @@ export async function getStudentAssignments(userId: string) {
     enrolledCourseIds = publishedCourses.map((c: any) => c._id.toString());
   }
 
-  const courseObjectIds = enrolledCourseIds.map((id: any) =>
+  let courseObjectIds = enrolledCourseIds.map((id: any) =>
     mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
   );
+
+  // Apply backend course filter if provided
+  if (courseFilter && courseFilter !== "All" && courseFilter !== "all") {
+    let targetCourseIds: any[] = [];
+    if (mongoose.Types.ObjectId.isValid(courseFilter)) {
+      targetCourseIds = [new mongoose.Types.ObjectId(courseFilter)];
+    } else {
+      const escaped = courseFilter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matched = await Course.find({
+        $or: [
+          { title: { $regex: new RegExp(`^${escaped}$`, "i") } },
+          { category: { $regex: new RegExp(`^${escaped}$`, "i") } },
+          { code: { $regex: new RegExp(`^${escaped}$`, "i") } },
+        ],
+      }).select("_id").lean();
+      targetCourseIds = matched.map((m: any) => m._id);
+    }
+
+    if (targetCourseIds.length > 0) {
+      courseObjectIds = courseObjectIds.filter((cid: any) =>
+        targetCourseIds.some((tid) => tid.toString() === cid.toString())
+      );
+      // Fallback: if student is enrolled or exploring, use the targeted course ids
+      if (courseObjectIds.length === 0) {
+        courseObjectIds = targetCourseIds;
+      }
+    }
+  }
 
   const assignments = await Assignment.find({
     courseId: { $in: courseObjectIds },

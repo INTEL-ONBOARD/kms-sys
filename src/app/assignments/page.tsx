@@ -14,7 +14,6 @@ import {
   FiUploadCloud, 
   FiExternalLink,
   FiAward,
-  FiPrinter,
   FiBookOpen,
   FiUser,
   FiCalendar,
@@ -68,11 +67,13 @@ function AssignmentsContent() {
   const toast = useToast();
   const searchParams = useSearchParams();
   const initialBriefId = searchParams.get('briefId') || searchParams.get('id');
+  const initialCourseParam = searchParams.get('courseId') || searchParams.get('course') || '';
 
   const [assignments, setAssignments] = useState<AssignmentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Submitted' | 'Graded'>('All');
   const [selectedCourse, setSelectedCourse] = useState('All');
+  const [activeCourseFilter, setActiveCourseFilter] = useState(initialCourseParam);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal States
@@ -87,10 +88,15 @@ function AssignmentsContent() {
   const [uploadProgressText, setUploadProgressText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAssignments = async () => {
+  const fetchAssignments = async (targetCourseFilter?: string) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/student/assignments');
+      const filterToUse = targetCourseFilter !== undefined ? targetCourseFilter : activeCourseFilter;
+      const url = filterToUse && filterToUse !== 'All'
+        ? `/api/student/assignments?courseId=${encodeURIComponent(filterToUse)}`
+        : '/api/student/assignments';
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         const items: AssignmentData[] = data.assignments || [];
@@ -116,7 +122,7 @@ function AssignmentsContent() {
 
   useEffect(() => {
     fetchAssignments();
-  }, [initialBriefId]);
+  }, [initialBriefId, activeCourseFilter]);
 
   // Distinct courses for dropdown
   const courseList = useMemo(() => {
@@ -170,6 +176,9 @@ function AssignmentsContent() {
   };
 
   const uploadFileToR2 = async (file: File, targetCourseId: string): Promise<string> => {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error(`File "${file.name}" exceeds maximum allowed student size limit of 10MB.`);
+    }
     setUploadProgressText(`Requesting upload URL for ${file.name}...`);
     const presignRes = await fetch("/api/materials/generate-upload-url", {
       method: "POST",
@@ -278,10 +287,6 @@ function AssignmentsContent() {
     }
   };
 
-  const handlePrintBrief = () => {
-    window.print();
-  };
-
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
       
@@ -340,7 +345,7 @@ function AssignmentsContent() {
               </div>
 
               <button
-                onClick={fetchAssignments}
+                onClick={() => fetchAssignments()}
                 title="Refresh assignments"
                 className="p-2.5 text-gray-400 hover:text-[#5A67D8] bg-white border border-gray-100 hover:border-[#5A67D8] rounded-xl shadow-sm transition"
               >
@@ -348,6 +353,37 @@ function AssignmentsContent() {
               </button>
             </div>
           </div>
+
+          {/* Active Course Workspace Filter Banner */}
+          {activeCourseFilter && activeCourseFilter !== "All" && (
+            <div className="mb-5 p-3.5 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#5A67D8] text-white flex items-center justify-center text-xs font-bold">
+                  <FiBookOpen />
+                </div>
+                <div>
+                  <span className="font-extrabold text-[#2D3748]">Course Workspace Filter:</span>{" "}
+                  <span className="text-[#5A67D8] font-bold">
+                    {assignments.length > 0 ? assignments[0].course : activeCourseFilter}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Displaying assignments and deliverables strictly relevant to this course.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.history.replaceState({}, '', '/assignments');
+                  setActiveCourseFilter('');
+                  setSelectedCourse('All');
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-[#5A67D8] border border-indigo-200 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1.5"
+              >
+                <FiX /> Show All Courses
+              </button>
+            </div>
+          )}
 
           {/* Navigation Tabs */}
           <div className="border-b border-gray-200 mb-6">
@@ -645,13 +681,6 @@ function AssignmentsContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handlePrintBrief}
-                    title="Print Brief"
-                    className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition"
-                  >
-                    <FiPrinter className="text-lg" />
-                  </button>
                   <button
                     onClick={() => setViewingBrief(null)}
                     className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-xl transition"
@@ -1040,7 +1069,7 @@ function AssignmentsContent() {
                 <label className="border-2 border-dashed border-gray-200 hover:border-[#5A67D8] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer bg-gray-50/60 hover:bg-blue-50/30 transition text-center">
                   <FiUploadCloud className="text-2xl text-[#5A67D8] mb-1" />
                   <p className="font-bold text-gray-700 text-xs">Click to browse or drop your coursework file</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">PDF, DOCX, ZIP, PPT, TXT, Code files up to 250MB</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">PDF, DOCX, ZIP, PPT, TXT, Code files up to 10MB</p>
                   <input
                     type="file"
                     multiple
@@ -1048,7 +1077,15 @@ function AssignmentsContent() {
                     onChange={(e) => {
                       if (e.target.files) {
                         const newFiles = Array.from(e.target.files);
-                        setSelectedFiles((prev) => [...prev, ...newFiles]);
+                        const MAX_STUDENT_SIZE = 10 * 1024 * 1024;
+                        const oversized = newFiles.filter((f) => f.size > MAX_STUDENT_SIZE);
+                        if (oversized.length > 0) {
+                          toast.error(`File "${oversized[0].name}" exceeds maximum allowed student size limit of 10MB.`);
+                        }
+                        const validFiles = newFiles.filter((f) => f.size <= MAX_STUDENT_SIZE);
+                        if (validFiles.length > 0) {
+                          setSelectedFiles((prev) => [...prev, ...validFiles]);
+                        }
                       }
                     }}
                   />
