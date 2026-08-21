@@ -50,6 +50,11 @@ export default function ModerationPage() {
   const [studentToRemove, setStudentToRemove] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newBatchName, setNewBatchName] = useState('');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
+
   const selectedBatchData = batches.find(b => b._id === manageBatchId);
   const currentCapacity = selectedBatchData?.maxCapacity || 50;
   const currentEnrolledCount = batchStudents.length;
@@ -178,15 +183,18 @@ export default function ModerationPage() {
     return () => clearTimeout(timer);
   }, [manageBatchId, searchQuery]);
 
-  const handleCreateBatch = async () => {
+  const handleCreateBatchSubmit = async () => {
+    if (!newBatchName.trim()) {
+      setBatchMessage({ text: 'Batch name cannot be empty', type: 'error' });
+      return;
+    }
     setIsCreatingBatch(true);
     setBatchMessage({ text: '', type: '' });
     try {
-      const nextBatchNumber = batches.length + 1;
       const res = await fetch('/api/admin/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `Batch ${nextBatchNumber}`, description: `Auto-generated Batch ${nextBatchNumber}` })
+        body: JSON.stringify({ name: newBatchName.trim(), description: `Custom Batch` })
       });
       const data = await res.json();
       if (res.ok) {
@@ -197,6 +205,8 @@ export default function ModerationPage() {
           const batchesData = await batchesRes.json();
           setBatches(batchesData.batches || []);
         }
+        setIsCreateModalOpen(false);
+        setNewBatchName('');
       } else {
         setBatchMessage({ text: data.message || 'Failed to create batch.', type: 'error' });
       }
@@ -204,6 +214,39 @@ export default function ModerationPage() {
       setBatchMessage({ text: 'An unexpected error occurred.', type: 'error' });
     } finally {
       setIsCreatingBatch(false);
+    }
+  };
+
+  const confirmDeleteBatch = async () => {
+    if (!manageBatchId) return;
+    setIsDeletingBatch(true);
+    setBatchMessage({ text: '', type: '' });
+    try {
+      const res = await fetch(`/api/admin/batches/${manageBatchId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setBatchMessage({ text: 'Batch deleted successfully.', type: 'success' });
+        
+        // Refresh batches
+        const batchesRes = await fetch('/api/admin/batches');
+        if (batchesRes.ok) {
+          const batchesData = await batchesRes.json();
+          setBatches(batchesData.batches || []);
+        }
+        
+        // Reset selected batch
+        setManageBatchId('');
+        setBatchStudents([]);
+      } else {
+        const data = await res.json();
+        setBatchMessage({ text: data.message || 'Failed to delete batch.', type: 'error' });
+      }
+    } catch (error) {
+      setBatchMessage({ text: 'An unexpected error occurred.', type: 'error' });
+    } finally {
+      setIsDeletingBatch(false);
+      setIsDeleteModalOpen(false);
     }
   };
 
@@ -486,12 +529,21 @@ export default function ModerationPage() {
                 </select>
               </div>
               
+              {manageBatchId && (
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 px-4 rounded-lg border border-red-200 transition"
+                  title="Delete Batch"
+                >
+                  <FiTrash2 />
+                </button>
+              )}
+              
               <button 
-                onClick={handleCreateBatch}
-                disabled={isCreatingBatch}
-                className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-3 px-6 rounded-lg shadow-sm transition disabled:opacity-50 whitespace-nowrap"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-3 px-6 rounded-lg shadow-sm transition whitespace-nowrap"
               >
-                {isCreatingBatch ? 'Creating...' : '+ Create New Batch'}
+                + Create New Batch
               </button>
             </div>
 
@@ -590,6 +642,73 @@ export default function ModerationPage() {
 
         </div>
       </main>
+
+      {/* Create Batch Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Create New Batch</h3>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Name</label>
+              <input
+                type="text"
+                value={newBatchName}
+                onChange={(e) => setNewBatchName(e.target.value)}
+                placeholder="e.g., Spring 2027"
+                className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-3 outline-none transition"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => { setIsCreateModalOpen(false); setNewBatchName(''); }}
+                disabled={isCreatingBatch}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateBatchSubmit}
+                disabled={isCreatingBatch || !newBatchName.trim()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition disabled:opacity-50 flex items-center"
+              >
+                {isCreatingBatch ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Batch Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center text-red-600 mb-4">
+              <FiAlertCircle className="w-8 h-8 mr-3" />
+              <h3 className="text-xl font-bold text-gray-900">Delete Batch</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this batch? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeletingBatch}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteBatch}
+                disabled={isDeletingBatch}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-sm transition disabled:opacity-50 flex items-center"
+              >
+                {isDeletingBatch ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Removal Confirmation Modal */}
       {studentToRemove && (
