@@ -8,6 +8,9 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),
   }),
+  useSearchParams: () => ({
+    get: jest.fn().mockReturnValue(''),
+  }),
 }));
 
 // Mock next-auth/react

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { 
-  FiChevronDown, 
-  FiDownload, 
-  FiFileText, 
-  FiCheckCircle, 
-  FiX, 
-  FiRefreshCw, 
+import {
+  FiChevronDown,
+  FiDownload,
+  FiFileText,
+  FiCheckCircle,
+  FiX,
+  FiRefreshCw,
   FiBookOpen,
   FiAward,
   FiClock,
@@ -78,7 +78,7 @@ function GradesContent() {
   const [requestingApproval, setRequestingApproval] = useState(false);
   const [approvalRequested, setApprovalRequested] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  
+
   // Dynamic API state
   const [loading, setLoading] = useState(true);
   const [reportApproved, setReportApproved] = useState(false);
@@ -140,14 +140,14 @@ function GradesContent() {
     return gradesData.filter((item) => {
       const matchesSemester = selectedSemester === 'All' || selectedSemester === 'Select' || item.semester === selectedSemester;
       const matchesCourse = selectedCourse === 'All' || selectedCourse === 'All Courses' || item.title === selectedCourse || item.title.includes(selectedCourse);
-      const matchesTab = 
-        activeTab === 'all' 
-          ? true 
-          : activeTab === 'completed' 
-          ? item.allAssessmentsCompleted 
-          : !item.allAssessmentsCompleted;
-      const matchesSearch = !searchQuery.trim() || 
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesTab =
+        activeTab === 'all'
+          ? true
+          : activeTab === 'completed'
+            ? item.allAssessmentsCompleted
+            : !item.allAssessmentsCompleted;
+      const matchesSearch = !searchQuery.trim() ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.instructor && item.instructor.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchesSemester && matchesCourse && matchesTab && matchesSearch;
@@ -242,19 +242,19 @@ function GradesContent() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-gray-800 relative">
-      
+
       {/* Sidebar Component */}
       <Sidebar />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        
+
         {/* Dash Header */}
         <Header />
 
         {/* Scrollable Main Area */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-16 pt-6 space-y-6">
-          
+
           {/* Toast Notification */}
           {toastMessage && (
             <div className="flex items-center justify-between bg-emerald-600 text-white px-5 py-3.5 rounded-xl shadow-lg transition-all animate-in fade-in">
@@ -305,11 +305,10 @@ function GradesContent() {
                     setShowApprovalModal(true);
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${
-                  reportApproved
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer ${reportApproved
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
-                }`}
+                  }`}
                 title={reportApproved ? "Export Academic Report" : "Admin Approval Required to Export Report"}
               >
                 {reportApproved ? (
@@ -331,7 +330,7 @@ function GradesContent() {
 
           {/* Academic Metrics Grid (4 Key Performance Indicators) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
+
             {/* CGPA */}
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between hover:border-gray-200 transition">
               <div className="flex justify-between items-start">
@@ -440,39 +439,36 @@ function GradesContent() {
 
           {/* Filter, Search & View Controls Bar */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-            
+
             {/* Filter Tabs */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
-                  activeTab === 'all'
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${activeTab === 'all'
                     ? "bg-[#1E293B] text-white shadow-xs"
                     : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                }`}
+                  }`}
               >
                 All Modules ({gradesData.length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('completed')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
-                  activeTab === 'completed'
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${activeTab === 'completed'
                     ? "bg-emerald-600 text-white shadow-xs"
                     : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                }`}
+                  }`}
               >
                 Finalized ({completedCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('in_progress')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
-                  activeTab === 'in_progress'
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 ${activeTab === 'in_progress'
                     ? "bg-amber-600 text-white shadow-xs"
                     : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                }`}
+                  }`}
               >
                 In Progress ({gradesData.length - completedCount})
               </button>
@@ -480,7 +476,7 @@ function GradesContent() {
 
             {/* Search Input, Dropdowns & View Switcher */}
             <div className="flex flex-wrap items-center gap-3">
-              
+
               {/* Search Field */}
               <div className="relative flex-1 sm:w-60">
                 <FiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
@@ -532,9 +528,8 @@ function GradesContent() {
                 <button
                   type="button"
                   onClick={() => setViewMode('cards')}
-                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
-                    viewMode === 'cards' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-                  }`}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${viewMode === 'cards' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                    }`}
                   title="Card View"
                 >
                   <FiGrid className="text-sm" />
@@ -542,9 +537,8 @@ function GradesContent() {
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
-                    viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-                  }`}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                    }`}
                   title="Table View"
                 >
                   <FiList className="text-sm" />
@@ -557,7 +551,7 @@ function GradesContent() {
 
           {/* Module Grades Breakdown Section */}
           <div className="space-y-4">
-            
+
             {loading ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -589,11 +583,11 @@ function GradesContent() {
                   const items = course.assessmentItems && course.assessmentItems.length > 0
                     ? course.assessmentItems
                     : [
-                        { name: "Assignments", type: "assignment", weight: 20, score: course.assignments, earned: 0 },
-                        { name: "Course Work 1", type: "coursework", weight: 30, score: course.courseWork, earned: 0 },
-                        { name: "Final Exam", type: "exam", weight: 40, score: course.finalExam, earned: 0 },
-                        { name: "Attendance", type: "attendance", weight: 10, score: course.attendance, earned: 0 },
-                      ];
+                      { name: "Assignments", type: "assignment", weight: 20, score: course.assignments, earned: 0 },
+                      { name: "Course Work 1", type: "coursework", weight: 30, score: course.courseWork, earned: 0 },
+                      { name: "Final Exam", type: "exam", weight: 40, score: course.finalExam, earned: 0 },
+                      { name: "Attendance", type: "attendance", weight: 10, score: course.attendance, earned: 0 },
+                    ];
 
                   return (
                     <div
@@ -604,7 +598,7 @@ function GradesContent() {
                       <div className={`h-1.5 w-full ${course.allAssessmentsCompleted ? 'bg-emerald-500' : 'bg-blue-600'}`} />
 
                       <div className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-                        
+
                         {/* Course Header & Grade Badge */}
                         <div className="flex justify-between items-start gap-3">
                           <div>
@@ -626,11 +620,10 @@ function GradesContent() {
 
                           {/* Final Grade Badge */}
                           <div className="flex flex-col items-end shrink-0">
-                            <span className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide ${
-                              course.allAssessmentsCompleted
+                            <span className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide ${course.allAssessmentsCompleted
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                 : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
+                              }`}>
                               {course.allAssessmentsCompleted ? `Grade ${course.grade}` : "In Progress"}
                             </span>
                             <span className="text-[10px] font-bold text-gray-400 mt-1">
@@ -654,9 +647,8 @@ function GradesContent() {
 
                           <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                course.allAssessmentsCompleted ? "bg-emerald-500" : "bg-amber-400"
-                              }`}
+                              className={`h-full rounded-full transition-all duration-500 ${course.allAssessmentsCompleted ? "bg-emerald-500" : "bg-amber-400"
+                                }`}
                               style={{
                                 width: course.allAssessmentsCompleted
                                   ? `${Math.min(100, course.totalPoints || 0)}%`
@@ -690,11 +682,10 @@ function GradesContent() {
                               return (
                                 <div
                                   key={idx}
-                                  className={`p-3 rounded-xl border transition flex flex-col justify-between ${
-                                    isItemPublished
+                                  className={`p-3 rounded-xl border transition flex flex-col justify-between ${isItemPublished
                                       ? "bg-[#F8FAFC] border-gray-200/80 hover:bg-[#F1F5F9]"
                                       : "bg-gray-50/50 border-dashed border-gray-200"
-                                  }`}
+                                    }`}
                                 >
                                   <div className="flex items-start justify-between gap-1 mb-2">
                                     <div className="truncate pr-1">
@@ -795,11 +786,10 @@ function GradesContent() {
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.finalExam}</td>
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.attendance}</td>
                           <td className="px-6 py-4 text-center">
-                            <span className={`inline-block px-3.5 py-1 rounded-xl text-xs font-black ${
-                              course.allAssessmentsCompleted
+                            <span className={`inline-block px-3.5 py-1 rounded-xl text-xs font-black ${course.allAssessmentsCompleted
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                 : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
+                              }`}>
                               {course.allAssessmentsCompleted ? course.grade : "In Progress"}
                             </span>
                           </td>

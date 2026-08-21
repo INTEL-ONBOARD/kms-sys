@@ -87,6 +87,13 @@ const courseSchema = new Schema(
   }
 );
 
+export type AssessmentItem = {
+  _id?: mongoose.Types.ObjectId;
+  name: string;
+  type: "assignment" | "exam" | "coursework" | "attendance" | "quiz" | "project" | "other";
+  weight: number;
+};
+
 export type ScheduleSlot = {
   dayOfWeek: "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
   startTime: string;

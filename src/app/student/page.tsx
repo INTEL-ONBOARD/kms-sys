@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { 
-  FiBell, 
-  FiFileText, 
-  FiChevronLeft, 
-  FiChevronRight, 
-  FiVideo, 
-  FiBookOpen, 
+import {
+  FiBell,
+  FiFileText,
+  FiChevronLeft,
+  FiChevronRight,
+  FiVideo,
+  FiBookOpen,
   FiClock,
   FiCalendar,
   FiDownload,
@@ -210,11 +210,10 @@ export default function DashboardPage() {
                     setShowApprovalModal(true);
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer ${
-                  reportApproved
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer ${reportApproved
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
-                }`}
+                  }`}
                 title={reportApproved ? "Download Official Academic Report" : "Admin Approval Required to Download Report"}
               >
                 {reportApproved ? (
@@ -433,20 +432,20 @@ export default function DashboardPage() {
                                 <FiBookOpen className="text-[11px] shrink-0" /> {lc.courseId?.title || 'General'}
                               </span>
                             </div>
-                            
+
                             <div className="mt-2.5 flex items-center gap-3">
                               {isEnded ? (
-                                <Link 
+                                <Link
                                   href="/recordings"
                                   className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1"
                                 >
                                   <FiVideo className="text-xs" /> Watch Recording & Notes
                                 </Link>
                               ) : (
-                                <a 
-                                  href={lc.meetingLink || "/live-classes"} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
+                                <a
+                                  href={lc.meetingLink || "/live-classes"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
                                   className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center gap-1.5"
                                 >
                                   <FiVideo className="text-xs" /> Join Live Classroom
@@ -492,8 +491,8 @@ export default function DashboardPage() {
                       {assignments.map((a) => {
                         const overdue = isOverdue(a.dueDate);
                         return (
-                          <Link 
-                            key={a._id} 
+                          <Link
+                            key={a._id}
                             href={`/assignments?briefId=${a._id}`}
                             className={`flex items-center justify-between p-3.5 hover:bg-[#EEF2FF]/60 rounded-xl transition ${overdue ? 'bg-red-50' : 'hover:bg-gray-50'}`}
                           >

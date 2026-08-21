@@ -1,11 +1,93 @@
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/models/Enrollment";
-import Course from "@/models/Course";
-import Assignment from "@/models/Assignment";
+import Course, { AssessmentItem } from "@/models/Course";
 import Submission from "@/models/Submission";
 import Exam from "@/models/Exam";
 import User from "@/models/User";
+
+export interface AssessmentItemBreakdown {
+  name: string;
+  type: string;
+  weight: number;
+  isPublished: boolean;
+  status: string;
+  score: string;
+  earned: number;
+}
+
+export interface CourseGradeSummary {
+  id: string | number;
+  courseId: string;
+  title: string;
+  code: string;
+  assignments: string;
+  courseWork: string;
+  finalExam: string;
+  attendance: string;
+  grade: string;
+  gradeColor: string;
+  gpaPoint: number;
+  totalPoints: number | null;
+  totalEarnedPoints: number;
+  allAssessmentsCompleted: boolean;
+  publishedCount: number;
+  totalAssessmentCount: number;
+  hasPublishedResults: boolean;
+  assessmentItems: AssessmentItemBreakdown[];
+  gradedCount: number;
+  semester: string;
+  instructor: string;
+}
+
+export interface StudentReportSummary {
+  studentName: string;
+  studentId: string;
+  semester: string;
+  gpa: string;
+  cgpa: string;
+  generatedAt: string;
+  grades: CourseGradeSummary[];
+  allGrades: CourseGradeSummary[];
+  availableSemesters: string[];
+  availableCourses: string[];
+  totalEnrolled: number;
+  reportApproved: boolean;
+}
+
+interface PopulatedEnrollment {
+  _id: mongoose.Types.ObjectId;
+  userId: string;
+  progress?: number;
+  courseId: {
+    _id: mongoose.Types.ObjectId;
+    title?: string;
+    code?: string;
+    semester?: string;
+    instructor?: string;
+    assessmentItems?: AssessmentItem[];
+    gradingBreakdown?: {
+      assignmentsWeight?: number;
+      courseWorkWeight?: number;
+      finalExamWeight?: number;
+      attendanceWeight?: number;
+    };
+  } | null;
+}
+
+interface SubmissionRecord {
+  _id: mongoose.Types.ObjectId;
+  courseId?: mongoose.Types.ObjectId | string;
+  studentId: string;
+  status?: string;
+  grade?: number | null;
+}
+
+interface ExamRecord {
+  _id: mongoose.Types.ObjectId;
+  courseId?: mongoose.Types.ObjectId | string;
+  status?: string;
+}
 
 /**
  * Calculates student grades, GPA, CGPA, and coursework breakdown.
@@ -15,35 +97,39 @@ export async function getStudentReport(
   userName: string,
   requestedSemester = "All",
   courseFilter?: string
-) {
+): Promise<StudentReportSummary> {
   await connectToDatabase();
 
   // 1. Fetch student enrollments populated with course details
-  const enrollments = await Enrollment.find({ userId })
+  const enrollments = (await Enrollment.find({ userId })
     .populate({
       path: "courseId",
       model: Course,
     })
     .sort({ createdAt: -1 })
-    .lean();
+    .lean()) as unknown as PopulatedEnrollment[];
 
-  const validEnrollments = enrollments.filter((e: any) => e.courseId != null);
-  const validCourseIds = validEnrollments.map((e: any) => e.courseId._id);
+  const validEnrollments = enrollments.filter(
+    (e): e is PopulatedEnrollment & { courseId: NonNullable<PopulatedEnrollment["courseId"]> } =>
+      e.courseId != null
+  );
+  const validCourseIds = validEnrollments.map((e) => e.courseId._id);
 
-  // 2. Fetch all assignments, student submissions, and exams for enrolled courses in parallel
-  const [assignments, submissions, exams] = await Promise.all([
-    Assignment.find({ courseId: { $in: validCourseIds } }).lean(),
-    Submission.find({ studentId: userId, courseId: { $in: validCourseIds } }).lean(),
-    Exam.find({ courseId: { $in: validCourseIds } }).lean(),
+  // 2. Fetch student submissions and exams for enrolled courses in parallel
+  const [submissions, exams] = await Promise.all([
+    (Submission.find({ studentId: userId, courseId: { $in: validCourseIds } }).lean() as unknown) as Promise<
+      SubmissionRecord[]
+    >,
+    (Exam.find({ courseId: { $in: validCourseIds } }).lean() as unknown) as Promise<ExamRecord[]>,
   ]);
 
   // 3. Map dynamic course grades - ONLY show published results, and ONLY show overall marks once all assessments are finished
-  const allGrades = validEnrollments.map((enrollment: any, index: number) => {
+  const allGrades: CourseGradeSummary[] = validEnrollments.map((enrollment, index) => {
     const course = enrollment.courseId;
     const cIdStr = course._id ? course._id.toString() : "";
 
     // Dynamic Assessment Items and weights configured by the lecturer
-    const courseItems =
+    const courseItems: AssessmentItem[] =
       course.assessmentItems && course.assessmentItems.length > 0
         ? course.assessmentItems
         : [
@@ -56,17 +142,18 @@ export async function getStudentReport(
     const courseSemester = course.semester || (index % 2 === 0 ? "Semester 01" : "Semester 02");
     const courseCode = course.code || `WISE-${cIdStr.substring(0, 4).toUpperCase()}/CO`;
 
-    const courseSubmissions = submissions.filter((s: any) => s.courseId?.toString() === cIdStr);
+    const courseSubmissions = submissions.filter((s) => s.courseId?.toString() === cIdStr);
     const gradedSubmissions = courseSubmissions.filter(
-      (s: any) => s.status === "graded" && typeof s.grade === "number" && s.grade !== null
+      (s): s is SubmissionRecord & { grade: number } =>
+        s.status === "graded" && typeof s.grade === "number" && s.grade !== null
     );
 
-    const courseExams = exams.filter((e: any) => e.courseId?.toString() === cIdStr);
+    const courseExams = exams.filter((e) => e.courseId?.toString() === cIdStr);
 
     let totalEarnedPoints = 0;
     let publishedCount = 0;
 
-    const itemBreakdown = courseItems.map((item: any, itemIdx: number) => {
+    const itemBreakdown: AssessmentItemBreakdown[] = courseItems.map((item, itemIdx) => {
       const w = Number(item.weight) || 0;
       let isPublished = false;
       let earnedNum = 0;
@@ -86,12 +173,12 @@ export async function getStudentReport(
       } else if (item.type === "exam") {
         if (
           courseExams.length > 0 &&
-          courseExams.some((e: any) => e.status === "graded" || e.status === "completed") &&
+          courseExams.some((e) => e.status === "graded" || e.status === "completed") &&
           gradedSubmissions.length > 0
         ) {
           isPublished = true;
           const avgGrade =
-            gradedSubmissions.reduce((acc: number, s: any) => acc + s.grade, 0) / gradedSubmissions.length;
+            gradedSubmissions.reduce((acc, s) => acc + s.grade, 0) / gradedSubmissions.length;
           earnedNum = Math.min(w, Math.max(0, Math.round((avgGrade / 100) * w)));
         }
       } else if (item.type === "attendance") {
@@ -160,12 +247,12 @@ export async function getStudentReport(
       }
     }
 
-    const assignItem = itemBreakdown.find((i: any) => i.type === "assignment") || itemBreakdown[0];
+    const assignItem = itemBreakdown.find((i) => i.type === "assignment") || itemBreakdown[0];
     const cwItem =
-      itemBreakdown.find((i: any) => i.type === "coursework" || i.type === "quiz" || i.type === "project") ||
+      itemBreakdown.find((i) => i.type === "coursework" || i.type === "quiz" || i.type === "project") ||
       itemBreakdown[1];
-    const examItem = itemBreakdown.find((i: any) => i.type === "exam") || itemBreakdown[2];
-    const attItem = itemBreakdown.find((i: any) => i.type === "attendance") || itemBreakdown[3];
+    const examItem = itemBreakdown.find((i) => i.type === "exam") || itemBreakdown[2];
+    const attItem = itemBreakdown.find((i) => i.type === "attendance") || itemBreakdown[3];
 
     return {
       id: cIdStr || index + 1,
@@ -204,7 +291,7 @@ export async function getStudentReport(
 
   if (courseFilter && courseFilter !== "All" && courseFilter !== "all") {
     const filterLower = courseFilter.toLowerCase();
-    filteredGrades = filteredGrades.filter((g: any) => {
+    filteredGrades = filteredGrades.filter((g) => {
       const cId = g.courseId?.toString();
       const title = (g.title || "").toLowerCase();
       const code = (g.code || "").toLowerCase();
@@ -218,19 +305,19 @@ export async function getStudentReport(
   }
 
   const completedCourses = allGrades.filter(
-    (g: any) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
+    (g) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
   );
   const avgCGPAPoints =
     completedCourses.length > 0
-      ? (completedCourses.reduce((acc: number, g: any) => acc + g.gpaPoint, 0) / completedCourses.length).toFixed(1)
+      ? (completedCourses.reduce((acc, g) => acc + g.gpaPoint, 0) / completedCourses.length).toFixed(1)
       : "0.0";
 
   const filteredCompleted = filteredGrades.filter(
-    (g: any) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
+    (g) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
   );
   const avgSemesterGPA =
     filteredCompleted.length > 0
-      ? (filteredCompleted.reduce((acc: number, g: any) => acc + g.gpaPoint, 0) / filteredCompleted.length).toFixed(1)
+      ? (filteredCompleted.reduce((acc, g) => acc + g.gpaPoint, 0) / filteredCompleted.length).toFixed(1)
       : avgCGPAPoints;
 
   const userObjectId = mongoose.Types.ObjectId.isValid(userId)
