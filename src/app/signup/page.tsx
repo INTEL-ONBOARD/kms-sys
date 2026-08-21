@@ -338,8 +338,8 @@ export default function SignupPage() {
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Highest Qualification</label>
                         <select name="qualification" value={formData.qualification} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-300 rounded focus:ring-black focus:border-black outline-none transition bg-white">
                           <option value="">Select Qualification</option>
-                          <option value="bsc">Bachelor's Degree</option>
-                          <option value="msc">Master's Degree</option>
+                          <option value="bsc">Bachelor&apos;s Degree</option>
+                          <option value="msc">Master&apos;s Degree</option>
                           <option value="phd">Ph.D.</option>
                         </select>
                       </div>
