@@ -110,7 +110,7 @@ export default function LecturerStudentsPage() {
 
       {/* Students Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100/50 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#F7FAFC] border-b border-gray-100 text-gray-500 font-bold uppercase tracking-wider">
               <tr>

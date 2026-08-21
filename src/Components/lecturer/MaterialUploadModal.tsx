@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   FiX,
   FiUploadCloud,
@@ -22,6 +23,7 @@ interface CourseOption {
 
 interface MaterialUploadModalProps {
   initialCourseId?: string;
+  initialCourseTitle?: string;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -30,15 +32,26 @@ type UploadState = "idle" | "generating_url" | "uploading_r2" | "saving_metadata
 
 export default function MaterialUploadModal({
   initialCourseId = "",
+  initialCourseTitle = "",
   onClose,
   onSuccess,
 }: MaterialUploadModalProps) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Form State
-  const [courses, setCourses] = useState<CourseOption[]>([]);
-  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [courses, setCourses] = useState<CourseOption[]>(() => {
+    if (initialCourseId) {
+      return [{ _id: initialCourseId, title: initialCourseTitle || "Current Course" }];
+    }
+    return [];
+  });
+  const [loadingCourses, setLoadingCourses] = useState(!initialCourseId);
   const [selectedCourseId, setSelectedCourseId] = useState(initialCourseId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -60,10 +73,16 @@ export default function MaterialUploadModal({
         const res = await fetch("/api/lecturer/courses?limit=50");
         if (res.ok) {
           const data = await res.json();
-          const courseList: CourseOption[] = data.data || [];
-          setCourses(courseList);
-          if (!selectedCourseId && courseList.length > 0) {
-            setSelectedCourseId(courseList[0]._id);
+          const courseList: CourseOption[] = data.data || data.courses || [];
+          if (initialCourseId && !courseList.some((c) => c._id === initialCourseId)) {
+            setCourses([{ _id: initialCourseId, title: initialCourseTitle || "Current Course" }, ...courseList]);
+          } else {
+            setCourses(courseList);
+          }
+          if (initialCourseId) {
+            setSelectedCourseId(initialCourseId);
+          } else if (courseList.length > 0) {
+            setSelectedCourseId((prev) => prev || courseList[0]._id);
           }
         }
       } catch (err) {
@@ -73,11 +92,11 @@ export default function MaterialUploadModal({
       }
     }
     loadCourses();
-  }, [selectedCourseId]);
+  }, [initialCourseId, initialCourseTitle]);
 
-  if (!loadingCourses && courses.length === 0) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  if (!loadingCourses && courses.length === 0 && !initialCourseId) {
+    const blockedModal = (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 text-center">
           <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
             <FiLock />
@@ -95,6 +114,7 @@ export default function MaterialUploadModal({
         </div>
       </div>
     );
+    return mounted ? createPortal(blockedModal, document.body) : null;
   }
 
   const handleFileSelect = (file: File) => {
@@ -198,42 +218,24 @@ export default function MaterialUploadModal({
 
     try {
       setErrorMessage("");
-      setUploadState("generating_url");
-      setUploadProgress(5);
-
-      // Step 1: Request pre-signed upload URL from R2
-      const urlRes = await fetch("/api/materials/generate-upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courseId: selectedCourseId,
-          fileName: selectedFile.name,
-          fileType: selectedFile.type || "application/octet-stream",
-          fileSize: selectedFile.size,
-        }),
-      });
-
-      if (!urlRes.ok) {
-        const errJson = await urlRes.json();
-        throw new Error(errJson.error || "Failed to authorize upload");
-      }
-
-      const urlData = await urlRes.json();
-      const { uploadUrl, fileKey, publicUrl } = urlData.data;
-
-      // Step 2: Upload binary directly to Cloudflare R2
       setUploadState("uploading_r2");
-      setUploadProgress(20);
+      setUploadProgress(10);
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("courseId", selectedCourseId);
+      formData.append("title", title.trim());
+      formData.append("description", description.trim());
+      formData.append("materialType", materialType);
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", selectedFile.type || "application/octet-stream");
+        xhr.open("POST", "/api/materials/upload");
 
         xhr.upload.onprogress = (evt) => {
           if (evt.lengthComputable) {
-            const percent = Math.round((evt.loaded / evt.total) * 70) + 20; // Scale from 20% to 90%
-            setUploadProgress(percent);
+            const percent = Math.round((evt.loaded / evt.total) * 85) + 10;
+            setUploadProgress(Math.min(95, percent));
           }
         };
 
@@ -241,38 +243,18 @@ export default function MaterialUploadModal({
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Storage service error (${xhr.status})`));
+            try {
+              const errData = JSON.parse(xhr.responseText);
+              reject(new Error(errData.message || errData.error || `Upload failed (${xhr.status})`));
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
           }
         };
 
-        xhr.onerror = () => reject(new Error("Network error during file transfer"));
-        xhr.send(selectedFile);
+        xhr.onerror = () => reject(new Error("Network error during file upload"));
+        xhr.send(formData);
       });
-
-      // Step 3: Save metadata to MongoDB
-      setUploadState("saving_metadata");
-      setUploadProgress(95);
-
-      const metaRes = await fetch("/api/materials", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim(),
-          courseId: selectedCourseId,
-          materialType,
-          fileName: selectedFile.name,
-          fileKey,
-          fileUrl: publicUrl,
-          fileSize: selectedFile.size,
-          mimeType: selectedFile.type || "application/octet-stream",
-        }),
-      });
-
-      if (!metaRes.ok) {
-        const errJson = await metaRes.json();
-        throw new Error(errJson.error || "Failed to save material record");
-      }
 
       setUploadState("success");
       setUploadProgress(100);
@@ -281,7 +263,7 @@ export default function MaterialUploadModal({
       setTimeout(() => {
         if (onSuccess) onSuccess();
         onClose();
-      }, 900);
+      }, 800);
     } catch (err: any) {
       console.error("Upload workflow failed:", err);
       setUploadState("error");
@@ -295,8 +277,8 @@ export default function MaterialUploadModal({
     uploadState === "uploading_r2" ||
     uploadState === "saving_metadata";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
@@ -312,15 +294,16 @@ export default function MaterialUploadModal({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={isUploading}
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition disabled:opacity-40"
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition disabled:opacity-40"
           >
             <FiX className="text-lg" />
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
+        {/* Form Body */}
         <form onSubmit={handleUploadAndSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
           
           {/* Target Course Selector */}
@@ -559,7 +542,12 @@ export default function MaterialUploadModal({
             </button>
             <button
               type="submit"
-              disabled={isUploading || !selectedFile || !selectedCourseId || !title.trim()}
+              disabled={
+                isUploading ||
+                !selectedCourseId ||
+                !title.trim() ||
+                (materialType === "video" ? !recordingLink.trim() : !selectedFile)
+              }
               className="px-5 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-sm shadow-indigo-100 transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
             >
               {isUploading ? (
@@ -580,4 +568,6 @@ export default function MaterialUploadModal({
       </div>
     </div>
   );
+
+  return mounted ? createPortal(modalContent, document.body) : null;
 }

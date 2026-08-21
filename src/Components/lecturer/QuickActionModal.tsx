@@ -433,7 +433,7 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
     availableBreakdownItems.length === 0;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative transform transition-all scale-100 font-sans max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}

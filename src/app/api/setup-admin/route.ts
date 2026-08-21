@@ -1,11 +1,36 @@
+import { NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError } from "@/server/core/errors";
+import { BadRequestError, ForbiddenError } from "@/server/core/errors";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const setupSecretEnv = process.env.ADMIN_SETUP_SECRET;
+    const isProduction = process.env.NODE_ENV === "production";
+
+    if (isProduction && !setupSecretEnv) {
+      throw new ForbiddenError("Admin setup route is disabled in production.");
+    }
+
+    const { searchParams } = new URL(req.url);
+    const reqSecret =
+      req.headers.get("x-setup-secret") ||
+      req.headers.get("x-admin-setup-secret") ||
+      searchParams.get("secret") ||
+      searchParams.get("setupSecret") ||
+      searchParams.get("adminSecret") ||
+      (req.headers.get("authorization")?.startsWith("Bearer ")
+        ? req.headers.get("authorization")?.slice(7)
+        : null);
+
+    if (setupSecretEnv) {
+      if (!reqSecret || reqSecret !== setupSecretEnv) {
+        throw new ForbiddenError("Invalid or missing setup secret.");
+      }
+    }
+
     await connectToDatabase();
 
     const adminExists = await User.findOne({ role: "super_admin" });
@@ -39,4 +64,4 @@ export async function GET() {
   } catch (error) {
     return handleApiError(error, "GET /api/setup-admin");
   }
-}
+}

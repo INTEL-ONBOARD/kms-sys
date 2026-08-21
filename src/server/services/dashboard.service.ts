@@ -6,6 +6,7 @@ import Assignment from "@/models/Assignment";
 import LiveClass from "@/models/LiveClass";
 import Submission from "@/models/Submission";
 import Announcement from "@/models/Announcement";
+import Exam from "@/models/Exam";
 import { createSafeSearchRegex } from "../core/pagination";
 
 // Ensure models are registered
@@ -16,6 +17,7 @@ Assignment;
 LiveClass;
 Submission;
 Announcement;
+Exam;
 
 /**
  * Retrieves aggregate statistics for the Admin Dashboard.
@@ -237,6 +239,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     allCourseEnrollments,
     allSubmissionsForPerf,
     allEnrollments,
+    examsList,
   ] = await Promise.all([
     // Total enrolled students across lecturer courses
     Enrollment.countDocuments({ courseId: { $in: courseIds } }),
@@ -317,6 +320,9 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       .populate("courseId", "title")
       .sort({ createdAt: -1 })
       .lean(),
+
+    // All exams for lecturer courses
+    Exam.find({ courseId: { $in: courseIds } }).lean(),
   ]);
 
   // Format Course cards with stats
@@ -509,7 +515,19 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     const assignmentAverageScore =
       studentGradedCount > 0 ? Math.round(studentTotalEarnedPct / studentGradedCount) : null;
 
+    const courseExams = (examsList || []).filter(
+      (e: any) => e.courseId?.toString() === courseIdStr
+    );
+    const totalCourseExams = courseExams.length;
+    const studentExamsGraded = courseExams.filter((e: any) => {
+      const res = (e.results || []).find((r: any) => r.studentId?.toString() === studentIdStr);
+      return (e.status === "completed" || e.status === "graded") || (res && res.marks !== null && res.marks !== undefined);
+    });
+    const completedExamsCount = studentExamsGraded.length;
+
     const allAssignmentsCompleted = totalCourseAssignments > 0 && studentGradedCount === totalCourseAssignments;
+    const finalExamCompleted = totalCourseExams === 0 || completedExamsCount === totalCourseExams;
+    const isCompleted = allAssignmentsCompleted && finalExamCompleted;
 
     let finalGrade: number | null = null;
     let finalLetterGrade = "In Progress";
@@ -517,8 +535,21 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     let gpaPoint: number | null = null;
     let status = "In Progress";
 
-    if (allAssignmentsCompleted) {
-      finalGrade = Math.round(studentTotalEarnedPct / totalCourseAssignments);
+    if (isCompleted) {
+      let totalPts = studentTotalEarnedPct;
+      let totalComponents = totalCourseAssignments;
+
+      studentExamsGraded.forEach((e: any) => {
+        const res = (e.results || []).find((r: any) => r.studentId?.toString() === studentIdStr);
+        if (res && res.marks !== null && res.marks !== undefined) {
+          const maxM = Number(res.maxMarks || e.maxMarks) || 100;
+          const pct = maxM > 0 ? (Number(res.marks) / maxM) * 100 : 0;
+          totalPts += pct;
+          totalComponents += 1;
+        }
+      });
+
+      finalGrade = Math.round(totalPts / Math.max(1, totalComponents));
       completedStudentsCount += 1;
       completedStudentsTotalFinalScore += finalGrade;
 
@@ -567,7 +598,11 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       totalAssignments: totalCourseAssignments,
       completedAssignments: studentGradedCount,
       pendingAssignments: Math.max(0, totalCourseAssignments - studentGradedCount),
+      totalExams: totalCourseExams,
+      completedExams: completedExamsCount,
       allAssignmentsCompleted,
+      finalExamCompleted,
+      isCompleted,
       assignmentScores,
       assignmentAverageScore,
       finalGrade,
@@ -579,16 +614,20 @@ export async function getLecturerDashboard(userId: string, userName: string) {
   });
 
   const finalGradeAverage =
-    completedStudentsCount > 0 ? Math.round(completedStudentsTotalFinalScore / completedStudentsCount) : 0;
+    completedStudentsCount > 0
+      ? Math.round(completedStudentsTotalFinalScore / completedStudentsCount)
+      : 0;
 
   const finalPassingRate =
-    completedStudentsCount > 0 ? Math.round((completedPassingCount / completedStudentsCount) * 100) : 0;
+    completedStudentsCount > 0
+      ? Math.round((completedPassingCount / completedStudentsCount) * 100)
+      : 0;
 
   const inProgressStudentsCount = studentsPerformance.length - completedStudentsCount;
 
   const coursesPerformance = formattedCourses.map((c: any) => {
     const courseStudents = studentsPerformance.filter((s: any) => s.courseId === c._id);
-    const completedCourseStudents = courseStudents.filter((s: any) => s.allAssignmentsCompleted);
+    const completedCourseStudents = courseStudents.filter((s: any) => s.isCompleted || s.allAssignmentsCompleted);
 
     const courseFinalAvg =
       completedCourseStudents.length > 0
@@ -614,6 +653,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       totalAssignments: c.assignmentCount,
       completedStudentsCount: completedCourseStudents.length,
       inProgressStudentsCount: courseStudents.length - completedCourseStudents.length,
+      allCompleted: courseStudents.length > 0 && completedCourseStudents.length === courseStudents.length,
       assignmentAvg: courseAssignAvg,
       finalGradeAvg: courseFinalAvg,
     };
@@ -673,6 +713,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
         totalEnrolled: studentsPerformance.length,
         completedCount: completedStudentsCount,
         inProgressCount: inProgressStudentsCount,
+        allCompleted: studentsPerformance.length > 0 && completedStudentsCount === studentsPerformance.length,
         completionRate:
           studentsPerformance.length > 0
             ? Math.round((completedStudentsCount / studentsPerformance.length) * 100)

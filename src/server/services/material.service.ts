@@ -8,6 +8,8 @@ import { generatePresignedUploadUrl, generatePresignedDownloadUrl, getFilePublic
 import { BadRequestError, NotFoundError, ForbiddenError } from "../core/errors";
 import { CreateMaterialInput, GenerateUploadUrlInput } from "../dtos/material.dto";
 
+type MaterialTypeEnum = "notes" | "slides" | "tutorial" | "assignment" | "video" | "other";
+
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -106,8 +108,8 @@ export async function createMaterial(input: CreateMaterialInput, userId: string)
     fileUrl: `https://${process.env.R2_BUCKET_NAME || "kms-bucket"}.r2.cloudflarestorage.com/${input.fileKey}`,
     fileSize: input.fileSize || 0,
     materialType: (["notes", "slides", "tutorial", "assignment", "video", "other"].includes(input.fileType || "")
-      ? input.fileType
-      : "notes") as any,
+      ? (input.fileType as MaterialTypeEnum)
+      : "notes"),
     mimeType: input.mimeType || "application/octet-stream",
     lecturerId: new mongoose.Types.ObjectId(userId),
     isPublished: input.isPublished ?? true,
@@ -122,8 +124,8 @@ export async function createMaterial(input: CreateMaterialInput, userId: string)
 export async function getMaterials(courseId?: string, isStudent = false) {
   await connectToDatabase();
 
-  const query: Record<string, any> = {};
-  if (courseId) query.courseId = courseId;
+  const query: Record<string, unknown> = {};
+  if (courseId) query.courseId = new mongoose.Types.ObjectId(courseId);
   if (isStudent) query.isPublished = true;
 
   const materials = await CourseMaterial.find(query)
@@ -177,11 +179,12 @@ export async function getMaterialFileUrl(
     }
   }
 
-  // External link (e.g. Google Drive recording link) bypasses R2 signed URL
+  // Local storage or external link bypasses R2 signed URL
   if (
     material.fileUrl &&
-    (material.fileUrl.startsWith("http://") || material.fileUrl.startsWith("https://")) &&
-    (material.fileKey?.startsWith("external-link") || material.materialType === "video")
+    (material.fileUrl.startsWith("/uploads/") ||
+      ((material.fileUrl.startsWith("http://") || material.fileUrl.startsWith("https://")) &&
+        (material.fileKey?.startsWith("external-link") || material.materialType === "video")))
   ) {
     return { signedUrl: material.fileUrl, material };
   }
@@ -192,11 +195,15 @@ export async function getMaterialFileUrl(
       ? `attachment; filename="${encodeURIComponent(cleanFileName)}"`
       : `inline; filename="${encodeURIComponent(cleanFileName)}"`;
 
-  const signedUrl = await generatePresignedDownloadUrl(material.fileKey, {
-    expiresIn: 3600,
-    contentDisposition: disposition,
-    contentType: material.mimeType || "application/pdf",
-  });
-
-  return { signedUrl, material };
+  try {
+    const signedUrl = await generatePresignedDownloadUrl(material.fileKey, {
+      expiresIn: 3600,
+      contentDisposition: disposition,
+      contentType: material.mimeType || "application/pdf",
+    });
+    return { signedUrl, material };
+  } catch (err) {
+    // If R2 signed URL fails, fallback to direct fileUrl
+    return { signedUrl: material.fileUrl || `/api/materials`, material };
+  }
 }

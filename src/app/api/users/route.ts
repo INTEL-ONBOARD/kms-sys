@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
+import { requireRole } from "@/server/core/auth-context";
 import { successResponse, handleApiError } from "@/server/core/api-response";
 import * as UserService from "@/server/services/user.service";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requireRole(req, ["super_admin", "admin"]);
     const { users } = await UserService.getUsers();
     return successResponse(users, undefined, 200);
   } catch (error) {
@@ -13,6 +15,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireRole(req, ["super_admin", "admin"]);
     const payload = await req.json();
     if (!payload.name?.trim() || !payload.email?.trim()) {
       return successResponse(undefined, "name and email are required", 400);
@@ -30,3 +33,4 @@ export async function POST(req: NextRequest) {
     return handleApiError(error, "POST /api/users");
   }
 }
+

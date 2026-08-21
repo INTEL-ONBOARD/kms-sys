@@ -8,6 +8,7 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
+    await requireRole(req, ["super_admin", "admin"]);
     const result = await SettingsService.getSettings();
     return successResponse(result, undefined, 200);
   } catch (error) {

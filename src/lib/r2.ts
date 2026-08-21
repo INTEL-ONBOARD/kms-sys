@@ -42,6 +42,24 @@ export async function generatePresignedUploadUrl(
 }
 
 /**
+ * Uploads a binary buffer directly to Cloudflare R2 from server
+ */
+export async function uploadBufferToR2(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<void> {
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  });
+
+  await r2Client.send(command);
+}
+
+/**
  * Generate a pre-signed GET URL for secure, temporary file downloads and in-browser viewing
  * (Used when the R2 bucket is private and not exposed via public domain)
  */

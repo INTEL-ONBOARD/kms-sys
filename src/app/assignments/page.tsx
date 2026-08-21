@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { 
   FiChevronDown, 
   FiAlertCircle, 
@@ -198,7 +199,9 @@ function AssignmentsContent() {
       throw new Error(errorData.error || "Failed to generate upload URL");
     }
 
-    const { uploadUrl, publicUrl } = await presignRes.json();
+    const presignData = await presignRes.json();
+    const uploadUrl = presignData.data?.uploadUrl || presignData.uploadUrl;
+    const publicUrl = presignData.data?.publicUrl || presignData.publicUrl;
     setUploadProgressText(`Uploading ${file.name} to storage...`);
 
     await new Promise<void>((resolve, reject) => {
@@ -428,24 +431,43 @@ function AssignmentsContent() {
               ))}
             </div>
           ) : filteredAssignments.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-              <div className="w-14 h-14 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-3 text-2xl">
-                <FiFileText />
+            <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm p-8 max-w-2xl mx-auto">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-100 to-purple-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-5 text-3xl shadow-sm border border-indigo-100/60">
+                <MdOutlineAssignment />
               </div>
-              <h3 className="text-base font-bold text-gray-700">No Assignments Found</h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                {assignments.length === 0
-                  ? "There are no assignments published for your enrolled courses yet."
-                  : "No assignments match your current tab or search criteria."}
+              <h3 className="text-lg font-black text-[#2D3748]">
+                {searchQuery ? "No Matching Tasks Found" : "All Caught Up! No Assignments Due"}
+              </h3>
+              <p className="text-xs text-gray-500 mt-2 max-w-md mx-auto leading-relaxed">
+                {searchQuery 
+                  ? `No coursework briefs match "${searchQuery}". Try clearing search or switching filter tabs.` 
+                  : "You have no pending assignments or coursework tasks scheduled at the moment. Keep exploring course materials or review your academic timetable."}
               </p>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="mt-3 text-xs font-bold text-[#5A67D8] hover:underline"
-                >
-                  Clear Search
-                </button>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
+                  >
+                    <FiRefreshCw className="text-xs" /> Reset Filters & Search
+                  </button>
+                ) : (
+                  <>
+                    <Link
+                      href="/courses"
+                      className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
+                    >
+                      <FiBookOpen className="text-xs" /> Browse Enrolled Courses
+                    </Link>
+                    <Link
+                      href="/calendar"
+                      className="px-5 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    >
+                      <FiCalendar className="text-xs text-[#5A67D8]" /> Check Academic Calendar
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-8">

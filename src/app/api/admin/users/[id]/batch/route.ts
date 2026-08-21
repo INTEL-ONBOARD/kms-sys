@@ -23,34 +23,50 @@ export async function PUT(
       throw new BadRequestError("batchId must be provided");
     }
 
-    if (batchId === null) {
-      // Always remove the user from any batch they might currently be in
+    if (!batchId || batchId === "none") {
+      // Remove the user from any batch they might currently be in
       await Batch.updateMany(
         { students: userId },
         { $pull: { students: userId } }
       );
-    } else {
-      // First check if the student is already in ANY batch
-      const existingBatch = await Batch.findOne({ students: userId });
-      if (existingBatch) {
-        throw new BadRequestError("This student is already assigned to a batch.");
-      }
-
-      // First check if the target batch has reached its maximum capacity
-      const targetBatch = await Batch.findById(batchId);
-      if (!targetBatch) {
-        throw new NotFoundError("Target batch not found");
-      }
-
-      if (targetBatch.students.length >= targetBatch.maxCapacity) {
-        throw new BadRequestError("Batch capacity reached");
-      }
-
-      await Batch.findByIdAndUpdate(
-        batchId,
-        { $addToSet: { students: userId } }
-      );
+      return successResponse({ message: "User removed from batch successfully" }, undefined, 200);
     }
+
+    // Check if target batch exists
+    const targetBatch = await Batch.findById(batchId);
+    if (!targetBatch) {
+      throw new NotFoundError("Target batch not found");
+    }
+
+    const isAlreadyInTargetBatch = targetBatch.students.some(
+      (s) => s.toString() === userId
+    );
+
+    if (isAlreadyInTargetBatch) {
+      // Ensure student is cleanly removed from any other batches if orphaned
+      await Batch.updateMany(
+        { _id: { $ne: batchId }, students: userId },
+        { $pull: { students: userId } }
+      );
+      return successResponse({ message: "Student is already in this batch" }, undefined, 200);
+    }
+
+    // Check if target batch has reached its maximum capacity
+    if (targetBatch.students.length >= targetBatch.maxCapacity) {
+      throw new BadRequestError("Batch capacity reached");
+    }
+
+    // Remove user from any other batch they might currently be in (seamless reassignment)
+    await Batch.updateMany(
+      { students: userId },
+      { $pull: { students: userId } }
+    );
+
+    // Add user to the target batch
+    await Batch.findByIdAndUpdate(
+      batchId,
+      { $addToSet: { students: userId } }
+    );
     
     return successResponse({ message: "User batch assignment updated successfully" }, undefined, 200);
   } catch (error) {

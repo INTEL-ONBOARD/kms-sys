@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import DashHeader from "@/Components/DashHeader";
@@ -26,6 +26,32 @@ interface SettingsState {
   activePaymentGateway: string;
   features: FeatureFlags;
 }
+
+const ToggleSwitch = ({
+  enabled,
+  onToggle,
+  danger = false,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+  danger?: boolean;
+}) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    role="switch"
+    aria-checked={enabled}
+    className={`w-12 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+      enabled
+        ? danger
+          ? "bg-red-500 justify-end"
+          : "bg-indigo-600 justify-end"
+        : "bg-gray-300 justify-start"
+    }`}
+  >
+    <div className="w-4 h-4 bg-white rounded-full shadow-md" />
+  </button>
+);
 
 const DEFAULT_SETTINGS: SettingsState = {
   platformName: "",
@@ -117,22 +143,6 @@ export default function SettingsAdminPage() {
       setSaving(false);
     }
   };
-
-  const ToggleSwitch = ({ enabled, onToggle, danger = false }: { enabled: boolean; onToggle: () => void; danger?: boolean }) => (
-    <button
-      type="button"
-      onClick={onToggle}
-      role="switch"
-      aria-checked={enabled}
-      className={`w-12 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-        enabled
-          ? danger ? "bg-red-500 justify-end" : "bg-indigo-600 justify-end"
-          : "bg-gray-300 justify-start"
-      }`}
-    >
-      <div className="w-4 h-4 bg-white rounded-full shadow-md" />
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">

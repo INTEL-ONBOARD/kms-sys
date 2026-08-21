@@ -62,6 +62,8 @@ export default function LecturerAnalyticsPage() {
   const assignmentDonut = performance.assignmentDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
   const finalDonut = performance.finalDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
 
+  const isFinalGradesReady = (finalSummary.completedCount || 0) > 0;
+
   return (
     <div className="space-y-6 font-sans pb-8">
       {/* Header */}
@@ -92,7 +94,7 @@ export default function LecturerAnalyticsPage() {
           <p className="font-extrabold text-blue-950">Grading Policy & Evaluation Architecture</p>
           <p className="text-blue-800 leading-relaxed">
             <strong>Assignment Grades</strong> represent continuous individual assessment scores evaluated per task.
-            The <strong>Final Course Grade</strong> is automatically calculated <span className="font-bold underline">only after all assignments</span> in the course are completed and evaluated for a student. Until then, students remain marked as <em>In Progress</em>.
+            The <strong>Final Course Grade</strong> is generated for each student <span className="font-bold underline">after completing all assignments and the final exam</span>. The <strong>Final Course Grades Distribution</strong> immediately displays results as soon as any student completes their coursework, without waiting for the entire class.
           </p>
         </div>
       </div>
@@ -120,14 +122,18 @@ export default function LecturerAnalyticsPage() {
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className={`w-2 h-2 rounded-full ${isFinalGradesReady ? "bg-emerald-500" : "bg-amber-500"}`} />
               <p className="text-xs text-[#A0AEC0] font-semibold uppercase tracking-wider">Final Grades Ready</p>
             </div>
             <h3 className="text-2xl font-black text-emerald-600 mt-1.5">
               {finalSummary.completedCount} <span className="text-sm font-bold text-gray-400">/ {finalSummary.totalEnrolled}</span>
             </h3>
             <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
-              <span className="font-bold text-emerald-600">{finalSummary.completionRate}%</span> all assignments completed
+              {isFinalGradesReady ? (
+                <span className="font-bold text-emerald-600">{finalSummary.completedCount} student(s) completed all requirements</span>
+              ) : (
+                <span className="text-amber-600 font-semibold">{finalSummary.inProgressCount} student(s) in progress</span>
+              )}
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-2xs">
@@ -135,7 +141,7 @@ export default function LecturerAnalyticsPage() {
           </div>
         </div>
 
-        {/* Card 3: Class Final Average (Completed Students) */}
+        {/* Card 3: Class Final Average */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1.5">
@@ -143,10 +149,10 @@ export default function LecturerAnalyticsPage() {
               <p className="text-xs text-[#A0AEC0] font-semibold uppercase tracking-wider">Final Course Avg</p>
             </div>
             <h3 className="text-2xl font-black text-[#5A67D8] mt-1.5">
-              {finalSummary.completedCount > 0 ? `${finalSummary.averageFinalGrade}%` : "—"}
+              {isFinalGradesReady ? `${finalSummary.averageFinalGrade}%` : "—"}
             </h3>
             <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
-              {finalSummary.inProgressCount} student(s) in progress
+              {isFinalGradesReady ? `Based on ${finalSummary.completedCount} completed student(s)` : `${finalSummary.inProgressCount} student(s) in progress`}
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#5A67D8] flex items-center justify-center text-xl shadow-2xs">
@@ -162,10 +168,10 @@ export default function LecturerAnalyticsPage() {
               <p className="text-xs text-[#A0AEC0] font-semibold uppercase tracking-wider">Final Pass Rate</p>
             </div>
             <h3 className="text-2xl font-black text-purple-600 mt-1.5">
-              {finalSummary.completedCount > 0 ? `${finalSummary.passingRate}%` : "—"}
+              {isFinalGradesReady ? `${finalSummary.passingRate}%` : "—"}
             </h3>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              {finalSummary.completedCount > 0 ? "Grade D or higher (≥50%)" : "Awaiting completion"}
+              {isFinalGradesReady ? "Grade D or higher (≥50%)" : "Awaiting student completion"}
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shadow-2xs">
@@ -207,28 +213,41 @@ export default function LecturerAnalyticsPage() {
               <h3 className="font-bold text-[#111827] text-sm flex items-center gap-2">
                 <FiAward className="text-emerald-600" /> Final Course Grades Distribution
               </h3>
-              <span className="text-[10px] font-extrabold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">
-                {finalSummary.completedCount} Completed
-              </span>
+              {isFinalGradesReady ? (
+                <span className="text-[10px] font-extrabold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                  {finalSummary.completedCount} Completed
+                </span>
+              ) : (
+                <span className="text-[10px] font-extrabold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  {finalSummary.inProgressCount} Pending Completion
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-gray-400 mt-1">
-              Calculated strictly for students who completed <span className="font-bold text-gray-600">all assignments</span>
+              Calculated for students who completed <span className="font-bold text-gray-600">all assignments & final exam</span>
             </p>
           </div>
           <div className="py-2">
-            {finalSummary.completedCount > 0 ? (
+            {isFinalGradesReady ? (
               <MiniDonutChart data={finalDonut} />
             ) : (
-              <div className="text-center py-10 text-gray-400 text-xs">
-                <FiClock className="text-2xl mx-auto mb-2 text-gray-300" />
-                <p className="font-semibold text-gray-500">No students have completed all assignments yet.</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Final grades will populate as students complete all tasks.</p>
+              <div className="text-center py-10 px-4 bg-gray-50/60 rounded-2xl border border-dashed border-gray-200 my-2">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl mx-auto mb-3 shadow-2xs">
+                  <FiClock />
+                </div>
+                <h4 className="font-bold text-gray-800 text-xs">No Final Grades Completed Yet</h4>
+                <p className="text-[11px] text-gray-500 mt-1 max-w-xs mx-auto leading-relaxed">
+                  Final course grades and distribution will appear as soon as a student completes all course assignments and the final exam.
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-gray-200 text-[10px] font-bold text-gray-600 shadow-2xs">
+                  <span>0 of {finalSummary.totalEnrolled} students finished</span>
+                </div>
               </div>
             )}
           </div>
           <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium">
             <span>Completed: <strong>{finalSummary.completedCount}</strong> &middot; In Progress: <strong>{finalSummary.inProgressCount}</strong></span>
-            <span>Final Course Avg: <strong className="text-emerald-600">{finalSummary.completedCount > 0 ? `${finalSummary.averageFinalGrade}%` : "—"}</strong></span>
+            <span>Final Course Avg: <strong className={isFinalGradesReady ? "text-emerald-600 font-bold" : "text-gray-400"}>{isFinalGradesReady ? `${finalSummary.averageFinalGrade}%` : "Awaiting completion"}</strong></span>
           </div>
         </div>
       </div>

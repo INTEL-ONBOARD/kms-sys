@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import DashHeader from '@/Components/DashHeader'; 
 import AdminSidebar from '@/Components/AdminSidebar';
 import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail } from 'react-icons/fi';
+import { useToast } from '@/Components/ToastProvider';
 
 interface UserData {
   _id: string;
@@ -17,6 +18,7 @@ interface UserData {
 }
 
 export default function UserAdminPage() {
+  const toast = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -120,14 +122,13 @@ export default function UserAdminPage() {
         // Reset form data and re-apply Demo Password
         setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active', reportApproved: false });
         fetchUsers(); 
-        alert(`User successfully added!\nPlease remind them to log in with password: Demo@1234 and update their profile.`);
+        toast.success(`User "${formData.name}" added successfully! Demo password: Demo@1234`);
       } else {
-        // Show exact error if user addition fails (e.g., Email already exists)
-        alert("Failed to add user: " + (data.message || "Unknown error occurred"));
+        toast.error("Failed to add user: " + (data.message || "Unknown error occurred"));
       }
     } catch (error) {
       console.error(error);
-      alert("Network Error: Please check your terminal to see if the server crashed.");
+      toast.error("Network Error: Please check server connectivity.");
     }
   };
 
@@ -146,13 +147,13 @@ export default function UserAdminPage() {
         setIsInviteModalOpen(false);
         setInviteFormData({ name: '', email: '', role: 'student' });
         fetchUsers();
-        alert('Invitation sent successfully! The user will receive an email to activate their account.');
+        toast.success('Invitation sent successfully! The user will receive an activation email.');
       } else {
-        alert('Failed to send invitation: ' + (data.message || 'Unknown error'));
+        toast.error('Failed to send invitation: ' + (data.message || 'Unknown error'));
       }
     } catch (error) {
       console.error(error);
-      alert('Network Error: Please check your terminal to see if the server crashed.');
+      toast.error('Network Error: Unable to send invitation.');
     } finally {
       setInviteLoading(false);
     }
@@ -171,9 +172,13 @@ export default function UserAdminPage() {
       if (res.ok) {
         setIsEditModalOpen(false);
         fetchUsers(); 
+        toast.success("User updated successfully");
+      } else {
+        toast.error("Failed to update user");
       }
     } catch (error) {
       console.error(error);
+      toast.error("Network error while updating user");
     }
   };
 
@@ -187,9 +192,13 @@ export default function UserAdminPage() {
       if (res.ok) {
         setIsDeleteModalOpen(false);
         fetchUsers(); 
+        toast.success("User deleted successfully");
+      } else {
+        toast.error("Failed to delete user");
       }
     } catch (error) {
       console.error(error);
+      toast.error("Network error while deleting user");
     }
   };
 
@@ -204,9 +213,11 @@ export default function UserAdminPage() {
       });
       if (res.ok) {
         setUsers(users.map(u => u._id === user._id ? { ...u, reportApproved: nextState } : u));
+        toast.success(`Academic report download ${nextState ? 'approved' : 'locked'} for ${user.name}`);
       }
     } catch (err) {
       console.error("Failed to toggle report approval:", err);
+      toast.error("Failed to update report access");
     }
   };
 
@@ -320,7 +331,7 @@ export default function UserAdminPage() {
           </div>
 
           <div className="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto min-h-[400px]">
+            <div className="overflow-x-auto w-full min-h-[400px]">
               <table className="w-full text-left text-sm text-gray-600">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold border-b border-gray-200">
                   <tr>

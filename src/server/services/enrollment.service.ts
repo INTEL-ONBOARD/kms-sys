@@ -159,16 +159,24 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 4. Live / Upcoming classes for enrolled courses
+  // 4. Live / Upcoming classes for enrolled courses (only active live or future upcoming)
+  if (allCourseIds.length > 0) {
+    await LiveClass.updateMany(
+      {
+        courseId: { $in: allCourseIds },
+        status: "upcoming",
+        endTime: { $lt: now },
+      },
+      { $set: { status: "ended" } }
+    );
+  }
+
   const liveClasses =
     allCourseIds.length > 0
       ? await LiveClass.find({
           courseId: { $in: allCourseIds },
-          status: { $ne: "cancelled" },
-          $or: [
-            { status: { $in: ["upcoming", "live"] } },
-            { endTime: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } },
-          ],
+          status: { $in: ["upcoming", "live"] },
+          endTime: { $gte: now },
         })
           .populate("courseId", "title category instructor")
           .sort({ startTime: 1 })
@@ -336,12 +344,25 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
           .lean()
       : [];
 
-  // 2. Fetch all scheduled Live Classes for enrolled courses
+  // 2. Auto-mark past classes as ended and fetch ONLY active live and future upcoming classes
+  const nowTime = new Date();
+  if (courseIds.length > 0) {
+    await LiveClass.updateMany(
+      {
+        courseId: { $in: courseIds },
+        status: "upcoming",
+        endTime: { $lt: nowTime },
+      },
+      { $set: { status: "ended" } }
+    );
+  }
+
   const liveClasses =
     courseIds.length > 0
       ? await LiveClass.find({
           courseId: { $in: courseIds },
-          status: { $ne: "cancelled" },
+          status: { $in: ["upcoming", "live"] },
+          endTime: { $gte: nowTime },
         })
           .populate("courseId", "title colorCode instructor")
           .sort({ startTime: 1 })
@@ -404,6 +425,11 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
     const courseTitle = c?.title || "Live Session";
     const startDate = new Date(lc.startTime);
     const endDate = new Date(lc.endTime);
+
+    // Skip if finished / past and not currently live
+    if (endDate.getTime() < Date.now() && lc.status !== "live") {
+      return;
+    }
 
     const dayOfWeek = daysOfWeek[startDate.getDay()] || "Monday";
     const startHour = startDate.getHours();
@@ -528,38 +554,44 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
     };
   });
 
-  // Formatted live classes objects for direct list views
-  const formattedLiveClasses = liveClasses.map((lc: any) => {
-    const c = lc.courseId as any;
-    const startDate = new Date(lc.startTime);
-    const endDate = new Date(lc.endTime);
-    return {
-      _id: lc._id.toString(),
-      title: lc.title,
-      courseId: c?._id?.toString() || lc.courseId?.toString() || "",
-      courseTitle: c?.title || "Live Course",
-      instructor: lc.instructor || c?.instructor || "Course Lecturer",
-      startTime: startDate.toISOString(),
-      endTime: endDate.toISOString(),
-      dateFormatted: startDate.toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      timeFormatted: `${startDate.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })} - ${endDate.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })}`,
-      meetingLink: lc.meetingLink || "",
-      status: lc.status || "upcoming",
-    };
-  });
+  // Formatted live classes objects for direct list views (only live and future upcoming)
+  const nowTs = Date.now();
+  const formattedLiveClasses = liveClasses
+    .filter((lc: any) => {
+      const endDate = new Date(lc.endTime);
+      return lc.status === "live" || (lc.status === "upcoming" && endDate.getTime() >= nowTs);
+    })
+    .map((lc: any) => {
+      const c = lc.courseId as any;
+      const startDate = new Date(lc.startTime);
+      const endDate = new Date(lc.endTime);
+      return {
+        _id: lc._id.toString(),
+        title: lc.title,
+        courseId: c?._id?.toString() || lc.courseId?.toString() || "",
+        courseTitle: c?.title || "Live Course",
+        instructor: lc.instructor || c?.instructor || "Course Lecturer",
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+        dateFormatted: startDate.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        timeFormatted: `${startDate.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })} - ${endDate.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })}`,
+        meetingLink: lc.meetingLink || "",
+        status: lc.status || "upcoming",
+      };
+    });
 
   return {
     courses: validCourses,

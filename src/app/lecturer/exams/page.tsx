@@ -11,10 +11,12 @@ import {
   FiLayers,
   FiBookOpen,
   FiEdit3,
-  FiSearch
+  FiSearch,
+  FiAward
 } from "react-icons/fi";
 import CreateExamModal from "@/Components/lecturer/CreateExamModal";
 import CourseManageModal from "@/Components/lecturer/CourseManageModal";
+import ExamGradingModal from "@/Components/lecturer/ExamGradingModal";
 import { useToast } from "@/Components/ToastProvider";
 
 interface CourseItem {
@@ -42,6 +44,8 @@ interface ExamItem {
   type: string;
   status: string;
   weight?: number;
+  maxMarks?: number;
+  results?: any[];
 }
 
 export default function LecturerExamsPage() {
@@ -51,6 +55,7 @@ export default function LecturerExamsPage() {
   const [selectedCourseForModal, setSelectedCourseForModal] = useState<CourseItem | null>(null);
 
   const [editingExam, setEditingExam] = useState<ExamItem | null>(null);
+  const [gradingExamId, setGradingExamId] = useState<string | null>(null);
   const [exams, setExams] = useState<ExamItem[]>([]);
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("All");
@@ -451,17 +456,14 @@ export default function LecturerExamsPage() {
                     Edit Parameters
                   </button>
                   <button
-                    onClick={() => handlePublishResults(e._id, e.title)}
-                    disabled={publishingId === e._id || isCompleted}
+                    onClick={() => setGradingExamId(e._id)}
                     className={`px-3.5 py-2 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer ${
                       isCompleted
-                        ? "bg-emerald-600 cursor-default"
+                        ? "bg-emerald-600 hover:bg-emerald-700"
                         : "bg-purple-600 hover:bg-purple-700"
                     }`}
                   >
-                    {publishingId === e._id ? (
-                      "Publishing..."
-                    ) : isCompleted ? (
+                    {isCompleted ? (
                       <>
                         <FiCheckCircle /> Results Published
                       </>
@@ -474,6 +476,18 @@ export default function LecturerExamsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Enter & Send Marks Modal */}
+      {gradingExamId && (
+        <ExamGradingModal
+          examId={gradingExamId}
+          onClose={() => setGradingExamId(null)}
+          onSuccess={() => {
+            fetchExams();
+            fetchLecturerCourses();
+          }}
+        />
       )}
 
       {/* Create / Edit Exam Modal */}

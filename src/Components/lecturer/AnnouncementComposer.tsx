@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiBold, FiItalic, FiLink, FiList, FiPaperclip, FiSend } from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
 
@@ -16,6 +16,20 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
   const [notifyStudents, setNotifyStudents] = useState(false);
   const [attachmentName, setAttachmentName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Sync selectedCourse when courses prop loads or changes
+  useEffect(() => {
+    if (courses && courses.length > 0) {
+      setSelectedCourse((prev) => {
+        if (prev && courses.some((c) => c._id === prev)) {
+          return prev;
+        }
+        return courses[0]._id;
+      });
+    } else {
+      setSelectedCourse("");
+    }
+  }, [courses]);
 
   // Formatting toggles (decorates textarea content)
   const applyFormat = (formatType: string) => {
@@ -36,7 +50,8 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCourse && courses.length > 0) {
+    const effectiveCourseId = selectedCourse || courses[0]?._id;
+    if (!effectiveCourseId) {
       toast.warning("Please select a course");
       return;
     }
@@ -51,8 +66,8 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          courseId: selectedCourse || courses[0]?._id,
-          message,
+          courseId: effectiveCourseId,
+          message: message.trim(),
           notifyStudents,
           attachments: attachmentName ? [attachmentName] : [],
         }),
@@ -86,7 +101,7 @@ export default function AnnouncementComposer({ courses, onAnnouncementPosted }: 
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Target Course</label>
           <select
-            value={selectedCourse}
+            value={selectedCourse || courses[0]?._id || ""}
             onChange={(e) => setSelectedCourse(e.target.value)}
             className="w-full bg-[#F7FAFC] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-[#2563EB]"
           >

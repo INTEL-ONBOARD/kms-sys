@@ -275,26 +275,43 @@ export default function CoursesPage() {
 
           {/* Empty State */}
           {!isLoading && filteredAndSortedCourses.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
-              <div className="w-16 h-16 rounded-full bg-indigo-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-4 text-2xl">
-                <FiBook />
+            <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm p-8 max-w-2xl mx-auto">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-100 to-blue-50 text-[#5A67D8] flex items-center justify-center mx-auto mb-5 text-3xl shadow-sm border border-indigo-100/60">
+                <FiBookOpen />
               </div>
-              <h3 className="text-base font-bold text-gray-700">
-                {searchQuery ? "No Matching Courses" : "No Enrolled Courses"}
+              <h3 className="text-lg font-black text-[#2D3748]">
+                {searchQuery ? "No Matching Courses Found" : "No Enrolled Courses Yet"}
               </h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
+              <p className="text-xs text-gray-500 mt-2 max-w-md mx-auto leading-relaxed">
                 {searchQuery 
-                  ? `No enrolled courses match "${searchQuery}".` 
-                  : "You are not enrolled in any courses yet. Please contact your academic administrator to enroll you in your assigned courses and modules."}
+                  ? `We couldn't find any courses matching "${searchQuery}". Try adjusting your keywords or clearing the search filter.` 
+                  : "You are not currently enrolled in any academic courses for this term. Explore the academic calendar or consult your academic administrator."}
               </p>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="mt-4 text-xs font-bold text-[#5A67D8] hover:underline"
-                >
-                  Clear Search
-                </button>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
+                  >
+                    <FiRefreshCw className="text-xs" /> Clear Search Filter
+                  </button>
+                ) : (
+                  <>
+                    <Link
+                      href="/calendar"
+                      className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
+                    >
+                      <FiCalendar className="text-xs" /> Check Academic Calendar
+                    </Link>
+                    <Link
+                      href="/assignments"
+                      className="px-5 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    >
+                      <MdOutlineAssignment className="text-sm text-[#5A67D8]" /> View Coursework & Tasks
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           )}
 

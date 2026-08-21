@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { requireRole } from "@/server/core/auth-context";
 import { validateBody } from "@/server/core/validator";
 import { parsePaginationParams } from "@/server/core/pagination";
 import { successResponse, handleApiError } from "@/server/core/api-response";
@@ -26,10 +27,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authUser = await requireRole(req, ["super_admin", "admin", "lecturer"]);
     const body = await validateBody(req, createCourseSchema);
-    const course = await CourseService.createCourse(body);
+    const course = await CourseService.createCourse(body, authUser.id);
     return successResponse(course, undefined, 201);
   } catch (error) {
     return handleApiError(error, "POST /api/courses");
   }
 }
+

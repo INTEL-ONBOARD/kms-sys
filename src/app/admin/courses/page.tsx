@@ -22,6 +22,7 @@ import {
   FiAlertCircle,
   FiLoader
 } from 'react-icons/fi';
+import { useToast } from '@/Components/ToastProvider';
 import type { ScheduleSlot } from '@/types/lms';
 
 // Define the Course interface based on your MongoDB structure
@@ -220,6 +221,7 @@ function LecturerDropdown({ selectedId, selectedName, onSelect, required = true 
 }
 
 export default function CoursesAdminPage() {
+  const toast = useToast();
   // --- States for Data and UI ---
   const [courses, setCourses] = useState<CourseData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -325,7 +327,7 @@ export default function CoursesAdminPage() {
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.instructor || !formData.instructorId) {
-      alert("Please select a registered lecturer from the dropdown list.");
+      toast.warning("Please select a registered lecturer from the dropdown list.");
       return;
     }
 
@@ -340,12 +342,14 @@ export default function CoursesAdminPage() {
         setFormData({ title: '', instructor: '', instructorId: '', category: 'Design', price: 'Free', status: 'draft', colorCode: '#5A67D8' });
         setScheduleSlots([]);
         fetchCourses();
+        toast.success("Course created successfully!");
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to create course");
+        toast.error(data.error || "Failed to create course");
       }
     } catch (error) {
       console.error("Failed to add course:", error);
+      toast.error("Network error while creating course");
     }
   };
 
@@ -354,7 +358,7 @@ export default function CoursesAdminPage() {
     e.preventDefault();
     if (!selectedCourse) return;
     if (!formData.instructor || !formData.instructorId) {
-      alert("Please select a registered lecturer from the dropdown list.");
+      toast.warning("Please select a registered lecturer from the dropdown list.");
       return;
     }
 
@@ -367,12 +371,14 @@ export default function CoursesAdminPage() {
       if (res.ok) {
         setIsEditModalOpen(false);
         fetchCourses();
+        toast.success("Course updated successfully!");
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to update course");
+        toast.error(data.error || "Failed to update course");
       }
     } catch (error) {
       console.error("Failed to update course:", error);
+      toast.error("Network error while updating course");
     }
   };
 
@@ -384,9 +390,13 @@ export default function CoursesAdminPage() {
       if (res.ok) {
         setIsDeleteModalOpen(false);
         fetchCourses(); // Refresh table
+        toast.success("Course deleted successfully!");
+      } else {
+        toast.error("Failed to delete course");
       }
     } catch (error) {
       console.error("Failed to delete course:", error);
+      toast.error("Network error while deleting course");
     }
   };
 
@@ -515,7 +525,7 @@ export default function CoursesAdminPage() {
             </div>
 
             {/* Courses Table */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto w-full">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">

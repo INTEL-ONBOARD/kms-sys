@@ -1,6 +1,7 @@
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
-import Exam from "@/models/Exam";
-import Course from "@/models/Course";
+import Exam, { ExamDoc } from "@/models/Exam";
+import Course, { AssessmentItem } from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import Notification from "@/models/Notification";
 import { BadRequestError, NotFoundError } from "../core/errors";
@@ -9,7 +10,15 @@ import {
   buildPaginationMeta,
   createSafeSearchRegex,
 } from "../core/pagination";
-import { CreateExamInput, UpdateExamInput } from "../dtos/exam.dto";
+
+interface PopulatedExamDoc extends Omit<ExamDoc, "courseId"> {
+  courseId: {
+    _id: mongoose.Types.ObjectId;
+    title?: string;
+    category?: string;
+    assessmentItems?: AssessmentItem[];
+  } | null;
+}
 
 /**
  * Retrieves exams for lecturer's courses.
@@ -38,27 +47,27 @@ export async function getLecturerExams(
     };
   }
 
-  const query: Record<string, any> = { courseId: { $in: courseIds } };
+  const query: Record<string, unknown> = { courseId: { $in: courseIds } };
   if (pagination.search) {
     const searchRegex = createSafeSearchRegex(pagination.search);
     query.title = searchRegex;
   }
 
   const total = await Exam.countDocuments(query);
-  const examsDocs = await Exam.find(query)
+  const examsDocs = (await Exam.find(query)
     .populate("courseId", "title category assessmentItems")
     .sort({ [pagination.sortBy || "date"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
-    .lean();
+    .lean()) as unknown as PopulatedExamDoc[];
 
   // Enrich exams with weight from course breakdown
-  const exams = examsDocs.map((e: any) => {
+  const exams = examsDocs.map((e) => {
     const course = e.courseId;
     let weight: number | null = null;
     if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
       const match = course.assessmentItems.find(
-        (item: any) => item.name?.toLowerCase() === e.title?.toLowerCase()
+        (item) => item.name?.toLowerCase() === e.title?.toLowerCase()
       );
       if (match) weight = match.weight;
     }
@@ -68,10 +77,10 @@ export async function getLecturerExams(
     };
   });
 
-  const formattedCourses = courses.map((c: any) => ({
+  const formattedCourses = courses.map((c) => ({
     _id: c._id,
     title: c.title,
-    assessmentItems: (c.assessmentItems || []).filter((i: any) => i.type === "exam"),
+    assessmentItems: (c.assessmentItems || []).filter((i: AssessmentItem) => i.type === "exam"),
   }));
 
   return {
@@ -126,11 +135,11 @@ export async function createExam(
   const courseDoc = await Course.findById(targetCourseId);
   if (courseDoc && courseDoc.assessmentItems && courseDoc.assessmentItems.length > 0) {
     const isConfiguredExam = courseDoc.assessmentItems.some(
-      (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+      (i: AssessmentItem) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
     );
     if (!isConfiguredExam) {
       const isAssignment = courseDoc.assessmentItems.some(
-        (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
+        (i: AssessmentItem) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
       );
       if (isAssignment) {
         throw new BadRequestError(
@@ -215,7 +224,7 @@ export async function updateExam(
 ) {
   await connectToDatabase();
 
-  const updateFields: Record<string, any> = {};
+  const updateFields: mongoose.UpdateQuery<ExamDoc> = {};
   if (input.title) updateFields.title = input.title.trim();
   if (input.date) {
     const updatedDate = new Date(input.date);
@@ -257,4 +266,213 @@ export async function updateExam(
   }
 
   return updatedExam;
+}
+
+/**
+ * Retrieves the exam details along with all enrolled students and their current marks.
+ */
+export async function getExamGradingRoster(
+  examId: string,
+  userId: string,
+  userName: string
+) {
+  await connectToDatabase();
+
+  const exam = await Exam.findById(examId)
+    .populate("courseId", "title category instructor instructorId assessmentItems code")
+    .lean();
+
+  if (!exam) {
+    throw new NotFoundError("Exam not found");
+  }
+
+  const course = exam.courseId as any;
+  const courseId = course?._id;
+
+  let weight = 40;
+  let attendanceItem: any = null;
+
+  if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
+    const match = course.assessmentItems.find(
+      (item: any) => item.name?.toLowerCase() === exam.title?.toLowerCase()
+    );
+    if (match && typeof match.weight === "number") {
+      weight = match.weight;
+    }
+    attendanceItem = course.assessmentItems.find(
+      (item: any) => item.type === "attendance"
+    );
+  }
+
+  const enrollments = await Enrollment.find({ courseId })
+    .populate("userId", "name email image")
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const students = enrollments.map((enr: any) => {
+    const u = enr.userId;
+    const studentIdStr = u?._id ? u._id.toString() : enr.userId?.toString() || "";
+    const existingResult = (exam as any).results?.find(
+      (r: any) => r.studentId?.toString() === studentIdStr
+    );
+
+    return {
+      studentId: studentIdStr,
+      name: u?.name || "Student",
+      email: u?.email || "",
+      image: u?.image || "",
+      marks:
+        existingResult && existingResult.marks !== undefined && existingResult.marks !== null
+          ? existingResult.marks
+          : "",
+      maxMarks: existingResult?.maxMarks || (exam as any).maxMarks || 100,
+      attendanceMarks:
+        existingResult?.attendanceMarks !== undefined && existingResult?.attendanceMarks !== null
+          ? existingResult.attendanceMarks
+          : enr.attendanceMarks !== undefined && enr.attendanceMarks !== null
+          ? enr.attendanceMarks
+          : "",
+      percentage: existingResult?.percentage !== undefined ? existingResult.percentage : null,
+      grade: existingResult?.grade || "",
+      feedback: existingResult?.feedback || "",
+      gradedAt: existingResult?.gradedAt || null,
+      isGraded:
+        existingResult !== undefined &&
+        existingResult.marks !== null &&
+        existingResult.marks !== undefined,
+    };
+  });
+
+  return {
+    exam: {
+      _id: exam._id.toString(),
+      title: exam.title,
+      courseId: courseId ? courseId.toString() : "",
+      courseTitle: course?.title || "Course",
+      courseCode: course?.code || "",
+      date: exam.date,
+      duration: exam.duration,
+      location: exam.location,
+      type: exam.type,
+      status: exam.status,
+      maxMarks: (exam as any).maxMarks || 100,
+      weight,
+      hasAttendance: Boolean(attendanceItem),
+      attendanceItem: attendanceItem
+        ? {
+            name: attendanceItem.name || "Attendance & Participation",
+            weight: Number(attendanceItem.weight) || 10,
+          }
+        : null,
+      gradedCount: (exam as any).results?.length || 0,
+      totalEnrolled: enrollments.length,
+    },
+    students,
+  };
+}
+
+/**
+ * Saves exam marks for students and optionally publishes results directly to students.
+ */
+export async function saveExamGrades(
+  examId: string,
+  userId: string,
+  userName: string,
+  input: {
+    grades: Array<{
+      studentId: string;
+      marks: number | string;
+      attendanceMarks?: number | string;
+      feedback?: string;
+      maxMarks?: number;
+    }>;
+    sendToStudents?: boolean;
+    maxMarks?: number;
+  }
+) {
+  await connectToDatabase();
+
+  const exam = await Exam.findById(examId).populate("courseId", "title");
+  if (!exam) {
+    throw new NotFoundError("Exam not found");
+  }
+
+  const effectiveMax = Number(input.maxMarks) || (exam as any).maxMarks || 100;
+  (exam as any).maxMarks = effectiveMax;
+
+  const validGrades = (input.grades || []).filter(
+    (g) => g.marks !== "" && g.marks !== null && g.marks !== undefined && !isNaN(Number(g.marks))
+  );
+
+  const processedResults = validGrades.map((g) => {
+    const marksNum = Math.max(0, Math.min(effectiveMax, Number(g.marks)));
+    const pct = effectiveMax > 0 ? Math.round((marksNum / effectiveMax) * 100) : 0;
+    let letterGrade = "F";
+    if (pct >= 80) letterGrade = "A";
+    else if (pct >= 70) letterGrade = "B";
+    else if (pct >= 60) letterGrade = "C";
+    else if (pct >= 50) letterGrade = "D";
+    else letterGrade = "F";
+
+    const attMarks =
+      g.attendanceMarks !== "" &&
+      g.attendanceMarks !== null &&
+      g.attendanceMarks !== undefined &&
+      !isNaN(Number(g.attendanceMarks))
+        ? Number(g.attendanceMarks)
+        : null;
+
+    return {
+      studentId: new mongoose.Types.ObjectId(g.studentId),
+      marks: marksNum,
+      maxMarks: effectiveMax,
+      attendanceMarks: attMarks,
+      percentage: pct,
+      grade: letterGrade,
+      feedback: g.feedback ? g.feedback.trim() : "",
+      gradedAt: new Date(),
+    };
+  });
+
+  (exam as any).results = processedResults;
+
+  // Sync attendance marks to Enrollments if entered
+  for (const g of input.grades || []) {
+    if (
+      g.attendanceMarks !== "" &&
+      g.attendanceMarks !== null &&
+      g.attendanceMarks !== undefined &&
+      !isNaN(Number(g.attendanceMarks))
+    ) {
+      await Enrollment.updateOne(
+        { courseId: exam.courseId, userId: g.studentId },
+        { $set: { attendanceMarks: Number(g.attendanceMarks) } }
+      );
+    }
+  }
+
+  if (input.sendToStudents) {
+    exam.status = "completed";
+
+    // Send notifications to all students who received marks
+    const courseTitle = (exam.courseId as any)?.title || "Course";
+    const notifications = processedResults.map((r) => ({
+      userId: r.studentId,
+      type: "grading",
+      message: `Final Exam Marks Published: "${exam.title}" in ${courseTitle} (${r.marks}/${r.maxMarks} - Grade ${r.grade})`,
+      link: "/grades",
+    }));
+
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+    }
+  }
+
+  await exam.save();
+
+  return {
+    exam,
+    savedCount: processedResults.length,
+    isPublished: !!input.sendToStudents,
+  };
 }
