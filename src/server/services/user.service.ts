@@ -1,12 +1,12 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import User, { UserDoc } from "@/models/User";
 import {
   BadRequestError,
   NotFoundError,
   ConflictError,
-  UnauthorizedError,
 } from "../core/errors";
 import {
   PaginationParams,
@@ -29,7 +29,7 @@ export async function getUsers(
 ) {
   await connectToDatabase();
 
-  const query: Record<string, any> = {};
+  const query: Record<string, unknown> = {};
 
   if (filters?.role) {
     query.role = filters.role;
@@ -127,7 +127,7 @@ export async function createUser(input: CreateUserInput) {
 export async function updateUser(id: string, input: UpdateUserInput) {
   await connectToDatabase();
 
-  const updateData: Record<string, any> = { ...input };
+  const updateData: mongoose.UpdateQuery<UserDoc> = { ...input };
 
   if (input.email) {
     const existing = await User.findOne({

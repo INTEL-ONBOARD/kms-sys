@@ -1,5 +1,22 @@
 import { connectToDatabase } from "@/lib/db";
-import Settings from "@/models/Settings";
+import Settings, { SettingsDoc } from "@/models/Settings";
+import { UpdateQuery } from "mongoose";
+
+export interface UpdateSettingsInput {
+  platformName?: string;
+  primaryDomain?: string;
+  supportEmail?: string;
+  timezone?: string;
+  defaultCurrency?: string;
+  activePaymentGateway?: string;
+  features?: {
+    discussionForums?: boolean;
+    gamification?: boolean;
+    liveSessions?: boolean;
+    certificates?: boolean;
+    maintenanceMode?: boolean;
+  };
+}
 
 /**
  * Retrieves the global singleton system settings.
@@ -18,10 +35,10 @@ export async function getSettings() {
 /**
  * Updates the global singleton system settings.
  */
-export async function updateSettings(body: Record<string, any>) {
+export async function updateSettings(body: UpdateSettingsInput) {
   await connectToDatabase();
 
-  const updateData: Record<string, any> = {};
+  const updateData: UpdateQuery<SettingsDoc> = {};
   if (body.platformName !== undefined) updateData.platformName = body.platformName;
   if (body.primaryDomain !== undefined) updateData.primaryDomain = body.primaryDomain;
   if (body.supportEmail !== undefined) updateData.supportEmail = body.supportEmail;
