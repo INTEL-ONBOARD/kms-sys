@@ -11,7 +11,10 @@ const enrollmentSchema = new Schema(
     courseId: { type: Schema.Types.ObjectId, ref: "Course", required: true, index: true },
     
     // Track the student's learning progress (percentage from 0 to 100)
-    progress: { type: Number, min: 0, max: 100, default: 0 }
+    progress: { type: Number, min: 0, max: 100, default: 0 },
+
+    // Attendance marks if course has attendance in grade breakdown
+    attendanceMarks: { type: Number, default: null },
   },
   {
     // Automatically adds 'createdAt' and 'updatedAt' fields

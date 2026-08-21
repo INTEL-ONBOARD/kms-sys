@@ -171,7 +171,19 @@ export async function getStudentReport(
           earnedNum = Math.min(w, Math.max(0, Math.round(((sub.grade || 0) / 100) * w)));
         }
       } else if (item.type === "exam") {
-        if (
+        const studentExam = courseExams.find((e: any) => {
+          const res = (e.results || []).find((r: any) => r.studentId?.toString() === userId);
+          return (e.status === "graded" || e.status === "completed") && res && res.marks !== null && res.marks !== undefined;
+        });
+
+        if (studentExam) {
+          const studentResult = (studentExam as any).results.find((r: any) => r.studentId?.toString() === userId);
+          const studentMarks = Number(studentResult.marks) || 0;
+          const maxMarks = Number(studentResult.maxMarks || (studentExam as any).maxMarks) || 100;
+          const pct = maxMarks > 0 ? (studentMarks / maxMarks) : 0;
+          isPublished = true;
+          earnedNum = Math.min(w, Math.max(0, Math.round(pct * w)));
+        } else if (
           courseExams.length > 0 &&
           courseExams.some((e) => e.status === "graded" || e.status === "completed") &&
           gradedSubmissions.length > 0
@@ -182,10 +194,18 @@ export async function getStudentReport(
           earnedNum = Math.min(w, Math.max(0, Math.round((avgGrade / 100) * w)));
         }
       } else if (item.type === "attendance") {
-        const prog = typeof enrollment.progress === "number" ? enrollment.progress : 0;
-        if (prog > 0 && gradedSubmissions.length > 0) {
+        if ((enrollment as any).attendanceMarks !== undefined && (enrollment as any).attendanceMarks !== null) {
           isPublished = true;
-          earnedNum = Math.min(w, Math.max(1, Math.round((prog / 100) * w)));
+          const attScore = Number((enrollment as any).attendanceMarks);
+          earnedNum = attScore <= w
+            ? Math.min(w, Math.max(0, Math.round(attScore)))
+            : Math.min(w, Math.max(0, Math.round((attScore / 100) * w)));
+        } else {
+          const prog = typeof enrollment.progress === "number" ? enrollment.progress : 0;
+          if (prog > 0 && gradedSubmissions.length > 0) {
+            isPublished = true;
+            earnedNum = Math.min(w, Math.max(1, Math.round((prog / 100) * w)));
+          }
         }
       }
 
