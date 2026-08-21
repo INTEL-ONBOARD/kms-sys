@@ -179,11 +179,12 @@ export async function getMaterialFileUrl(
     }
   }
 
-  // External link (e.g. Google Drive recording link) bypasses R2 signed URL
+  // Local storage or external link bypasses R2 signed URL
   if (
     material.fileUrl &&
-    (material.fileUrl.startsWith("http://") || material.fileUrl.startsWith("https://")) &&
-    (material.fileKey?.startsWith("external-link") || material.materialType === "video")
+    (material.fileUrl.startsWith("/uploads/") ||
+      ((material.fileUrl.startsWith("http://") || material.fileUrl.startsWith("https://")) &&
+        (material.fileKey?.startsWith("external-link") || material.materialType === "video")))
   ) {
     return { signedUrl: material.fileUrl, material };
   }
@@ -194,11 +195,15 @@ export async function getMaterialFileUrl(
       ? `attachment; filename="${encodeURIComponent(cleanFileName)}"`
       : `inline; filename="${encodeURIComponent(cleanFileName)}"`;
 
-  const signedUrl = await generatePresignedDownloadUrl(material.fileKey, {
-    expiresIn: 3600,
-    contentDisposition: disposition,
-    contentType: material.mimeType || "application/pdf",
-  });
-
-  return { signedUrl, material };
+  try {
+    const signedUrl = await generatePresignedDownloadUrl(material.fileKey, {
+      expiresIn: 3600,
+      contentDisposition: disposition,
+      contentType: material.mimeType || "application/pdf",
+    });
+    return { signedUrl, material };
+  } catch (err) {
+    // If R2 signed URL fails, fallback to direct fileUrl
+    return { signedUrl: material.fileUrl || `/api/materials`, material };
+  }
 }

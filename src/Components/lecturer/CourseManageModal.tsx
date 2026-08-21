@@ -146,7 +146,7 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
       const res = await fetch(`/api/materials?courseId=${course._id}`);
       if (res.ok) {
         const data = await res.json();
-        setMaterials(data.data || []);
+        setMaterials(data.data || data.materials || (Array.isArray(data) ? data : []));
       }
     } catch (err) {
       console.error("Failed to reload materials:", err);
@@ -808,6 +808,7 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
       {showMaterialModal && (
         <MaterialUploadModal
           initialCourseId={course._id}
+          initialCourseTitle={course.title}
           onClose={() => setShowMaterialModal(false)}
           onSuccess={() => {
             refreshMaterials();

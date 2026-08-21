@@ -199,7 +199,9 @@ function AssignmentsContent() {
       throw new Error(errorData.error || "Failed to generate upload URL");
     }
 
-    const { uploadUrl, publicUrl } = await presignRes.json();
+    const presignData = await presignRes.json();
+    const uploadUrl = presignData.data?.uploadUrl || presignData.uploadUrl;
+    const publicUrl = presignData.data?.publicUrl || presignData.publicUrl;
     setUploadProgressText(`Uploading ${file.name} to storage...`);
 
     await new Promise<void>((resolve, reject) => {

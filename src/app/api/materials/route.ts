@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
       mimeType,
     } = body;
 
-    if (!title || !courseId || !fileName || !fileKey || !fileUrl || !fileSize || !mimeType) {
+    if (!title || !courseId || !fileName || !fileKey || !fileUrl || typeof fileSize !== "number") {
       throw new BadRequestError("Missing required material metadata");
     }
 
