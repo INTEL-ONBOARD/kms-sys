@@ -404,9 +404,17 @@ function CalendarContent() {
     return Array.from(new Set([...fromEvents, ...fromExams, ...fromLive]));
   }, [calendarEvents, exams, liveClasses]);
 
-  // Filtered calendar events based on search, course, and event type
+  // Filtered calendar events based on search, course, and event type (only upcoming/live sessions)
   const filteredEvents = useMemo(() => {
+    const now = Date.now();
     return calendarEvents.filter((ev) => {
+      // Exclude ended or finished live classes from the calendar
+      if (ev.eventType === 'live_class') {
+        if (ev.status === 'ended' || ev.status === 'cancelled' || ev.status === 'completed') return false;
+        if (ev.date && new Date(ev.date).getTime() + (ev.durationHours || 1) * 3600000 < now && ev.status !== 'live') {
+          return false;
+        }
+      }
       if (eventTypeFilter !== 'all' && ev.eventType !== eventTypeFilter) return false;
       if (selectedCourse !== 'All' && ev.title !== selectedCourse && ev.courseTitle !== selectedCourse && ev.courseId !== selectedCourse) {
         return false;
@@ -424,6 +432,7 @@ function CalendarContent() {
 
   const filteredExams = useMemo(() => {
     return exams.filter((ex) => {
+      if (ex.status === 'completed' || ex.status === 'cancelled') return false;
       if (selectedCourse !== 'All' && ex.courseTitle !== selectedCourse) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -434,7 +443,11 @@ function CalendarContent() {
   }, [exams, selectedCourse, searchQuery]);
 
   const filteredLiveClasses = useMemo(() => {
+    const now = Date.now();
     return liveClasses.filter((lc) => {
+      // Exclude finished / ended classes
+      if (lc.status === 'ended' || lc.status === 'cancelled' || lc.status === 'completed') return false;
+      if (lc.endTime && new Date(lc.endTime).getTime() < now && lc.status !== 'live') return false;
       if (selectedCourse !== 'All' && lc.courseTitle !== selectedCourse) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
