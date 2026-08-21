@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole(req, ["lecturer", "super_admin", "admin"]);
+    const authUser = await requireRole(req, ["lecturer", "super_admin", "admin"]);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -187,6 +187,20 @@ export async function DELETE(req: NextRequest) {
     const material = await CourseMaterial.findById(id);
     if (!material) {
       throw new NotFoundError("Material not found");
+    }
+
+    if (authUser.role === "lecturer") {
+      const isOwner = material.lecturerId?.toString() === authUser.id;
+      if (!isOwner) {
+        const course = await Course.findById(material.courseId).lean();
+        const isAssigned =
+          course &&
+          (course.instructorId?.toString() === authUser.id ||
+            (authUser.name && course.instructor?.toLowerCase() === authUser.name.toLowerCase()));
+        if (!isAssigned) {
+          throw new ForbiddenError("You are not authorized to delete this course material.");
+        }
+      }
     }
 
     if (material.fileKey) {
