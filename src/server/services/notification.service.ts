@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Notification from "@/models/Notification";
 
@@ -36,7 +37,7 @@ export async function markNotificationsAsRead(userId: string, notificationId?: s
  * Creates a notification.
  */
 export async function createNotification(input: {
-  userId: string | any;
+  userId: string | mongoose.Types.ObjectId;
   type: string;
   message: string;
   link?: string;

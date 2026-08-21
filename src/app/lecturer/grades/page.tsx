@@ -314,7 +314,7 @@ export default function LecturerGradebookPage() {
 
       {/* Main Table Content */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#F7FAFC] border-b border-gray-100 text-gray-500 font-bold uppercase tracking-wider">
               {activeTab === "pending" ? (
@@ -356,12 +356,26 @@ export default function LecturerGradebookPage() {
               ) : activeTab === "pending" ? (
                 filteredPending.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                      <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-2 text-xl font-bold">
-                        ✓
+                    <td colSpan={7} className="px-6 py-16 text-center">
+                      <div className="max-w-md mx-auto space-y-3">
+                        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-100 to-green-50 text-emerald-600 flex items-center justify-center mx-auto text-2xl font-black shadow-sm border border-emerald-100">
+                          <FiCheckCircle />
+                        </div>
+                        <h4 className="text-base font-black text-gray-800">
+                          All caught up! No submissions awaiting grading.
+                        </h4>
+                        <p className="text-xs text-gray-400 max-w-sm mx-auto leading-relaxed">
+                          Great job! All student coursework deliverables across your teaching courses have been evaluated.
+                        </p>
+                        {gradedQueue.length > 0 && (
+                          <button
+                            onClick={() => setActiveTab("graded")}
+                            className="mt-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5"
+                          >
+                            <FiAward /> View Past Graded Records ({gradedQueue.length})
+                          </button>
+                        )}
                       </div>
-                      <p className="font-bold text-gray-700 text-sm">All caught up!</p>
-                      <p className="text-xs text-gray-400 mt-1">No pending student submissions waiting for evaluation.</p>
                     </td>
                   </tr>
                 ) : (

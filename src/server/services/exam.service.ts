@@ -1,6 +1,7 @@
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
-import Exam from "@/models/Exam";
-import Course from "@/models/Course";
+import Exam, { ExamDoc } from "@/models/Exam";
+import Course, { AssessmentItem } from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import Notification from "@/models/Notification";
 import { BadRequestError, NotFoundError } from "../core/errors";
@@ -9,7 +10,15 @@ import {
   buildPaginationMeta,
   createSafeSearchRegex,
 } from "../core/pagination";
-import { CreateExamInput, UpdateExamInput } from "../dtos/exam.dto";
+
+interface PopulatedExamDoc extends Omit<ExamDoc, "courseId"> {
+  courseId: {
+    _id: mongoose.Types.ObjectId;
+    title?: string;
+    category?: string;
+    assessmentItems?: AssessmentItem[];
+  } | null;
+}
 
 /**
  * Retrieves exams for lecturer's courses.
@@ -38,27 +47,27 @@ export async function getLecturerExams(
     };
   }
 
-  const query: Record<string, any> = { courseId: { $in: courseIds } };
+  const query: Record<string, unknown> = { courseId: { $in: courseIds } };
   if (pagination.search) {
     const searchRegex = createSafeSearchRegex(pagination.search);
     query.title = searchRegex;
   }
 
   const total = await Exam.countDocuments(query);
-  const examsDocs = await Exam.find(query)
+  const examsDocs = (await Exam.find(query)
     .populate("courseId", "title category assessmentItems")
     .sort({ [pagination.sortBy || "date"]: pagination.sortOrder })
     .skip(pagination.skip)
     .limit(pagination.limit)
-    .lean();
+    .lean()) as unknown as PopulatedExamDoc[];
 
   // Enrich exams with weight from course breakdown
-  const exams = examsDocs.map((e: any) => {
+  const exams = examsDocs.map((e) => {
     const course = e.courseId;
     let weight: number | null = null;
     if (course?.assessmentItems && Array.isArray(course.assessmentItems)) {
       const match = course.assessmentItems.find(
-        (item: any) => item.name?.toLowerCase() === e.title?.toLowerCase()
+        (item) => item.name?.toLowerCase() === e.title?.toLowerCase()
       );
       if (match) weight = match.weight;
     }
@@ -68,10 +77,10 @@ export async function getLecturerExams(
     };
   });
 
-  const formattedCourses = courses.map((c: any) => ({
+  const formattedCourses = courses.map((c) => ({
     _id: c._id,
     title: c.title,
-    assessmentItems: (c.assessmentItems || []).filter((i: any) => i.type === "exam"),
+    assessmentItems: (c.assessmentItems || []).filter((i: AssessmentItem) => i.type === "exam"),
   }));
 
   return {
@@ -126,11 +135,11 @@ export async function createExam(
   const courseDoc = await Course.findById(targetCourseId);
   if (courseDoc && courseDoc.assessmentItems && courseDoc.assessmentItems.length > 0) {
     const isConfiguredExam = courseDoc.assessmentItems.some(
-      (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
+      (i: AssessmentItem) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type === "exam"
     );
     if (!isConfiguredExam) {
       const isAssignment = courseDoc.assessmentItems.some(
-        (i: any) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
+        (i: AssessmentItem) => i.name.trim().toLowerCase() === title.trim().toLowerCase() && i.type !== "exam"
       );
       if (isAssignment) {
         throw new BadRequestError(
@@ -215,7 +224,7 @@ export async function updateExam(
 ) {
   await connectToDatabase();
 
-  const updateFields: Record<string, any> = {};
+  const updateFields: mongoose.UpdateQuery<ExamDoc> = {};
   if (input.title) updateFields.title = input.title.trim();
   if (input.date) {
     const updatedDate = new Date(input.date);

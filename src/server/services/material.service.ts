@@ -8,6 +8,8 @@ import { generatePresignedUploadUrl, generatePresignedDownloadUrl, getFilePublic
 import { BadRequestError, NotFoundError, ForbiddenError } from "../core/errors";
 import { CreateMaterialInput, GenerateUploadUrlInput } from "../dtos/material.dto";
 
+type MaterialTypeEnum = "notes" | "slides" | "tutorial" | "assignment" | "video" | "other";
+
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -106,8 +108,8 @@ export async function createMaterial(input: CreateMaterialInput, userId: string)
     fileUrl: `https://${process.env.R2_BUCKET_NAME || "kms-bucket"}.r2.cloudflarestorage.com/${input.fileKey}`,
     fileSize: input.fileSize || 0,
     materialType: (["notes", "slides", "tutorial", "assignment", "video", "other"].includes(input.fileType || "")
-      ? input.fileType
-      : "notes") as any,
+      ? (input.fileType as MaterialTypeEnum)
+      : "notes"),
     mimeType: input.mimeType || "application/octet-stream",
     lecturerId: new mongoose.Types.ObjectId(userId),
     isPublished: input.isPublished ?? true,
@@ -122,8 +124,8 @@ export async function createMaterial(input: CreateMaterialInput, userId: string)
 export async function getMaterials(courseId?: string, isStudent = false) {
   await connectToDatabase();
 
-  const query: Record<string, any> = {};
-  if (courseId) query.courseId = courseId;
+  const query: Record<string, unknown> = {};
+  if (courseId) query.courseId = new mongoose.Types.ObjectId(courseId);
   if (isStudent) query.isPublished = true;
 
   const materials = await CourseMaterial.find(query)

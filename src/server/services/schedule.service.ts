@@ -29,7 +29,7 @@ export async function getLecturerSchedule(
     return { schedule: [] };
   }
 
-  const query: Record<string, any> = { courseId: { $in: courseIds } };
+  const query: Record<string, unknown> = { courseId: { $in: courseIds } };
 
   if (options?.dateParam) {
     const queryDate = new Date(options.dateParam);
@@ -207,17 +207,19 @@ export async function updateLiveClass(
       : [input.resources];
   }
   if (input.materialId !== undefined) {
-    (liveClass as any).materialId = mongoose.Types.ObjectId.isValid(input.materialId)
+    liveClass.materialId = mongoose.Types.ObjectId.isValid(input.materialId)
       ? new mongoose.Types.ObjectId(input.materialId)
       : undefined;
   }
   if (input.materials !== undefined) {
     const matArray = Array.isArray(input.materials) ? input.materials : [input.materials];
-    (liveClass as any).materials = matArray
+    liveClass.materials = matArray
       .filter((m) => mongoose.Types.ObjectId.isValid(m))
       .map((m) => new mongoose.Types.ObjectId(m));
   }
-  if (input.status !== undefined) (liveClass as any).status = input.status;
+  if (input.status !== undefined && ["upcoming", "live", "ended", "cancelled"].includes(input.status)) {
+    liveClass.status = input.status as "upcoming" | "live" | "ended" | "cancelled";
+  }
 
   await liveClass.save();
 
