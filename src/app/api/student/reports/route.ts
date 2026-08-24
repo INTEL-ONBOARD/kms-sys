@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { ForbiddenError } from "@/server/core/errors";
-import { generateCSVReport } from "@/lib/reportGenerator";
-import * as ReportService from "@/server/services/report.service";
+import { requireAuth } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { ForbiddenError } from "@/lib/core/errors";
+import { generateCSVReport } from "@/utils/reports/reportGenerator";
+import * as ReportService from "@/services/report.service";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

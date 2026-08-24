@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { parsePaginationParams } from "@/server/core/pagination";
-import { paginatedResponse, handleApiError } from "@/server/core/api-response";
-import * as CourseService from "@/server/services/course.service";
+import { requireRole } from "@/lib/core/auth-context";
+import { parsePaginationParams } from "@/lib/core/pagination";
+import { paginatedResponse, handleApiError } from "@/lib/core/api-response";
+import * as CourseService from "@/services/course.service";
 
 export async function GET(req: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import * as EnrollmentService from "@/server/services/enrollment.service";
+import { requireAuth } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import * as EnrollmentService from "@/services/enrollment.service";
 
 export interface CalendarEvent {
   id: string;

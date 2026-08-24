@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import Batch from "@/models/Batch";
-import { BadRequestError, NotFoundError } from "@/server/core/errors";
+import Batch from "@/lib/models/Batch";
+import { BadRequestError, NotFoundError } from "@/lib/core/errors";
 import mongoose from "mongoose";
 
 interface RouteParams {

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
-import Assignment from "@/models/Assignment";
+import Assignment from "@/lib/models/Assignment";
 import { generatePresignedDownloadUrl } from "@/lib/r2";
 import mongoose from "mongoose";
 

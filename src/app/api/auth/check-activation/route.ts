@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError } from "@/server/core/errors";
-import * as AuthService from "@/server/services/auth.service";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError } from "@/lib/core/errors";
+import * as AuthService from "@/services/auth.service";
 
 export async function GET(req: NextRequest) {
   try {

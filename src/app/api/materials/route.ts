@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
-import { requireAuth, requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError, NotFoundError, ForbiddenError } from "@/server/core/errors";
+import { requireAuth, requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError, NotFoundError, ForbiddenError } from "@/lib/core/errors";
 import { deleteR2Object } from "@/lib/r2";
 import { connectToDatabase } from "@/lib/db";
-import CourseMaterial from "@/models/CourseMaterial";
-import Course from "@/models/Course";
-import Enrollment from "@/models/Enrollment";
-import User from "@/models/User";
+import CourseMaterial from "@/lib/models/CourseMaterial";
+import Course from "@/lib/models/Course";
+import Enrollment from "@/lib/models/Enrollment";
+import User from "@/lib/models/User";
 import mongoose from "mongoose";
 
 // Ensure models are registered

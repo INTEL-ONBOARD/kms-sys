@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import User from "@/models/User";
-import Notification from "@/models/Notification";
+import User from "@/lib/models/User";
+import Notification from "@/lib/models/Notification";
 
 export async function POST(req: NextRequest) {
   try {

@@ -1,4 +1,4 @@
-import { getAdminDashboardStats } from "./src/server/services/dashboard.service";
+import { getAdminDashboardStats } from "@/services/dashboard.service";
 
 async function run() {
   try {
