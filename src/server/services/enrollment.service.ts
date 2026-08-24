@@ -12,6 +12,7 @@ import Announcement from "@/models/Announcement";
 import { BadRequestError, NotFoundError, ConflictError } from "../core/errors";
 import { PaginationParams, buildPaginationMeta } from "../core/pagination";
 import { EnrollCourseInput } from "../dtos/course.dto";
+import { getStudentReport } from "./report.service";
 
 // Ensure models are registered in Mongoose
 Course;
@@ -227,25 +228,13 @@ export async function getStudentDashboard(userId: string) {
     );
     attendance = Math.round(totalProgress / validEnrollments.length);
 
-    const gradedSubmissions = await Submission.find({
-      studentId: { $in: [userObjectId, userId] },
-      status: "graded",
-      grade: { $ne: null },
-    }).lean();
-
-    if (gradedSubmissions.length > 0) {
-      const totalPoints = gradedSubmissions.reduce((sum: number, s: any) => {
-        const g = typeof s.grade === "number" ? s.grade : 0;
-        if (g >= 93) return sum + 4.0;
-        if (g >= 88) return sum + 3.7;
-        if (g >= 82) return sum + 3.3;
-        if (g >= 75) return sum + 3.0;
-        if (g >= 70) return sum + 2.7;
-        if (g >= 65) return sum + 2.3;
-        if (g >= 60) return sum + 2.0;
-        return sum + 1.0;
-      }, 0);
-      gpa = (totalPoints / gradedSubmissions.length).toFixed(1);
+    // Calculate GPA dynamically via ReportService so dashboard and grades match accurately
+    try {
+      const reportSummary = await getStudentReport(userId, "");
+      gpa = reportSummary.cgpa || reportSummary.gpa || "0.0";
+    } catch (err) {
+      console.error("Error computing GPA from report service for dashboard:", err);
+      gpa = "0.0";
     }
   }
 

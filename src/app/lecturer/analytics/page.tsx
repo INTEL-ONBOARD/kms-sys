@@ -10,14 +10,19 @@ import {
   FiPercent, 
   FiFileText, 
   FiClock, 
-  FiInfo 
+  FiInfo,
+  FiUsers,
+  FiArrowRight
 } from "react-icons/fi";
 import MiniBarChart, { MiniLineChart } from "@/Components/lecturer/MiniBarChart";
 import MiniDonutChart from "@/Components/lecturer/MiniDonutChart";
+import FinalGradesModal, { StudentFinalGrade } from "@/Components/lecturer/FinalGradesModal";
 
 export default function LecturerAnalyticsPage() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showFinalGradesModal, setShowFinalGradesModal] = useState(false);
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState<"A" | "B" | "C" | "S" | "F" | "ALL" | "IN_PROGRESS">("ALL");
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -43,7 +48,7 @@ export default function LecturerAnalyticsPage() {
     totalEvaluated: 0,
     averageScore: 0,
     passingRate: 0,
-    distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+    distribution: { A: 0, B: 0, C: 0, S: 0, F: 0 },
   };
 
   const finalSummary = performance.finalGradesSummary || {
@@ -53,16 +58,23 @@ export default function LecturerAnalyticsPage() {
     completionRate: 0,
     averageFinalGrade: 0,
     passingRate: 0,
-    distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+    distribution: { A: 0, B: 0, C: 0, S: 0, F: 0 },
   };
+
+  const studentsList: StudentFinalGrade[] = performance.students || [];
 
   const lineChartData = performance.lineChart || [];
   const barChartData = performance.barChart || [];
 
-  const assignmentDonut = performance.assignmentDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
-  const finalDonut = performance.finalDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  const assignmentDonut = performance.assignmentDonut || { A: 0, B: 0, C: 0, S: 0, F: 0 };
+  const finalDonut = performance.finalDonut || { A: 0, B: 0, C: 0, S: 0, F: 0 };
 
   const isFinalGradesReady = (finalSummary.completedCount || 0) > 0;
+
+  const handleOpenFinalGrades = (filter: "A" | "B" | "C" | "S" | "F" | "ALL" | "IN_PROGRESS" = "ALL") => {
+    setSelectedGradeFilter(filter);
+    setShowFinalGradesModal(true);
+  };
 
   return (
     <div className="space-y-6 font-sans pb-8">
@@ -75,14 +87,27 @@ export default function LecturerAnalyticsPage() {
           </p>
         </div>
 
-        <button
-          onClick={fetchAnalytics}
-          title="Refresh metrics"
-          className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-gray-700 bg-[#F7FAFC] border border-gray-200 hover:border-[#5A67D8] hover:text-[#5A67D8] rounded-xl shadow-xs transition"
-        >
-          <FiRefreshCw className={`text-sm ${loading ? "animate-spin text-[#5A67D8]" : ""}`} />
-          Refresh Data
-        </button>
+        <div className="flex items-center gap-2.5">
+          {studentsList.length > 0 && (
+            <button
+              onClick={() => handleOpenFinalGrades("ALL")}
+              title="View individual student final grades"
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl shadow-xs transition cursor-pointer"
+            >
+              <FiAward className="text-sm text-emerald-600" />
+              <span>Student Final Grades ({finalSummary.completedCount})</span>
+            </button>
+          )}
+
+          <button
+            onClick={fetchAnalytics}
+            title="Refresh metrics"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-gray-700 bg-[#F7FAFC] border border-gray-200 hover:border-[#5A67D8] hover:text-[#5A67D8] rounded-xl shadow-xs transition cursor-pointer"
+          >
+            <FiRefreshCw className={`text-sm ${loading ? "animate-spin text-[#5A67D8]" : ""}`} />
+            Refresh Data
+          </button>
+        </div>
       </div>
 
       {/* Info Callout: Grade Policy */}
@@ -94,7 +119,7 @@ export default function LecturerAnalyticsPage() {
           <p className="font-extrabold text-blue-950">Grading Policy & Evaluation Architecture</p>
           <p className="text-blue-800 leading-relaxed">
             <strong>Assignment Grades</strong> represent continuous individual assessment scores evaluated per task.
-            The <strong>Final Course Grade</strong> is generated for each student <span className="font-bold underline">after completing all assignments and the final exam</span>. The <strong>Final Course Grades Distribution</strong> immediately displays results as soon as any student completes their coursework, without waiting for the entire class.
+            The <strong>Final Course Grade</strong> is generated for each student <span className="font-bold underline">after completing all assignments and the final exam</span>. Click on any segment or button in the <strong>Final Course Grades Distribution</strong> to view the detailed student roster with individual final marks and GPA.
           </p>
         </div>
       </div>
@@ -119,7 +144,11 @@ export default function LecturerAnalyticsPage() {
         </div>
 
         {/* Card 2: Final Grade Completion Status */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => handleOpenFinalGrades("ALL")}
+          className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-200 transition"
+          title="Click to view student list"
+        >
           <div>
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${isFinalGradesReady ? "bg-emerald-500" : "bg-amber-500"}`} />
@@ -142,7 +171,12 @@ export default function LecturerAnalyticsPage() {
         </div>
 
         {/* Card 3: Class Final Average */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => isFinalGradesReady && handleOpenFinalGrades("ALL")}
+          className={`bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between ${
+            isFinalGradesReady ? "cursor-pointer hover:border-indigo-200 transition" : ""
+          }`}
+        >
           <div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-indigo-500" />
@@ -161,7 +195,12 @@ export default function LecturerAnalyticsPage() {
         </div>
 
         {/* Card 4: Final Passing Rate */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => isFinalGradesReady && handleOpenFinalGrades("ALL")}
+          className={`bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between ${
+            isFinalGradesReady ? "cursor-pointer hover:border-purple-200 transition" : ""
+          }`}
+        >
           <div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
@@ -171,7 +210,7 @@ export default function LecturerAnalyticsPage() {
               {isFinalGradesReady ? `${finalSummary.passingRate}%` : "—"}
             </h3>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              {isFinalGradesReady ? "Grade D or higher (≥50%)" : "Awaiting student completion"}
+              {isFinalGradesReady ? "Grade S or higher (≥50%)" : "Awaiting student completion"}
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shadow-2xs">
@@ -213,23 +252,40 @@ export default function LecturerAnalyticsPage() {
               <h3 className="font-bold text-[#111827] text-sm flex items-center gap-2">
                 <FiAward className="text-emerald-600" /> Final Course Grades Distribution
               </h3>
-              {isFinalGradesReady ? (
-                <span className="text-[10px] font-extrabold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-100">
-                  {finalSummary.completedCount} Completed
-                </span>
-              ) : (
-                <span className="text-[10px] font-extrabold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
-                  {finalSummary.inProgressCount} Pending Completion
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {isFinalGradesReady ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFinalGrades("ALL")}
+                    className="text-[10px] font-extrabold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-xl border border-emerald-200 transition flex items-center gap-1 cursor-pointer"
+                    title="Click to view all final student grades"
+                  >
+                    <FiUsers />
+                    <span>{finalSummary.completedCount} Completed</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFinalGrades("IN_PROGRESS")}
+                    className="text-[10px] font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1 rounded-xl border border-amber-200 transition cursor-pointer"
+                  >
+                    {finalSummary.inProgressCount} Pending Completion
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-[11px] text-gray-400 mt-1">
-              Calculated for students who completed <span className="font-bold text-gray-600">all assignments & final exam</span>
+              Click any grade segment below to view student marks & GPA
             </p>
           </div>
+
           <div className="py-2">
             {isFinalGradesReady ? (
-              <MiniDonutChart data={finalDonut} />
+              <MiniDonutChart
+                data={finalDonut}
+                interactive={true}
+                onSelectBucket={(grade) => handleOpenFinalGrades(grade as any)}
+              />
             ) : (
               <div className="text-center py-10 px-4 bg-gray-50/60 rounded-2xl border border-dashed border-gray-200 my-2">
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl mx-auto mb-3 shadow-2xs">
@@ -245,9 +301,21 @@ export default function LecturerAnalyticsPage() {
               </div>
             )}
           </div>
+
           <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium">
             <span>Completed: <strong>{finalSummary.completedCount}</strong> &middot; In Progress: <strong>{finalSummary.inProgressCount}</strong></span>
-            <span>Final Course Avg: <strong className={isFinalGradesReady ? "text-emerald-600 font-bold" : "text-gray-400"}>{isFinalGradesReady ? `${finalSummary.averageFinalGrade}%` : "Awaiting completion"}</strong></span>
+            {isFinalGradesReady ? (
+              <button
+                type="button"
+                onClick={() => handleOpenFinalGrades("ALL")}
+                className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <span>View Student Roster</span>
+                <FiArrowRight className="text-xs" />
+              </button>
+            ) : (
+              <span className="text-gray-400">Awaiting completion</span>
+            )}
           </div>
         </div>
       </div>
@@ -276,6 +344,14 @@ export default function LecturerAnalyticsPage() {
           <MiniLineChart data={lineChartData} />
         </div>
       </div>
+
+      {/* Final Grades & Student Roster Modal */}
+      {showFinalGradesModal && (
+        <FinalGradesModal
+          initialGradeFilter={selectedGradeFilter}
+          onClose={() => setShowFinalGradesModal(false)}
+        />
+      )}
     </div>
   );
 }

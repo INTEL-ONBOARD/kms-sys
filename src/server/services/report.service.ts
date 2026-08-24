@@ -101,7 +101,13 @@ export async function getStudentReport(
   await connectToDatabase();
 
   // 1. Fetch student enrollments populated with course details
-  const enrollments = (await Enrollment.find({ userId })
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+
+  const enrollments = (await Enrollment.find({
+    $or: [{ userId: userObjectId }, { userId }],
+  })
     .populate({
       path: "courseId",
       model: Course,
@@ -117,9 +123,10 @@ export async function getStudentReport(
 
   // 2. Fetch student submissions and exams for enrolled courses in parallel
   const [submissions, exams] = await Promise.all([
-    (Submission.find({ studentId: userId, courseId: { $in: validCourseIds } }).lean() as unknown) as Promise<
-      SubmissionRecord[]
-    >,
+    (Submission.find({
+      studentId: { $in: [userObjectId, userId] },
+      courseId: { $in: validCourseIds },
+    }).lean() as unknown) as Promise<SubmissionRecord[]>,
     (Exam.find({ courseId: { $in: validCourseIds } }).lean() as unknown) as Promise<ExamRecord[]>,
   ]);
 
@@ -172,12 +179,12 @@ export async function getStudentReport(
         }
       } else if (item.type === "exam") {
         const studentExam = courseExams.find((e: any) => {
-          const res = (e.results || []).find((r: any) => r.studentId?.toString() === userId);
+          const res = (e.results || []).find((r: any) => r.studentId?.toString() === userId?.toString());
           return (e.status === "graded" || e.status === "completed") && res && res.marks !== null && res.marks !== undefined;
         });
 
         if (studentExam) {
-          const studentResult = (studentExam as any).results.find((r: any) => r.studentId?.toString() === userId);
+          const studentResult = (studentExam as any).results.find((r: any) => r.studentId?.toString() === userId?.toString());
           const studentMarks = Number(studentResult.marks) || 0;
           const maxMarks = Number(studentResult.maxMarks || (studentExam as any).maxMarks) || 100;
           const pct = maxMarks > 0 ? (studentMarks / maxMarks) : 0;
@@ -256,14 +263,14 @@ export async function getStudentReport(
         letterGrade = "C +";
         gradeColor = "text-yellow-600 bg-yellow-50 border border-yellow-200";
         gpaPoint = 2.3;
-      } else if (totalEarnedPoints >= 60) {
-        letterGrade = "C";
-        gradeColor = "text-yellow-500 bg-yellow-50 border border-yellow-200";
-        gpaPoint = 2.0;
-      } else {
-        letterGrade = "D";
-        gradeColor = "text-red-500 bg-red-50 border border-red-200";
+      } else if (totalEarnedPoints >= 50) {
+        letterGrade = "S";
+        gradeColor = "text-purple-700 bg-purple-50 border border-purple-200";
         gpaPoint = 1.0;
+      } else {
+        letterGrade = "F";
+        gradeColor = "text-rose-700 bg-rose-50 border border-rose-200";
+        gpaPoint = 0.0;
       }
     }
 
@@ -340,9 +347,6 @@ export async function getStudentReport(
       ? (filteredCompleted.reduce((acc, g) => acc + g.gpaPoint, 0) / filteredCompleted.length).toFixed(1)
       : avgCGPAPoints;
 
-  const userObjectId = mongoose.Types.ObjectId.isValid(userId)
-    ? new mongoose.Types.ObjectId(userId)
-    : userId;
   const currentUser = await User.findById(userObjectId).select("name email role reportApproved").lean();
 
   return {
