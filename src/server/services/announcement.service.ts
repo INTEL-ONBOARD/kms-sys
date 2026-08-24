@@ -3,6 +3,7 @@ import Course from "@/models/Course";
 import Announcement from "@/models/Announcement";
 import Notification from "@/models/Notification";
 import Enrollment from "@/models/Enrollment";
+import Batch from "@/models/Batch";
 import { NotFoundError } from "../core/errors";
 
 /**
@@ -56,7 +57,8 @@ export async function getLecturerStudents(
   userId: string,
   userName: string,
   isSuperAdmin = false,
-  courseIdParam?: string | null
+  courseIdParam?: string | null,
+  batchIdParam?: string | null
 ) {
   await connectToDatabase();
 
@@ -84,6 +86,15 @@ export async function getLecturerStudents(
 
   if (courseIdParam) {
     enrollmentQuery = { courseId: courseIdParam };
+  }
+
+  if (batchIdParam && batchIdParam !== 'all') {
+    const batch = await Batch.findById(batchIdParam).lean();
+    if (batch && batch.students && batch.students.length > 0) {
+      enrollmentQuery.userId = { $in: batch.students };
+    } else {
+      return { students: [], total: 0 };
+    }
   }
 
   const enrollments = await Enrollment.find(enrollmentQuery)

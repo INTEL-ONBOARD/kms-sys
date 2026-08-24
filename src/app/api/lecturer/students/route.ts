@@ -8,12 +8,14 @@ export async function GET(req: NextRequest) {
     const authUser = await requireRole(req, ["lecturer", "super_admin", "admin"]);
     const { searchParams } = new URL(req.url);
     const courseIdParam = searchParams.get("courseId");
+    const batchIdParam = searchParams.get("batch");
 
     const result = await AnnouncementService.getLecturerStudents(
       authUser.id,
       authUser.name || "",
       authUser.role === "super_admin",
-      courseIdParam
+      courseIdParam,
+      batchIdParam
     );
 
     return successResponse(result, undefined, 200);
