@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/db";
-import Otp from "@/models/Otp";
+import Otp from "@/lib/models/Otp";
 import { sendOTP } from "@/lib/mailer";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { z } from "zod";
 
 const sendOtpSchema = z.object({

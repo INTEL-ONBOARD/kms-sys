@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getLecturerFinalGradesRoster } from "@/server/services/dashboard.service";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { UnauthorizedError, ForbiddenError } from "@/server/core/errors";
+import { getLecturerFinalGradesRoster } from "@/services/dashboard.service";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { UnauthorizedError, ForbiddenError } from "@/lib/core/errors";
 
 export async function GET(req: NextRequest) {
   try {

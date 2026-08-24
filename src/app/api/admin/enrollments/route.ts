@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import Enrollment from "@/models/Enrollment";
-import { BadRequestError } from "@/server/core/errors";
+import Enrollment from "@/lib/models/Enrollment";
+import { BadRequestError } from "@/lib/core/errors";
 import mongoose from "mongoose";
 
 export async function POST(req: NextRequest) {

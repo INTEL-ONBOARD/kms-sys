@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requirePermission } from "@/server/core/auth-context";
-import { validateBody } from "@/server/core/validator";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { inviteUserSchema } from "@/server/dtos/user.dto";
-import * as UserService from "@/server/services/user.service";
+import { requirePermission } from "@/lib/core/auth-context";
+import { validateBody } from "@/lib/core/validator";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { inviteUserSchema } from "@/types/dtos/user.dto";
+import * as UserService from "@/services/user.service";
 
 export async function POST(req: NextRequest) {
   try {
