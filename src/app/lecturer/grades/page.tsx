@@ -18,7 +18,8 @@ import {
   FiCheckSquare,
   FiRefreshCw,
   FiFilter,
-  FiMessageSquare
+  FiMessageSquare,
+  FiLink
 } from "react-icons/fi";
 import { useToast } from "@/Components/ToastProvider";
 
@@ -109,8 +110,56 @@ export default function LecturerGradebookPage() {
     }
   };
 
+  const isLinkSubmission = (url: string) => {
+    if (!url) return false;
+    const trimmed = url.trim().toLowerCase();
+    
+    // Check if it has a file extension or is stored in Cloudflare R2 / S3 storage
+    const isDocumentFile = /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|png|jpe?g|webp|gif|txt|csv)(\?.*)?$/i.test(trimmed);
+    const isStorageUrl = trimmed.includes("r2.dev") || trimmed.includes("cloudflarestorage.com") || trimmed.includes("/materials/") || trimmed.includes("/courses/");
+
+    if (isDocumentFile || isStorageUrl) {
+      return false;
+    }
+
+    return (
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      trimmed.startsWith("www.") ||
+      trimmed.includes("github.com") ||
+      trimmed.includes("figma.com") ||
+      trimmed.includes("drive.google.com") ||
+      trimmed.includes("docs.google.com") ||
+      trimmed.includes("notion.so") ||
+      trimmed.includes("notion.site") ||
+      trimmed.includes("loom.com") ||
+      trimmed.includes("youtube.com") ||
+      trimmed.includes("youtu.be") ||
+      trimmed.includes("vercel.app") ||
+      trimmed.includes("netlify.app")
+    );
+  };
+
   const getFileNameFromUrl = (url: string) => {
     try {
+      if (isLinkSubmission(url)) {
+        const lower = url.toLowerCase();
+        if (lower.includes("github.com")) return "GitHub Repository Link";
+        if (lower.includes("figma.com")) return "Figma Design Project Link";
+        if (lower.includes("drive.google.com") || lower.includes("docs.google.com")) return "Google Drive Document / Folder Link";
+        if (lower.includes("notion.so") || lower.includes("notion.site")) return "Notion Workspace Link";
+        if (lower.includes("loom.com")) return "Loom Video Recording Link";
+        if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "YouTube Video Link";
+        if (lower.includes("vercel.app") || lower.includes("netlify.app")) return "Live Web Application Link";
+        
+        try {
+          const urlObj = new URL(url.startsWith("http") ? url : `https://${url}`);
+          return `External Project Link (${urlObj.hostname})`;
+        } catch {
+          return "External Submission Link";
+        }
+      }
+
       const parts = url.split("/");
       const lastPart = parts[parts.length - 1];
       const clean = decodeURIComponent(lastPart).replace(/^\d+-[a-f0-9-]+-/, "");
@@ -391,10 +440,15 @@ export default function LecturerGradebookPage() {
                       <td className="px-6 py-4 text-gray-500">{item.courseTitle}</td>
                       <td className="px-6 py-4">
                         {item.files && item.files.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                            <FiPaperclip className="text-xs" />
-                            {item.files.length} {item.files.length === 1 ? "File" : "Files"}
-                          </span>
+                          (() => {
+                            const isAllLinks = item.files.every((f: string) => isLinkSubmission(f));
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                                {isAllLinks ? <FiLink className="text-xs" /> : <FiPaperclip className="text-xs" />}
+                                {item.files.length} {isAllLinks ? (item.files.length === 1 ? "Link" : "Links") : (item.files.length === 1 ? "File" : "Files")}
+                              </span>
+                            );
+                          })()
                         ) : item.content ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
                             <FiFileText className="text-xs" />
@@ -457,10 +511,15 @@ export default function LecturerGradebookPage() {
 
                         <td className="px-6 py-4">
                           {item.files && item.files.length > 0 ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                              <FiPaperclip className="text-xs" />
-                              {item.files.length} {item.files.length === 1 ? "File" : "Files"}
-                            </span>
+                            (() => {
+                              const isAllLinks = item.files.every((f: string) => isLinkSubmission(f));
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                                  {isAllLinks ? <FiLink className="text-xs" /> : <FiPaperclip className="text-xs" />}
+                                  {item.files.length} {isAllLinks ? (item.files.length === 1 ? "Link" : "Links") : (item.files.length === 1 ? "File" : "Files")}
+                                </span>
+                              );
+                            })()
                           ) : item.content ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
                               <FiFileText className="text-xs" />
@@ -592,25 +651,36 @@ export default function LecturerGradebookPage() {
                 )}
               </div>
 
-              {/* Files List */}
+              {/* Files / Links List */}
               {gradingItem.files && gradingItem.files.length > 0 ? (
                 <div className="space-y-2">
                   {gradingItem.files.map((fileUrl: string, idx: number) => {
-                    const fileName = getFileNameFromUrl(fileUrl);
+                    const isLink = isLinkSubmission(fileUrl);
+                    const displayName = getFileNameFromUrl(fileUrl);
+                    const targetLink = isLink
+                      ? fileUrl.startsWith("http")
+                        ? fileUrl
+                        : `https://${fileUrl}`
+                      : `/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=view`;
+
                     return (
                       <div
                         key={idx}
-                        className="p-3.5 bg-blue-50/60 rounded-2xl border border-blue-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs"
+                        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs ${
+                          isLink ? "bg-indigo-50/60 border-indigo-200/80" : "bg-blue-50/60 border-blue-200/80"
+                        }`}
                       >
                         <div className="flex items-center gap-3 truncate">
-                          <div className="w-9 h-9 rounded-xl bg-[#5A67D8] text-white flex items-center justify-center text-lg shrink-0 shadow-2xs">
-                            <FiFileText />
+                          <div className={`w-9 h-9 rounded-xl text-white flex items-center justify-center text-lg shrink-0 shadow-2xs ${
+                            isLink ? "bg-[#5A67D8]" : "bg-[#5A67D8]"
+                          }`}>
+                            {isLink ? <FiLink /> : <FiFileText />}
                           </div>
                           <div className="truncate">
-                            <p className="font-extrabold text-xs text-blue-950 truncate max-w-xs sm:max-w-md">
-                              {fileName}
+                            <p className="font-extrabold text-xs text-gray-900 truncate max-w-xs sm:max-w-md">
+                              {displayName}
                             </p>
-                            <p className="text-[10px] text-blue-600 font-medium truncate max-w-xs sm:max-w-md">
+                            <p className="text-[10px] text-gray-500 font-medium truncate max-w-xs sm:max-w-md">
                               {fileUrl}
                             </p>
                           </div>
@@ -618,22 +688,24 @@ export default function LecturerGradebookPage() {
 
                         <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto">
                           <a
-                            href={`/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=view`}
+                            href={targetLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-3.5 py-1.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial"
+                            className="px-3.5 py-1.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial cursor-pointer"
                           >
-                            <FiExternalLink /> Open Document
+                            <FiExternalLink /> {isLink ? "Open Link" : "Open Document"}
                           </a>
-                          <a
-                            href={`/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=download`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 bg-white hover:bg-gray-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs"
-                            title="Download File"
-                          >
-                            <FiDownload />
-                          </a>
+                          {!isLink && (
+                            <a
+                              href={`/api/lecturer/submissions/${gradingItem._id}/file?index=${idx}&action=download`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 bg-white hover:bg-gray-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                              title="Download File"
+                            >
+                              <FiDownload />
+                            </a>
+                          )}
                         </div>
                       </div>
                     );
