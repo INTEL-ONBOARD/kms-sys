@@ -8,6 +8,7 @@ const userSchema = new Schema(
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
     phone: { type: String, trim: true },
+    isMobileVerified: { type: Boolean, default: false },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: false }, 
     

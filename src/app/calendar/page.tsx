@@ -27,11 +27,12 @@ import type { CalendarEvent } from "@/app/api/student/calendar/route";
 // ── Constants & Time Slots ────────────────────────────────────────────────
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
-const TIME_SLOTS = [8, 9, 10, 11, 12, 13, 14, 15, 16];
 
 function formatHour(h: number) {
+  if (h === 24) return "12:00 am";
   const suffix = h < 12 ? "am" : "pm";
-  const display = h > 12 ? h - 12 : h;
+  let display = h % 12;
+  if (display === 0) display = 12;
   return `${String(display).padStart(2, "0")}:00 ${suffix}`;
 }
 
@@ -75,24 +76,40 @@ function WeekView({ events, filterCourse }: WeekViewProps) {
     ? events
     : events.filter((e) => e.courseId === filterCourse || e.title === filterCourse || e.courseTitle === filterCourse);
 
-  const eventMap = useMemo(() => {
-    const map: Record<string, Record<number, CalendarEvent>> = {};
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let i = 5; i <= 24; i++) {
+      slots.push(i);
+    }
+    return slots;
+  }, []);
+
+  const groupedByDay = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {};
+    for (const day of DAYS) map[day] = [];
     for (const ev of filtered) {
-      if (!map[ev.dayOfWeek]) map[ev.dayOfWeek] = {};
-      map[ev.dayOfWeek][ev.startHour] = ev;
+      if (map[ev.dayOfWeek]) map[ev.dayOfWeek].push(ev);
     }
     return map;
   }, [filtered]);
 
-  const skippedCells = useMemo(() => {
-    const skip = new Set<string>();
-    for (const ev of filtered) {
-      for (let h = ev.startHour + 1; h < ev.startHour + ev.durationHours; h++) {
-        skip.add(`${ev.dayOfWeek}-${h}`);
-      }
+  const parseTimeStrToDecimalHour = (timeStr: string) => {
+    if (!timeStr) return 0;
+    const match = timeStr.match(/(\d+):(\d+)\s*(am|pm)?/i);
+    if (!match) return 0;
+    let [, h, m, meridiem] = match;
+    let hour = parseInt(h, 10);
+    const min = parseInt(m, 10);
+    if (meridiem) {
+      const isPM = meridiem.toLowerCase() === 'pm';
+      if (isPM && hour !== 12) hour += 12;
+      if (!isPM && hour === 12) hour = 0;
     }
-    return skip;
-  }, [filtered]);
+    return hour + (min / 60);
+  };
+
+  const ROW_HEIGHT = 140; // Base height of a 1-hour block in pixels
+  const START_HOUR = 5;
 
   if (filtered.length === 0) {
     return (
@@ -105,109 +122,118 @@ function WeekView({ events, filterCourse }: WeekViewProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-center border-collapse min-w-[900px]">
-        <thead>
-          <tr className="bg-[#F7FAFC] border-b border-gray-200 text-[#4A5568] text-sm">
-            <th className="py-4 border-r border-gray-200 font-bold w-24 text-xs uppercase tracking-wider">Time</th>
-            {DAYS.map((day) => (
-              <th key={day} className="py-4 border-r border-gray-200 font-bold w-36 last:border-r-0 text-xs uppercase tracking-wider">
-                {day}
-              </th>
+    <div className="overflow-x-auto pb-4">
+      <div className="min-w-[900px] border border-gray-200 rounded-xl bg-white flex flex-col shadow-sm">
+        
+        {/* Header (Days) */}
+        <div className="grid grid-cols-[6rem_repeat(7,1fr)] bg-[#F7FAFC] border-b border-gray-200">
+          <div className="py-4 border-r border-gray-200 font-bold text-xs uppercase tracking-wider text-center text-[#4A5568]">Time</div>
+          {DAYS.map((day) => (
+            <div key={day} className="py-4 border-r border-gray-200 last:border-r-0 font-bold text-xs uppercase tracking-wider text-center text-[#4A5568]">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Body (Grid & Events) */}
+        <div className="grid grid-cols-[6rem_repeat(7,1fr)]">
+          
+          {/* Time Labels (Y-Axis) */}
+          <div className="border-r border-gray-200 bg-white">
+            {timeSlots.map((hour) => (
+              <div key={hour} className="border-b border-gray-200 flex items-start justify-end pr-2 pt-2 last:border-b-0" style={{ height: `${ROW_HEIGHT}px` }}>
+                <span className="text-[#A0AEC0] font-medium text-xs -mt-4 bg-white px-1 leading-none block">{formatHour(hour)}</span>
+              </div>
             ))}
-          </tr>
-        </thead>
+          </div>
 
-        <tbody className="text-sm">
-          {TIME_SLOTS.map((hour) => (
-            <tr key={hour} className="border-b border-gray-200 h-20 last:border-b-0">
-              <td className="border-r border-gray-200 text-[#A0AEC0] font-medium text-xs px-2">
-                {formatHour(hour)}
-              </td>
+          {/* Day Columns */}
+          {DAYS.map((day) => (
+            <div key={day} className="relative border-r border-gray-200 last:border-r-0 bg-white">
+              
+              {/* Background Grid Lines (1 Hour Slots) */}
+              {timeSlots.map((hour) => (
+                <div key={hour} className="border-b border-gray-100 last:border-b-0 w-full" style={{ height: `${ROW_HEIGHT}px` }} />
+              ))}
 
-              {DAYS.map((day) => {
-                const cellKey = `${day}-${hour}`;
-                if (skippedCells.has(cellKey)) return null;
+              {/* Absolute Positioned Events */}
+              {groupedByDay[day].map((ev) => {
+                const startDecimal = parseTimeStrToDecimalHour(ev.startTime);
+                let endDecimal = parseTimeStrToDecimalHour(ev.endTime);
+                
+                if (endDecimal === 0 && startDecimal > 0) {
+                  endDecimal = 24; 
+                }
+                
+                let duration = endDecimal - startDecimal;
+                if (duration <= 0) {
+                  duration = ev.durationHours || 1; 
+                }
 
-                const ev = eventMap[day]?.[hour];
+                const top = (startDecimal - START_HOUR) * ROW_HEIGHT;
+                const height = duration * ROW_HEIGHT;
 
-                if (ev) {
-                  const isExam = ev.eventType === 'exam';
-                  const isLive = ev.eventType === 'live_class';
-                  const bgColor = isExam ? '#7C3AED' : isLive ? '#2563EB' : (ev.colorCode || '#5A67D8');
-                  const textColor = getTextColor(bgColor);
-                  const subColor = getSubtleColor(bgColor);
+                const isExam = ev.eventType === 'exam';
+                const isLive = ev.eventType === 'live_class';
+                const bgColor = isExam ? '#7C3AED' : isLive ? '#2563EB' : (ev.colorCode || '#5A67D8');
+                const textColor = getTextColor(bgColor);
+                const subColor = getSubtleColor(bgColor);
 
-                  return (
-                    <td
-                      key={day}
-                      rowSpan={ev.durationHours}
-                      className="border-r border-gray-200 last:border-r-0 p-2.5 align-middle transition hover:brightness-95"
-                      style={{
-                        backgroundColor: bgColor,
-                        borderLeft: `4px solid ${bgColor}cc`,
-                      }}
-                    >
-                      {/* Event Type Badge */}
-                      {isExam ? (
-                        <div className="flex items-center justify-center gap-1 mb-1">
-                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-purple-900/40 text-purple-100 tracking-wider shadow-xs">
+                return (
+                  <div
+                    key={ev.id || `${ev.title}-${ev.startTime}`}
+                    className="absolute left-1 right-1 rounded-md p-2 shadow-sm overflow-hidden transition hover:brightness-95 border-l-4 z-10 hover:z-20 hover:shadow-md flex flex-col items-center justify-center text-center gap-1"
+                    style={{
+                      top: `${top}px`,
+                      height: `${height}px`,
+                      backgroundColor: bgColor,
+                      borderLeftColor: `${bgColor}cc`
+                    }}
+                  >
+                    {/* Badges */}
+                    {(isExam || isLive) && (
+                      <div className="flex justify-center w-full">
+                        {isExam ? (
+                          <span className="inline-block px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-purple-900/40 text-purple-100 tracking-wider shadow-xs">
                             EXAM
                           </span>
-                        </div>
-                      ) : isLive ? (
-                        <div className="flex items-center justify-center gap-1 mb-1">
-                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-blue-900/40 text-blue-100 tracking-wider flex items-center gap-1 shadow-xs">
+                        ) : isLive ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-blue-900/40 text-blue-100 tracking-wider shadow-xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                             LIVE CLASS
                           </span>
-                        </div>
-                      ) : null}
-
-                      <div
-                        className="font-bold text-[13px] leading-snug"
-                        style={{ color: textColor }}
-                      >
-                        {ev.title}
+                        ) : null}
                       </div>
+                    )}
 
-                      <div className="flex items-center justify-center gap-1 text-[11px] mt-1 font-medium" style={{ color: subColor }}>
-                        <FiClock className="text-[10px]" />
-                        {ev.startTime}–{ev.endTime}
+                    <div className="font-bold text-[10px] sm:text-[12px] leading-tight" style={{ color: textColor }}>
+                      {ev.title}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center gap-1 text-[9px] sm:text-[10px] font-medium" style={{ color: subColor }}>
+                      <span className="flex items-center gap-1"><FiClock className="text-[9px]" /> {ev.startTime}–{ev.endTime}</span>
+                      {ev.location && <span className="flex items-center gap-1 mt-0.5"><FiMapPin className="text-[9px]" /> {ev.location}</span>}
+                    </div>
+
+                    {isLive && ev.meetingLink && (
+                      <div className="pt-1">
+                        <a
+                          href={ev.meetingLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white transition shadow-xs"
+                        >
+                          <FiVideo className="text-[10px]" /> Join
+                        </a>
                       </div>
-
-                      {ev.location && (
-                        <div className="flex items-center justify-center gap-1 text-[11px] mt-0.5 font-medium" style={{ color: subColor }}>
-                          <FiMapPin className="text-[10px]" />
-                          {ev.location}
-                        </div>
-                      )}
-
-                      {/* Live meeting direct button */}
-                      {isLive && ev.meetingLink && (
-                        <div className="mt-1.5">
-                          <a
-                            href={ev.meetingLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white transition shadow-xs"
-                          >
-                            <FiVideo className="text-[10px]" /> Join
-                          </a>
-                        </div>
-                      )}
-                    </td>
-                  );
-                }
-
-                return (
-                  <td key={day} className="border-r border-gray-200 last:border-r-0" />
+                    )}
+                  </div>
                 );
               })}
-            </tr>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 }

@@ -21,11 +21,17 @@ export default function LecturerStudentsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("all");
+  const [selectedBatch, setSelectedBatch] = useState("all");
+  const [batches, setBatches] = useState<{ _id: string; name: string }[]>([]);
 
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/lecturer/students");
+      const url = new URL("/api/lecturer/students", window.location.origin);
+      if (selectedBatch !== "all") {
+        url.searchParams.set("batch", selectedBatch);
+      }
+      const res = await fetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         setStudents(data.students || []);
@@ -37,9 +43,25 @@ export default function LecturerStudentsPage() {
     }
   };
 
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch("/api/lecturer/batches");
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data.batches || []);
+      }
+    } catch (err) {
+      console.error("Failed to load batches:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchBatches();
+  }, []);
+
   useEffect(() => {
     fetchStudents();
-  }, []);
+  }, [selectedBatch]);
 
   // Unique list of courses for the dropdown filter
   const courseList = Array.from(new Set(students.map((s) => s.course).filter(Boolean)));
@@ -70,6 +92,20 @@ export default function LecturerStudentsPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {/* Batch Filter Dropdown */}
+          <select
+            value={selectedBatch}
+            onChange={(e) => setSelectedBatch(e.target.value)}
+            className="w-full sm:w-48 bg-[#F7FAFC] border border-gray-200 text-xs text-gray-700 rounded-xl py-2.5 px-3 outline-none focus:ring-1 focus:ring-[#5A67D8]"
+          >
+            <option value="all">All Batches</option>
+            {batches.map((batch) => (
+              <option key={batch._id} value={batch._id}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+
           {/* Course Filter Dropdown */}
           {courseList.length > 0 && (
             <select
@@ -77,7 +113,7 @@ export default function LecturerStudentsPage() {
               onChange={(e) => setSelectedCourse(e.target.value)}
               className="w-full sm:w-48 bg-[#F7FAFC] border border-gray-200 text-xs text-gray-700 rounded-xl py-2.5 px-3 outline-none focus:ring-1 focus:ring-[#5A67D8]"
             >
-              <option value="all">All Courses ({students.length})</option>
+              <option value="all">All Courses</option>
               {courseList.map((course) => (
                 <option key={course} value={course}>
                   {course}
