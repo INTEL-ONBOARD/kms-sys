@@ -89,7 +89,7 @@ export default function ExamGradingModal({
     if (pct >= 80) return { grade: "A", color: "text-emerald-700 bg-emerald-50 border-emerald-200" };
     if (pct >= 70) return { grade: "B", color: "text-blue-700 bg-blue-50 border-blue-200" };
     if (pct >= 60) return { grade: "C", color: "text-amber-700 bg-amber-50 border-amber-200" };
-    if (pct >= 50) return { grade: "D", color: "text-purple-700 bg-purple-50 border-purple-200" };
+    if (pct >= 50) return { grade: "S", color: "text-purple-700 bg-purple-50 border-purple-200" };
     return { grade: "F", color: "text-rose-700 bg-rose-50 border-rose-200" };
   };
 

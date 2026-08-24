@@ -22,7 +22,7 @@ export default function LecturerAnalyticsPage() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showFinalGradesModal, setShowFinalGradesModal] = useState(false);
-  const [selectedGradeFilter, setSelectedGradeFilter] = useState<"A" | "B" | "C" | "D" | "F" | "ALL" | "IN_PROGRESS">("ALL");
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState<"A" | "B" | "C" | "S" | "F" | "ALL" | "IN_PROGRESS">("ALL");
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -48,7 +48,7 @@ export default function LecturerAnalyticsPage() {
     totalEvaluated: 0,
     averageScore: 0,
     passingRate: 0,
-    distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+    distribution: { A: 0, B: 0, C: 0, S: 0, F: 0 },
   };
 
   const finalSummary = performance.finalGradesSummary || {
@@ -58,7 +58,7 @@ export default function LecturerAnalyticsPage() {
     completionRate: 0,
     averageFinalGrade: 0,
     passingRate: 0,
-    distribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+    distribution: { A: 0, B: 0, C: 0, S: 0, F: 0 },
   };
 
   const studentsList: StudentFinalGrade[] = performance.students || [];
@@ -66,12 +66,12 @@ export default function LecturerAnalyticsPage() {
   const lineChartData = performance.lineChart || [];
   const barChartData = performance.barChart || [];
 
-  const assignmentDonut = performance.assignmentDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
-  const finalDonut = performance.finalDonut || { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  const assignmentDonut = performance.assignmentDonut || { A: 0, B: 0, C: 0, S: 0, F: 0 };
+  const finalDonut = performance.finalDonut || { A: 0, B: 0, C: 0, S: 0, F: 0 };
 
   const isFinalGradesReady = (finalSummary.completedCount || 0) > 0;
 
-  const handleOpenFinalGrades = (filter: "A" | "B" | "C" | "D" | "F" | "ALL" | "IN_PROGRESS" = "ALL") => {
+  const handleOpenFinalGrades = (filter: "A" | "B" | "C" | "S" | "F" | "ALL" | "IN_PROGRESS" = "ALL") => {
     setSelectedGradeFilter(filter);
     setShowFinalGradesModal(true);
   };
@@ -210,7 +210,7 @@ export default function LecturerAnalyticsPage() {
               {isFinalGradesReady ? `${finalSummary.passingRate}%` : "—"}
             </h3>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              {isFinalGradesReady ? "Grade D or higher (≥50%)" : "Awaiting student completion"}
+              {isFinalGradesReady ? "Grade S or higher (≥50%)" : "Awaiting student completion"}
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shadow-2xs">
@@ -348,7 +348,6 @@ export default function LecturerAnalyticsPage() {
       {/* Final Grades & Student Roster Modal */}
       {showFinalGradesModal && (
         <FinalGradesModal
-          students={studentsList}
           initialGradeFilter={selectedGradeFilter}
           onClose={() => setShowFinalGradesModal(false)}
         />

@@ -4,13 +4,14 @@ interface DonutData {
   A: number;
   B: number;
   C: number;
-  D: number;
+  S?: number;
+  D?: number;
   F: number;
 }
 
 interface MiniDonutChartProps {
   data: DonutData;
-  onSelectBucket?: (grade: "A" | "B" | "C" | "D" | "F" | "ALL") => void;
+  onSelectBucket?: (grade: "A" | "B" | "C" | "S" | "F" | "ALL") => void;
   activeBucket?: string | null;
   interactive?: boolean;
 }
@@ -21,10 +22,11 @@ export default function MiniDonutChart({
   activeBucket,
   interactive = false,
 }: MiniDonutChartProps) {
-  const total = (data.A || 0) + (data.B || 0) + (data.C || 0) + (data.D || 0) + (data.F || 0);
+  const sCount = data.S !== undefined ? data.S : data.D !== undefined ? data.D : 0;
+  const total = (data.A || 0) + (data.B || 0) + (data.C || 0) + sCount + (data.F || 0);
 
   const buckets: Array<{
-    key: "A" | "B" | "C" | "D" | "F";
+    key: "A" | "B" | "C" | "S" | "F";
     label: string;
     count: number;
     color: string;
@@ -33,7 +35,7 @@ export default function MiniDonutChart({
     { key: "A", label: "Grade A", count: data.A || 0, color: "#16A34A", bgHover: "hover:bg-emerald-50" },
     { key: "B", label: "Grade B", count: data.B || 0, color: "#2563EB", bgHover: "hover:bg-blue-50" },
     { key: "C", label: "Grade C", count: data.C || 0, color: "#D97706", bgHover: "hover:bg-amber-50" },
-    { key: "D", label: "Grade D", count: data.D || 0, color: "#9333EA", bgHover: "hover:bg-purple-50" },
+    { key: "S", label: "Grade S", count: sCount, color: "#9333EA", bgHover: "hover:bg-purple-50" },
     { key: "F", label: "Grade F", count: data.F || 0, color: "#DC2626", bgHover: "hover:bg-rose-50" },
   ];
 

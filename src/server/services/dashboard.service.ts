@@ -405,7 +405,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
   const formattedActivity = activities.slice(0, 10);
 
   // 1. ASSIGNMENT GRADES CALCULATION & DISTRIBUTION
-  const assignmentGradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  const assignmentGradeBuckets = { A: 0, B: 0, C: 0, S: 0, F: 0 };
   let totalAssignmentScorePct = 0;
   let totalGradedAssignmentsCount = 0;
   let passingAssignmentsCount = 0;
@@ -415,7 +415,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     courseGradesMap.set(c._id.toString(), { totalScore: 0, count: 0, name: c.title });
   });
 
-  allSubmissionsForPerf.forEach((sub: any) => {
+  (allSubmissionsForPerf || []).forEach((sub: any) => {
     if (sub.grade !== null && sub.grade !== undefined && !isNaN(Number(sub.grade))) {
       const rawGrade = Number(sub.grade);
       const maxPts = Number(sub.assignmentId?.maxPoints) || 100;
@@ -430,7 +430,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       if (percentage >= 80) assignmentGradeBuckets.A += 1;
       else if (percentage >= 70) assignmentGradeBuckets.B += 1;
       else if (percentage >= 60) assignmentGradeBuckets.C += 1;
-      else if (percentage >= 50) assignmentGradeBuckets.D += 1;
+      else if (percentage >= 50) assignmentGradeBuckets.S += 1;
       else assignmentGradeBuckets.F += 1;
 
       if (percentage >= 50) {
@@ -457,7 +457,7 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       : 0;
 
   // 2. STUDENT-BY-STUDENT PERFORMANCE & FINAL GRADE CALCULATION
-  const finalGradeBuckets = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  const finalGradeBuckets = { A: 0, B: 0, C: 0, S: 0, F: 0 };
   let completedStudentsTotalFinalScore = 0;
   let completedStudentsCount = 0;
   let completedPassingCount = 0;
@@ -572,10 +572,10 @@ export async function getLecturerDashboard(userId: string, userName: string) {
         finalGradeBuckets.C += 1;
         completedPassingCount += 1;
       } else if (finalGrade >= 50) {
-        finalLetterGrade = "D";
+        finalLetterGrade = "S";
         finalGradeColor = "text-purple-700 bg-purple-50 border-purple-200";
         gpaPoint = 1.0;
-        finalGradeBuckets.D += 1;
+        finalGradeBuckets.S += 1;
         completedPassingCount += 1;
       } else {
         finalLetterGrade = "F";
@@ -808,3 +808,73 @@ export async function getLecturerActivity(userId: string, userName: string) {
 
   return { activity: activities.slice(0, 10) };
 }
+
+/**
+ * Retrieves student final grades roster with server-side backend filtering.
+ */
+export async function getLecturerFinalGradesRoster(
+  userId: string,
+  userName: string,
+  filterParams: {
+    search?: string;
+    grade?: string;
+    courseId?: string;
+  }
+) {
+  const data = await getLecturerDashboard(userId, userName);
+  const allStudents = data.performance?.students || [];
+
+  const completed = allStudents.filter((s: any) => s.isCompleted);
+  const counts = {
+    ALL: completed.length,
+    A: completed.filter((s: any) => s.finalLetterGrade === "A").length,
+    B: completed.filter((s: any) => s.finalLetterGrade === "B").length,
+    C: completed.filter((s: any) => s.finalLetterGrade === "C").length,
+    S: completed.filter((s: any) => s.finalLetterGrade === "S").length,
+    F: completed.filter((s: any) => s.finalLetterGrade === "F").length,
+    IN_PROGRESS: allStudents.filter((s: any) => !s.isCompleted).length,
+    TOTAL: allStudents.length,
+  };
+
+  const courseMap = new Map<string, string>();
+  allStudents.forEach((s: any) => {
+    if (s.courseId && s.courseTitle) {
+      courseMap.set(s.courseId, s.courseTitle);
+    }
+  });
+  const courses = Array.from(courseMap.entries()).map(([id, title]) => ({ id, title }));
+
+  const { search = "", grade = "ALL", courseId = "ALL" } = filterParams;
+
+  const filtered = allStudents.filter((s: any) => {
+    if (courseId !== "ALL" && s.courseId !== courseId) {
+      return false;
+    }
+
+    if (grade === "ALL") {
+      if (!s.isCompleted) return false;
+    } else if (grade === "IN_PROGRESS") {
+      if (s.isCompleted) return false;
+    } else if (grade) {
+      if (s.finalLetterGrade !== grade) return false;
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const matchName = s.name.toLowerCase().includes(q);
+      const matchEmail = s.email.toLowerCase().includes(q);
+      const matchCourse = s.courseTitle.toLowerCase().includes(q);
+      if (!matchName && !matchEmail && !matchCourse) return false;
+    }
+
+    return true;
+  });
+
+  return {
+    students: filtered,
+    counts,
+    courses,
+    total: filtered.length,
+  };
+}
+

@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   FiX,
   FiAward,
   FiUser,
   FiSearch,
-  FiFilter,
   FiCheckCircle,
   FiClock,
-  FiPercent,
-  FiFileText,
-  FiChevronDown
+  FiLoader
 } from "react-icons/fi";
 
 export interface StudentFinalGrade {
@@ -48,86 +45,92 @@ export interface StudentFinalGrade {
 }
 
 interface FinalGradesModalProps {
-  students: StudentFinalGrade[];
-  initialGradeFilter?: "A" | "B" | "C" | "D" | "F" | "ALL" | "IN_PROGRESS";
+  initialGradeFilter?: "A" | "B" | "C" | "S" | "F" | "ALL" | "IN_PROGRESS";
   onClose: () => void;
 }
 
 export default function FinalGradesModal({
-  students,
   initialGradeFilter = "ALL",
   onClose,
 }: FinalGradesModalProps) {
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string>(initialGradeFilter);
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
+
+  const [students, setStudents] = useState<StudentFinalGrade[]>([]);
+  const [counts, setCounts] = useState<{
+    ALL: number;
+    A: number;
+    B: number;
+    C: number;
+    S: number;
+    F: number;
+    IN_PROGRESS: number;
+    TOTAL: number;
+  }>({
+    ALL: 0,
+    A: 0,
+    B: 0,
+    C: 0,
+    S: 0,
+    F: 0,
+    IN_PROGRESS: 0,
+    TOTAL: 0,
+  });
+  const [courses, setCourses] = useState<Array<{ id: string; title: string }>>([]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const uniqueCourses = useMemo(() => {
-    const map = new Map<string, string>();
-    students.forEach((s) => {
-      if (s.courseId && s.courseTitle) {
-        map.set(s.courseId, s.courseTitle);
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch backend-filtered roster
+  const fetchFilteredRoster = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        grade: gradeFilter,
+        courseId: courseFilter,
+      });
+
+      const res = await fetch(`/api/lecturer/analytics/final-grades?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data || json;
+        setStudents(data.students || []);
+        if (data.counts) setCounts(data.counts);
+        if (data.courses) setCourses(data.courses);
       }
-    });
-    return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
-  }, [students]);
+    } catch (err) {
+      console.error("Backend final grades filter fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch, gradeFilter, courseFilter]);
 
-  const counts = useMemo(() => {
-    const completed = students.filter((s) => s.isCompleted);
-    return {
-      ALL: completed.length,
-      A: completed.filter((s) => s.finalLetterGrade === "A").length,
-      B: completed.filter((s) => s.finalLetterGrade === "B").length,
-      C: completed.filter((s) => s.finalLetterGrade === "C").length,
-      D: completed.filter((s) => s.finalLetterGrade === "D").length,
-      F: completed.filter((s) => s.finalLetterGrade === "F").length,
-      IN_PROGRESS: students.filter((s) => !s.isCompleted).length,
-      TOTAL: students.length,
-    };
-  }, [students]);
+  useEffect(() => {
+    fetchFilteredRoster();
+  }, [fetchFilteredRoster]);
 
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      // Course filter
-      if (courseFilter !== "ALL" && s.courseId !== courseFilter) {
-        return false;
-      }
-
-      // Grade tab filter
-      if (gradeFilter === "ALL") {
-        if (!s.isCompleted) return false;
-      } else if (gradeFilter === "IN_PROGRESS") {
-        if (s.isCompleted) return false;
-      } else {
-        if (s.finalLetterGrade !== gradeFilter) return false;
-      }
-
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = s.name.toLowerCase().includes(q);
-        const matchesEmail = s.email.toLowerCase().includes(q);
-        const matchesCourse = s.courseTitle.toLowerCase().includes(q);
-        if (!matchesName && !matchesEmail && !matchesCourse) return false;
-      }
-
-      return true;
-    });
-  }, [students, gradeFilter, courseFilter, searchQuery]);
-
-  const gradeTabs: Array<{ key: string; label: string; count: number; color: string }> = [
-    { key: "ALL", label: "All Completed", count: counts.ALL, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    { key: "A", label: "Grade A", count: counts.A, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    { key: "B", label: "Grade B", count: counts.B, color: "text-blue-700 bg-blue-50 border-blue-200" },
-    { key: "C", label: "Grade C", count: counts.C, color: "text-amber-700 bg-amber-50 border-amber-200" },
-    { key: "D", label: "Grade D", count: counts.D, color: "text-purple-700 bg-purple-50 border-purple-200" },
-    { key: "F", label: "Grade F", count: counts.F, color: "text-rose-700 bg-rose-50 border-rose-200" },
-    { key: "IN_PROGRESS", label: "In Progress", count: counts.IN_PROGRESS, color: "text-gray-700 bg-gray-100 border-gray-200" },
+  const gradeTabs: Array<{ key: string; label: string; count: number }> = [
+    { key: "ALL", label: "All Completed", count: counts.ALL },
+    { key: "A", label: "Grade A", count: counts.A },
+    { key: "B", label: "Grade B", count: counts.B },
+    { key: "C", label: "Grade C", count: counts.C },
+    { key: "S", label: "Grade S", count: counts.S },
+    { key: "F", label: "Grade F", count: counts.F },
+    { key: "IN_PROGRESS", label: "In Progress", count: counts.IN_PROGRESS },
   ];
 
   if (!mounted) return null;
@@ -146,7 +149,7 @@ export default function FinalGradesModal({
                 Final Course Grades & Student Breakdown
               </h2>
               <p className="text-xs text-gray-400">
-                Individual final scores, GPA points, and completion metrics
+                Live backend search, grade filters, and student completion metrics
               </p>
             </div>
           </div>
@@ -159,7 +162,7 @@ export default function FinalGradesModal({
           </button>
         </div>
 
-        {/* Filters and Search Bar */}
+        {/* Filters and Search Bar (Backend Filters) */}
         <div className="p-4 bg-gray-50 border-b border-gray-100 space-y-3 shrink-0">
           {/* Top row: Search and Course selector */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -167,14 +170,17 @@ export default function FinalGradesModal({
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
               <input
                 type="text"
-                placeholder="Search by student name or email..."
+                placeholder="Backend search student or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white text-xs text-gray-700 rounded-xl py-2 pl-8 pr-3 border border-gray-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition font-medium"
               />
+              {loading && (
+                <FiLoader className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 animate-spin text-xs" />
+              )}
             </div>
 
-            {uniqueCourses.length > 1 && (
+            {courses.length > 1 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Course:</span>
                 <select
@@ -183,7 +189,7 @@ export default function FinalGradesModal({
                   className="bg-white border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                 >
                   <option value="ALL">All Assigned Courses</option>
-                  {uniqueCourses.map((c) => (
+                  {courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
@@ -224,13 +230,18 @@ export default function FinalGradesModal({
 
         {/* Student Roster List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-2.5">
-          {filteredStudents.length === 0 ? (
+          {loading ? (
+            <div className="py-12 text-center text-gray-400 flex flex-col items-center justify-center gap-2">
+              <FiLoader className="text-2xl text-emerald-600 animate-spin" />
+              <p className="text-xs">Filtering student final grades on server...</p>
+            </div>
+          ) : students.length === 0 ? (
             <div className="py-12 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
               <FiUser className="text-3xl text-gray-300 mx-auto mb-2" />
               <p className="text-xs font-bold text-gray-700">No Students Found</p>
               <p className="text-[11px] text-gray-400 mt-0.5">
-                {searchQuery
-                  ? `No students match "${searchQuery}"`
+                {debouncedSearch
+                  ? `No students match "${debouncedSearch}" in this view.`
                   : `No students in "${gradeFilter}" category.`}
               </p>
             </div>
@@ -245,7 +256,7 @@ export default function FinalGradesModal({
                 <div className="col-span-2 text-right">GPA Point</div>
               </div>
 
-              {filteredStudents.map((student, idx) => {
+              {students.map((student, idx) => {
                 return (
                   <div
                     key={student.enrollmentId || student.studentId || idx}
@@ -335,7 +346,7 @@ export default function FinalGradesModal({
         {/* Footer summary */}
         <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-white shrink-0">
           <div className="text-xs text-gray-500 font-medium">
-            Showing <strong className="text-gray-900">{filteredStudents.length}</strong> of {students.length} enrolled student(s)
+            Showing <strong className="text-gray-900">{students.length}</strong> student record(s) matching filter
           </div>
 
           <button

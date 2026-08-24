@@ -411,7 +411,7 @@ export async function saveExamGrades(
     if (pct >= 80) letterGrade = "A";
     else if (pct >= 70) letterGrade = "B";
     else if (pct >= 60) letterGrade = "C";
-    else if (pct >= 50) letterGrade = "D";
+    else if (pct >= 50) letterGrade = "S";
     else letterGrade = "F";
 
     const attMarks =
