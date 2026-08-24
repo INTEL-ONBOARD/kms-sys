@@ -3,7 +3,8 @@ import Course from "@/lib/models/Course";
 import Announcement from "@/lib/models/Announcement";
 import Notification from "@/lib/models/Notification";
 import Enrollment from "@/lib/models/Enrollment";
-import { NotFoundError } from "@/lib/core/errors";
+import Batch from "@/lib/models/Batch";
+import { NotFoundError } from "@/errors";
 
 /**
  * Posts an announcement to a course and optionally notifies enrolled students.
@@ -56,7 +57,8 @@ export async function getLecturerStudents(
   userId: string,
   userName: string,
   isSuperAdmin = false,
-  courseIdParam?: string | null
+  courseIdParam?: string | null,
+  batchIdParam?: string | null
 ) {
   await connectToDatabase();
 
@@ -84,6 +86,15 @@ export async function getLecturerStudents(
 
   if (courseIdParam) {
     enrollmentQuery = { courseId: courseIdParam };
+  }
+
+  if (batchIdParam && batchIdParam !== 'all') {
+    const batch = await Batch.findById(batchIdParam).lean();
+    if (batch && batch.students && batch.students.length > 0) {
+      enrollmentQuery.userId = { $in: batch.students };
+    } else {
+      return { students: [], total: 0 };
+    }
   }
 
   const enrollments = await Enrollment.find(enrollmentQuery)

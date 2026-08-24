@@ -13,6 +13,7 @@ interface UserProfile {
   lastName?: string;
   email: string;
   phone?: string;
+  isMobileVerified?: boolean;
   role: string;
   status: string;
   dob?: string;
@@ -40,6 +41,18 @@ export default function ProfilePage() {
     confirmPassword: '',
   });
 
+  const [otpState, setOtpState] = useState<'unverified' | 'sent' | 'verified'>('unverified');
+  const [otp, setOtp] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -47,6 +60,7 @@ export default function ProfilePage() {
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
+          setOtpState(data.user.isMobileVerified ? 'verified' : 'unverified');
           setFormData({
             name: data.user.name || '',
             firstName: data.user.firstName || '',
@@ -127,6 +141,61 @@ export default function ProfilePage() {
         setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       } else {
         setError(data.message || 'Failed to update password.');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendOTP = async () => {
+    if (!formData.phone) {
+      setError("Please save your phone number first.");
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const res = await fetch('/api/profile/send-mobile-otp', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('OTP sent successfully.');
+        setOtpState('sent');
+        setCountdown(60);
+      } else {
+        setError(data.message || 'Failed to send OTP.');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otp) {
+      setError("Please enter the OTP.");
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const res = await fetch('/api/profile/verify-mobile-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('Mobile number verified successfully.');
+        setOtpState('verified');
+        setUser({ ...user!, isMobileVerified: true });
+        setOtp('');
+      } else {
+        setError(data.message || 'Failed to verify OTP.');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -363,37 +432,76 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Notifications */}
+              {/* Mobile Number Verification */}
               <div className="xl:col-span-2">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 h-full">
-                  <h3 className="text-lg font-bold text-[#2D3748] mb-6">Notifications</h3>
+                  <h3 className="text-lg font-bold text-[#2D3748] mb-6">Mobile Number Verification</h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      "Assignment deadlines",
-                      "Dashboard Alerts",
-                      "Grade Updates",
-                      "Timetable Reminders",
-                      "Announcements",
-                      "Exam Reminders",
-                      "Messages From Lectures"
-                    ].map((item, index) => (
-                      <label key={index} className="flex items-center p-4 border border-gray-100 rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                        <div className="relative flex items-center justify-center w-5 h-5 mr-4 border-2 border-[#5A67D8] bg-[#5A67D8] rounded">
-                          <FiCheck className="text-white text-sm" />
-                          <input type="checkbox" className="opacity-0 absolute inset-0 cursor-pointer" defaultChecked />
-                        </div>
-                        <span className="text-sm font-bold text-[#4A5568]">{item}</span>
-                      </label>
-                    ))}
-
-                    <div className="flex items-center justify-between p-4 border border-gray-100 rounded-lg">
-                      <span className="text-sm font-bold text-[#4A5568]">Two-Factor Authentication</span>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
-                      </label>
+                  <div className="flex flex-col space-y-6">
+                    <div className="flex items-center justify-between p-4 border border-gray-100 rounded-lg bg-[#F7FAFC]">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-[#4A5568]">Current Mobile Number</span>
+                        <span className="text-md text-[#2D3748] mt-1">{formData.phone || 'Not set'}</span>
+                      </div>
+                      <div>
+                        {otpState === 'verified' ? (
+                          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200">
+                            Verified <FiCheck className="inline ml-1" />
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200">
+                            Not Verified
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {otpState === 'unverified' && (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleSendOTP}
+                          disabled={saving || !formData.phone}
+                          className="px-6 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white font-bold text-sm rounded-lg shadow-sm transition disabled:opacity-70 flex items-center gap-2"
+                        >
+                          {saving && <FiLoader className="animate-spin" />}
+                          Send OTP
+                        </button>
+                      </div>
+                    )}
+
+                    {otpState === 'sent' && (
+                      <div className="flex flex-col space-y-4">
+                        <div className="flex flex-col">
+                          <label className="text-xs font-bold text-[#A0AEC0] mb-1.5 uppercase tracking-wide">Enter 6-digit OTP</label>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value)}
+                            className="w-full md:w-1/2 bg-[#F7FAFC] border border-gray-200 text-[#4A5568] font-medium text-sm rounded-lg py-2.5 px-4 focus:outline-none focus:border-[#5A67D8] focus:ring-1 focus:ring-[#5A67D8] transition tracking-widest"
+                            placeholder="------"
+                          />
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={handleVerifyOTP}
+                            disabled={saving || otp.length !== 6}
+                            className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-lg shadow-sm transition disabled:opacity-70 flex items-center gap-2"
+                          >
+                            {saving && <FiLoader className="animate-spin" />}
+                            Verify
+                          </button>
+                          
+                          <button
+                            onClick={handleSendOTP}
+                            disabled={saving || countdown > 0}
+                            className="text-sm font-bold text-[#5A67D8] hover:text-[#434190] transition disabled:text-gray-400"
+                          >
+                            {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
