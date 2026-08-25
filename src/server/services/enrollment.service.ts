@@ -397,21 +397,22 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
           durationHours: Math.max(1, Math.min(4, endHour - startHour)),
           startTime: slot.startTime,
           endTime: slot.endTime,
-          location: slot.location || "Main Lecture Hall",
+          location: slot.location || (slot.type === "online" ? "Online Virtual Room" : "Main Lecture Hall"),
           instructor: c.instructor || "Faculty Lecturer",
           colorCode,
           category: c.category || "Lecture",
           eventType: "lecture",
+          slotType: slot.type || "physical",
         });
       });
     }
   });
 
-  // Add Scheduled Live Classes to Timetable
+  // Add Scheduled Live/Physical Classes to Timetable
   liveClasses.forEach((lc: any) => {
     const c = lc.courseId as any;
     const courseIdStr = c?._id?.toString() || lc.courseId?.toString() || "";
-    const courseTitle = c?.title || "Live Session";
+    const courseTitle = c?.title || "Class Session";
     const startDate = new Date(lc.startTime);
     const endDate = new Date(lc.endTime);
 
@@ -438,21 +439,24 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
       hour12: true,
     });
 
+    const isPhysical = lc.classType === "physical";
+
     events.push({
       id: `live-${lc._id.toString()}`,
       courseId: courseIdStr,
       courseTitle,
-      title: lc.title || `${courseTitle} (Live Class)`,
+      title: lc.title || `${courseTitle} (${isPhysical ? "Class" : "Live Session"})`,
       dayOfWeek,
       startHour: Math.min(16, Math.max(8, startHour)),
       durationHours: Math.min(4, durationHours),
       startTime: startTimeFormatted,
       endTime: endTimeFormatted,
-      location: "Online (Live Stream)",
+      location: isPhysical ? (lc.location || "Campus Lecture Hall") : "Online (Live Session)",
       instructor: lc.instructor || c?.instructor || "Course Lecturer",
-      colorCode: "#2563EB",
-      category: "Live Class",
+      colorCode: isPhysical ? "#0D9488" : "#2563EB",
+      category: isPhysical ? "Physical Class" : "Live Class",
       eventType: "live_class",
+      classType: lc.classType || "online",
       meetingLink: lc.meetingLink || "",
       date: startDate.toISOString(),
       dateFormatted: startDate.toLocaleDateString("en-US", {
@@ -562,6 +566,8 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
         instructor: lc.instructor || c?.instructor || "Course Lecturer",
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
+        classType: lc.classType || "online",
+        location: lc.location || (lc.classType === "physical" ? "Campus Lecture Hall" : "Online"),
         dateFormatted: startDate.toLocaleDateString("en-US", {
           weekday: "short",
           month: "short",
@@ -666,6 +672,8 @@ export async function getStudentLiveClasses(userId: string, courseFilter?: strin
       instructor: c.instructor || c.courseId?.instructor || "Course Lecturer",
       startTime: c.startTime,
       endTime: c.endTime,
+      classType: (c as any).classType || "online",
+      location: (c as any).location || ((c as any).classType === "physical" ? "Campus Hall" : "Online"),
       startTimeFormatted: start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       endTimeFormatted: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       dateFormatted: start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
