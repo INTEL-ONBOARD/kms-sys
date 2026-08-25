@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import Batch from "@/models/Batch";
-import User from "@/models/User";
+import Batch from "@/lib/models/Batch";
+import User from "@/lib/models/User";
 
 export async function PUT(req: NextRequest) {
   try {

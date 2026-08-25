@@ -1,4 +1,4 @@
-import AuditLog from '@/models/AuditLog';
+import AuditLog from '@/lib/models/AuditLog';
 import { connectToDatabase } from '@/lib/db';
 
 interface LogParams {

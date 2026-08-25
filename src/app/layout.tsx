@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Anek_Odia } from "next/font/google";
 import "./globals.css";
-import Provider from "@/Components/Provider";
-import Header from "@/Components/Header";
-import Footer from "@/Components/Footer";
+import Provider from "@/contexts/SessionProvider";
+import Header from "@/components/shared/Header";
+import Footer from "@/components/shared/Footer";
 
 // Importing the Anek Odia font
 const anekOdia = Anek_Odia({

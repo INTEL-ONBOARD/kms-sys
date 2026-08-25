@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError } from "@/server/core/errors";
-import * as MaterialService from "@/server/services/material.service";
+import { requireAuth } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError } from "@/lib/core/errors";
+import * as MaterialService from "@/services/material.service";
 import mongoose from "mongoose";
 
 export async function GET(

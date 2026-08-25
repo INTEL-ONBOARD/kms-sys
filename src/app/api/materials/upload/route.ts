@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError, NotFoundError, ForbiddenError } from "@/server/core/errors";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError, NotFoundError, ForbiddenError } from "@/lib/core/errors";
 import { connectToDatabase } from "@/lib/db";
-import CourseMaterial from "@/models/CourseMaterial";
-import Course from "@/models/Course";
+import CourseMaterial from "@/lib/models/CourseMaterial";
+import Course from "@/lib/models/Course";
 import { uploadBufferToR2, getFilePublicUrl } from "@/lib/r2";
 import mongoose from "mongoose";
 import fs from "fs";

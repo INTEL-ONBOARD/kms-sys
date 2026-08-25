@@ -1,0 +1,740 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import DashHeader from '@/components/shared/DashHeader';
+import AdminSidebar from '@/components/shared/AdminSidebar';
+import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail, FiCheck } from 'react-icons/fi';
+import { useToast } from '@/contexts/ToastContext';
+
+interface UserData {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  department?: string;
+  reportApproved?: boolean;
+}
+
+export default function UserAdminPage() {
+  const toast = useToast();
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const itemsPerPage = 5;
+
+  // Modal States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+
+  // Form States for Add/Edit (Added Demo Password here)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: 'Demo@1234', // Default Demo Password
+    role: 'student',
+    status: 'active',
+    reportApproved: false,
+  });
+
+  const [inviteFormData, setInviteFormData] = useState({
+    name: '',
+    email: '',
+    role: 'student',
+  });
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batches, setBatches] = useState<{ _id: string; name: string }[]>([]);
+  const [batchFormData, setBatchFormData] = useState({
+    batchId: '',
+    accessStatus: 'Approved'
+  });
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch('/api/admin/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data.batches || []);
+        if (data.batches && data.batches.length > 0) {
+          setBatchFormData(prev => ({ ...prev, batchId: data.batches[0]._id }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBatches();
+  }, []);
+
+  // Fetch Users Function
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+      });
+      if (searchTerm) params.append('search', searchTerm);
+      if (roleFilter !== 'All') params.append('role', roleFilter);
+      if (statusFilter !== 'All') params.append('status', statusFilter);
+      if (departmentFilter !== 'All') params.append('department', departmentFilter);
+
+      const response = await fetch(`/api/admin/users?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setTotalUsers(data.pagination.total);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [currentPage, searchTerm, roleFilter, statusFilter, departmentFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, statusFilter, departmentFilter]);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  // --- Action Handlers ---
+
+  // Handle Add User Submit
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json(); // Read backend response
+
+      if (res.ok) {
+        setIsAddModalOpen(false);
+        // Reset form data and re-apply Demo Password
+        setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active', reportApproved: false });
+        fetchUsers();
+        toast.success(`User "${formData.name}" added successfully! Demo password: Demo@1234`);
+      } else {
+        toast.error("Failed to add user: " + (data.message || "Unknown error occurred"));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network Error: Please check server connectivity.");
+    }
+  };
+
+  // Handle Invite User Submit
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsInviteModalOpen(false);
+        setInviteFormData({ name: '', email: '', role: 'student' });
+        fetchUsers();
+        toast.success('Invitation sent successfully! The user will receive an activation email.');
+      } else {
+        toast.error('Failed to send invitation: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Network Error: Unable to send invitation.');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  // Handle Edit User Submit
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBatchLoading(true);
+    try {
+      const res = await fetch('/api/admin/users/bulk-report-access', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsBatchModalOpen(false);
+        fetchUsers();
+        toast.success(data.message || 'Batch access updated successfully');
+      } else {
+        toast.error('Failed to update batch access: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Network Error: Unable to update batch access.');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // Handle Edit User Submit
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: formData.role, status: formData.status }),
+      });
+      if (res.ok) {
+        setIsEditModalOpen(false);
+        fetchUsers();
+        toast.success("User updated successfully");
+      } else {
+        toast.error("Failed to update user");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network error while updating user");
+    }
+  };
+
+  // Handle Delete User Confirm
+  const handleDeleteConfirm = async () => {
+    if (!selectedUser) return;
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser._id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setIsDeleteModalOpen(false);
+        fetchUsers();
+        toast.success("User deleted successfully");
+      } else {
+        toast.error("Failed to delete user");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network error while deleting user");
+    }
+  };
+
+  // Handle Toggle Report Download Approval
+  const handleToggleReportApproval = async (user: UserData) => {
+    try {
+      const nextState = !user.reportApproved;
+      const res = await fetch(`/api/admin/users/${user._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportApproved: nextState }),
+      });
+      if (res.ok) {
+        setUsers(users.map(u => u._id === user._id ? { ...u, reportApproved: nextState } : u));
+        toast.success(`Academic report download ${nextState ? 'approved' : 'locked'} for ${user.name}`);
+      }
+    } catch (err) {
+      console.error("Failed to toggle report approval:", err);
+      toast.error("Failed to update report access");
+    }
+  };
+
+  // Handle Approve Lecturer
+  const handleApproveLecturer = async (user: UserData) => {
+    try {
+      const res = await fetch(`/api/admin/users/${user._id}/approve-lecturer`, {
+        method: 'PUT',
+      });
+      if (res.ok) {
+        toast.success(`Lecturer ${user.name} approved successfully`);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        toast.error(`Failed to approve lecturer: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network error while approving lecturer");
+    }
+  };
+
+  // Helper Functions
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toISOString().split('T')[0];
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-700';
+      case 'suspended': return 'bg-red-100 text-red-700';
+      case 'inactive': return 'bg-gray-100 text-gray-700';
+      case 'pending': return 'bg-amber-100 text-amber-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'super_admin': return 'bg-purple-100 text-purple-700';
+      case 'instructor':
+      case 'lecturer': return 'bg-blue-100 text-blue-700';
+      case 'student': return 'bg-indigo-100 text-indigo-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F7F9FC] flex font-sans text-gray-800">
+      <AdminSidebar />
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        <DashHeader />
+
+        <div className="flex-1 overflow-y-auto px-8 pb-12 pt-6 relative">
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">User Administration</h1>
+              <p className="text-[#A0AEC0] font-medium mt-1">Manage platform users, roles, and access</p>
+            </div>
+            {/* Main Add New User Button - Updated Color to match image */}
+            <div className="flex gap-3 mt-4 md:mt-0">
+              <button
+                onClick={() => setIsBatchModalOpen(true)}
+                className="bg-white border border-green-500 text-green-600 hover:bg-green-50 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiCheck className="mr-2 text-lg" />
+                Batch Access
+              </button>
+              <button
+                onClick={() => setIsInviteModalOpen(true)}
+                className="bg-white border border-[#5551FF] text-[#5551FF] hover:bg-[#5551FF]/5 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiMail className="mr-2 text-lg" />
+                Invite User
+              </button>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-[#5551FF] hover:bg-[#423ee0] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiUserPlus className="mr-2 text-lg" />
+                Add New User
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-t-xl border border-gray-200 border-b-0 flex flex-col sm:flex-row justify-between gap-4">
+            <div className="relative w-full sm:max-w-md">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search users by name or email..."
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <FiFilter className="text-gray-400" />
+              <select
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Business & Management">Business & Management</option>
+                <option value="Computing">Computing</option>
+                <option value="Science">Science</option>
+                <option value="Art">Art</option>
+              </select>
+
+              <select
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+              >
+                <option value="All">All Roles</option>
+                <option value="student">Student</option>
+                <option value="lecturer">Lecturer</option>
+                <option value="super_admin">Admin</option>
+              </select>
+
+              <select
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto w-full min-h-[400px]">
+              <table className="w-full text-left text-sm text-gray-600">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4">User Details</th>
+                    <th className="px-6 py-4">Role</th>
+                    <th className="px-6 py-4">Department</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Report Access</th>
+                    <th className="px-6 py-4">Joined Date</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+
+                  {loading ? (
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
+                  ) : users.length === 0 ? (
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">No users found.</td></tr>
+                  ) : (
+                    users.map((user) => (
+                      <tr key={user._id} className="hover:bg-gray-50 transition duration-150">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg mr-3">
+                              {user.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-bold text-gray-900">{user.name}</div>
+                              <div className="text-xs text-gray-500">{user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getRoleBadge(user.role)}`}>
+                            {user.role.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-700 font-medium text-sm">
+                          {user.department ? user.department : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize flex w-max items-center ${getStatusBadge(user.status || 'inactive')}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'active' ? 'bg-green-500' : user.status === 'suspended' ? 'bg-red-500' : user.status === 'pending' ? 'bg-amber-500' : 'bg-gray-500'}`}></span>
+                            {user.status || 'inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === 'student' ? (
+                            <button
+                              onClick={() => handleToggleReportApproval(user)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${user.reportApproved
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                }`}
+                              title="Click to toggle official report download permission"
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${user.reportApproved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                              <span>{user.reportApproved ? 'Approved' : 'Locked'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500">{formatDate(user.createdAt)}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end space-x-2">
+                            {user.role === 'lecturer' && user.status === 'pending' && (
+                              <button
+                                onClick={() => handleApproveLecturer(user)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                title="Approve Lecturer"
+                              >
+                                <FiCheck className="text-base" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setFormData({
+                                  ...formData,
+                                  role: user.role,
+                                  status: user.status || 'active',
+                                  reportApproved: !!user.reportApproved,
+                                });
+                                setIsEditModalOpen(true);
+                              }}
+                              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                            >
+                              <FiEdit2 className="text-base" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                            >
+                              <FiTrash2 className="text-base" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
+              <span>Showing {users.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {(currentPage - 1) * itemsPerPage + users.length} of {totalUsers} entries</span>
+              <div className="flex space-x-1">
+                <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50">Prev</button>
+                <button className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md font-medium">{currentPage}</button>
+                <button onClick={handleNextPage} disabled={currentPage === totalPages || totalPages === 0} className="px-3 py-1 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50">Next</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </main>
+
+      {/* --- MODALS --- */}
+
+      {/* Add User Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Add New User</h2>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input required type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+
+              {/* Password Field: Auto-filled with Demo Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password (Demo)</label>
+                <input required type="text" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full border rounded-lg p-2 bg-gray-50 text-gray-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <p className="text-xs text-orange-600 mt-1 font-medium">* Instruct user to change this from their profile after first login.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                  <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
+                  <option value="super_admin">Admin</option>
+                </select>
+              </div>
+
+              {/* Modal Button - Updated Color to match image */}
+              <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Create User</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite User Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Invite User</h2>
+              <button onClick={() => setIsInviteModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input required type="text" value={inviteFormData.name} onChange={(e) => setInviteFormData({ ...inviteFormData, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input required type="email" value={inviteFormData.email} onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select value={inviteFormData.role} onChange={(e) => setInviteFormData({ ...inviteFormData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                  <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
+                  <option value="super_admin">Admin</option>
+                </select>
+              </div>
+              <button type="submit" disabled={inviteLoading} className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
+                {inviteLoading ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Access Modal */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Batch Report Access</h2>
+              <button onClick={() => setIsBatchModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
+                <select
+                  required
+                  value={batchFormData.batchId}
+                  onChange={(e) => setBatchFormData({ ...batchFormData, batchId: e.target.value })}
+                  className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Select a batch</option>
+                  {batches.map((batch) => (
+                    <option key={batch._id} value={batch._id}>{batch.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accessStatus"
+                      value="Approved"
+                      checked={batchFormData.accessStatus === 'Approved'}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, accessStatus: e.target.value })}
+                      className="text-green-600 focus:ring-green-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Approve Access</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accessStatus"
+                      value="Locked"
+                      checked={batchFormData.accessStatus === 'Locked'}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, accessStatus: e.target.value })}
+                      className="text-red-600 focus:ring-red-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Lock Access</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsBatchModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-2.5 font-bold transition">Cancel</button>
+                <button type="submit" disabled={batchLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
+                  {batchLoading ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {isEditModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Edit User: {selectedUser.name}</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                  <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
+                  <option value="super_admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+
+              {selectedUser.role === 'student' && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="modal-reportApproved"
+                    checked={formData.reportApproved}
+                    onChange={(e) => setFormData({ ...formData, reportApproved: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                  />
+                  <label htmlFor="modal-reportApproved" className="text-xs font-bold text-gray-700 cursor-pointer">
+                    Approve Official Academic Report Download
+                  </label>
+                </div>
+              )}
+
+              <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Save Changes</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl text-center">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Delete User?</h3>
+            <p className="text-gray-500 mb-6 text-sm">Are you sure you want to delete <b>{selectedUser.name}</b>? This action cannot be undone.</p>
+            <div className="flex space-x-3 justify-center">
+              <button onClick={() => setIsDeleteModalOpen(false)} className="px-5 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 font-medium">Cancel</button>
+              <button onClick={handleDeleteConfirm} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

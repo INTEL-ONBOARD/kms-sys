@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import * as ExamService from "@/server/services/exam.service";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import * as ExamService from "@/services/exam.service";
 
 interface RouteParams {
   params: Promise<{ id: string }>;

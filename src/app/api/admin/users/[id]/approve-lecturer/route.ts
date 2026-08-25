@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import User from "@/models/User";
-import { NotFoundError, BadRequestError } from "@/server/core/errors";
+import User from "@/lib/models/User";
+import { NotFoundError, BadRequestError } from "@/errors/HttpExceptions";
 import { sendLecturerApprovalEmail } from "@/lib/mailer";
 
 export async function PUT(
