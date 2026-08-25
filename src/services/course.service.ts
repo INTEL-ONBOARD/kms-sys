@@ -116,7 +116,12 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
   if (input.category !== undefined) updatePayload.category = input.category.trim();
   if (input.price !== undefined) updatePayload.price = input.price.trim();
   if (input.status !== undefined) updatePayload.status = input.status;
-  if (input.published !== undefined) updatePayload.published = input.published;
+  if (input.published !== undefined) {
+    updatePayload.published = input.published;
+    if (input.status === undefined) {
+      updatePayload.status = input.published ? "published" : "draft";
+    }
+  }
   if (input.colorCode !== undefined) updatePayload.colorCode = input.colorCode.trim();
   if (input.credits !== undefined) updatePayload.credits = Math.max(1, Math.min(30, Number(input.credits) || 3));
   if (input.schedule !== undefined) {

@@ -48,26 +48,29 @@ export async function GET(req: NextRequest) {
       const course = enrollment.courseId;
       const cIdStr = course._id ? course._id.toString() : "";
       const progress = typeof enrollment.progress === "number" ? enrollment.progress : 0;
+      const isCourseMaterialsVisible = course.published !== false;
 
-      const courseMaterials = materialsList
-        .filter((m: any) => m.courseId?.toString() === cIdStr)
-        .map((m: any) => ({
-          _id: m._id.toString(),
-          title: m.title,
-          description: m.description || "",
-          materialType: m.materialType || "notes",
-          fileName: m.fileName,
-          fileUrl: m.fileUrl,
-          fileSize: m.fileSize || 0,
-          mimeType: m.mimeType || "application/octet-stream",
-          createdAt: m.createdAt
-            ? new Date(m.createdAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })
-            : "",
-        }));
+      const courseMaterials = isCourseMaterialsVisible
+        ? materialsList
+            .filter((m: any) => m.courseId?.toString() === cIdStr)
+            .map((m: any) => ({
+              _id: m._id.toString(),
+              title: m.title,
+              description: m.description || "",
+              materialType: m.materialType || "notes",
+              fileName: m.fileName,
+              fileUrl: m.fileUrl,
+              fileSize: m.fileSize || 0,
+              mimeType: m.mimeType || "application/octet-stream",
+              createdAt: m.createdAt
+                ? new Date(m.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "",
+            }))
+        : [];
 
       const courseAssignments = assignmentsList
         .filter((a: any) => a.courseId?.toString() === cIdStr)

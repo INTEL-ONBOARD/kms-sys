@@ -79,7 +79,11 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
 
   // Form states
   const [description, setDescription] = useState(course.description || "Comprehensive course curriculum.");
-  const [published, setPublished] = useState(course.published ?? true);
+  const [published, setPublished] = useState(
+    course.published !== undefined
+      ? Boolean(course.published)
+      : course.status !== "draft"
+  );
   const [credits, setCredits] = useState<number>((course as any).credits || 3);
   const [saving, setSaving] = useState(false);
 
@@ -387,12 +391,14 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
 
     setSaving(true);
     try {
+      const newStatus = published ? "published" : "draft";
       const res = await fetch(`/api/courses/${course._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           description,
           published,
+          status: newStatus,
           credits: Math.max(1, Math.min(30, Number(credits) || 3)),
           schedule: scheduleSlots,
           gradingScale,
@@ -405,7 +411,7 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
       });
 
       if (res.ok) {
-        toast.success(`Course settings, grading system & timetable updated!`);
+        toast.success(`Course settings updated! Status set to ${published ? "Published" : "Draft (Hidden)"}.`);
         if (onUpdate) onUpdate();
         onClose();
       } else {
@@ -581,20 +587,34 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-[#F7FAFC] rounded-xl border border-gray-100">
-                  <div>
-                    <h4 className="text-xs font-bold text-[#2D3748]">Course Visibility</h4>
-                    <p className="text-[11px] text-[#A0AEC0]">Allow enrolled students to access learning materials</p>
+                <div className="p-4 bg-[#F7FAFC] rounded-xl border border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-[#2D3748]">Course Visibility</h4>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          published ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {published ? "Visible to Students" : "Hidden from Students (Draft)"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#A0AEC0] mt-0.5">Allow enrolled students to access learning materials</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={published}
+                        onChange={(e) => setPublished(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
+                    </label>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={published}
-                      onChange={(e) => setPublished(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
-                  </label>
+                  <p className="text-[11px] text-gray-500 bg-white p-2.5 rounded-lg border border-gray-100">
+                    {published
+                      ? "✓ Course materials, lecture notes, and slides are accessible to enrolled students."
+                      : "🔒 Learning materials are hidden. Enrolled students cannot view or download materials for this course until enabled."}
+                  </p>
                 </div>
               </div>
             )}

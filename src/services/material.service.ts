@@ -129,9 +129,15 @@ export async function getMaterials(courseId?: string, isStudent = false) {
   if (isStudent) query.isPublished = true;
 
   const materials = await CourseMaterial.find(query)
-    .populate("courseId", "title")
+    .populate("courseId", "title published")
     .sort({ createdAt: -1 })
     .lean();
+
+  if (isStudent) {
+    return {
+      materials: materials.filter((m: any) => m.courseId && m.courseId.published !== false),
+    };
+  }
 
   return { materials };
 }
@@ -176,6 +182,13 @@ export async function getMaterialFileUrl(
 
     if (!isEnrolled) {
       throw new ForbiddenError("Access denied: You are not enrolled in this course");
+    }
+
+    const course = await Course.findById(material.courseId).select("published").lean();
+    if (!course || course.published === false || material.isPublished === false) {
+      throw new ForbiddenError(
+        "Access denied: Learning materials are currently not visible for this course"
+      );
     }
   }
 

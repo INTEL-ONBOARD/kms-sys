@@ -53,9 +53,25 @@ export async function GET(req: NextRequest) {
             403
           );
         }
+
+        const targetCourse = await Course.findById(courseId).select("published").lean();
+        if (!targetCourse || targetCourse.published === false) {
+          return successResponse([], undefined, 200, {
+            success: true,
+            data: [],
+            materials: [],
+          });
+        }
       } else {
+        const visibleCourses = await Course.find({
+          _id: { $in: enrolledCourseIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          published: { $ne: false },
+        })
+          .select("_id")
+          .lean();
+
         query.courseId = {
-          $in: enrolledCourseIds.map((id) => new mongoose.Types.ObjectId(id)),
+          $in: visibleCourses.map((c: any) => c._id),
         };
       }
 

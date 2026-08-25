@@ -185,11 +185,15 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 5. Recent course materials
+  // 5. Recent course materials (only from courses with visibility enabled)
+  const publishedCourseIds = validEnrollments
+    .filter((e: any) => e.courseId && e.courseId.published !== false)
+    .map((e: any) => e.courseId._id);
+
   const materials =
-    allCourseIds.length > 0
+    publishedCourseIds.length > 0
       ? await CourseMaterial.find({
-          courseId: { $in: allCourseIds },
+          courseId: { $in: publishedCourseIds },
           isPublished: true,
         })
           .populate("courseId", "title")
