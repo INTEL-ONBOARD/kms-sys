@@ -13,7 +13,7 @@ export const createAssignmentSchema = z.object({
   attachmentName: z.string().optional(),
   attachmentSize: z.number().optional(),
   fileKey: z.string().optional(),
-  status: z.enum(["draft", "open", "closed"]).default("open"),
+  status: z.enum(["draft", "open", "closed", "graded"]).default("open"),
 });
 
 export const updateAssignmentSchema = z.object({
@@ -29,7 +29,7 @@ export const updateAssignmentSchema = z.object({
   attachmentName: z.string().optional(),
   attachmentSize: z.number().optional(),
   fileKey: z.string().optional(),
-  status: z.enum(["draft", "open", "closed"]).optional(),
+  status: z.enum(["draft", "open", "closed", "graded"]).optional(),
 });
 
 export const gradeSubmissionSchema = z.object({

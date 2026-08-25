@@ -22,7 +22,8 @@ import {
   FiHelpCircle,
   FiInfo,
   FiTrash2,
-  FiFile
+  FiFile,
+  FiLock
 } from 'react-icons/fi';
 import { MdOutlineAssignment, MdOutlineNotificationsActive } from 'react-icons/md';
 import Sidebar from '@/components/shared/Sidebar';
@@ -59,8 +60,11 @@ interface AssignmentData {
   category: string;
   isOverdue: boolean;
   isUrgent: boolean;
+  isClosed?: boolean;
+  allowSubmissions?: boolean;
+  assignmentStatus?: string;
   timeLeft: string;
-  status: "Pending" | "Submitted" | "Graded" | "Overdue";
+  status: "Pending" | "Submitted" | "Graded" | "Overdue" | "Closed";
   submission: SubmissionData | null;
 }
 
@@ -156,13 +160,13 @@ function AssignmentsContent() {
 
   const filteredAssignments = assignments;
 
-  // Split into Upcoming and Overdue
+  // Split into Upcoming and Overdue (exclude closed assignments from overdue callout)
   const overdueAssignments = useMemo(() => {
-    return filteredAssignments.filter((a) => a.isOverdue && !a.submission);
+    return filteredAssignments.filter((a) => a.isOverdue && !a.submission && !a.isClosed && a.status !== "Closed");
   }, [filteredAssignments]);
 
   const regularAssignments = useMemo(() => {
-    return filteredAssignments.filter((a) => !a.isOverdue || a.submission);
+    return filteredAssignments.filter((a) => (!a.isOverdue || a.submission || a.isClosed || a.status === "Closed"));
   }, [filteredAssignments]);
 
   const handleOpenBrief = (assignment: AssignmentData) => {
@@ -171,6 +175,10 @@ function AssignmentsContent() {
   };
 
   const handleOpenSubmitModal = (assignment: AssignmentData) => {
+    if (assignment.isClosed || assignment.status === "Closed" || assignment.assignmentStatus === "closed") {
+      toast.warning("Submissions for this assignment have been closed by the lecturer.");
+      return;
+    }
     setSubmittingAssignment(assignment);
     setSubmissionContent(assignment.submission?.content || '');
     setSubmissionLink(assignment.submission?.files?.[0] || '');
@@ -178,7 +186,7 @@ function AssignmentsContent() {
     setUploadProgressText('');
   };
 
-  const uploadFileToR2 = async (file: File, targetCourseId: string): Promise<string> => {
+  const uploadFileToR2 = async (file: File, targetCourseId: string, assignmentId?: string): Promise<string> => {
     if (file.size > 10 * 1024 * 1024) {
       throw new Error(`File "${file.name}" exceeds maximum allowed student size limit of 10MB.`);
     }
@@ -191,6 +199,7 @@ function AssignmentsContent() {
         fileType: file.type || "application/octet-stream",
         fileSize: file.size,
         courseId: targetCourseId || "general",
+        assignmentId: assignmentId || undefined,
       }),
     });
 
@@ -228,6 +237,12 @@ function AssignmentsContent() {
     e.preventDefault();
     if (!submittingAssignment) return;
 
+    if (submittingAssignment.isClosed || submittingAssignment.status === "Closed" || submittingAssignment.assignmentStatus === "closed") {
+      toast.error("Submissions for this assignment have been closed. No submissions can be made.");
+      setSubmittingAssignment(null);
+      return;
+    }
+
     if (!submissionContent.trim() && !submissionLink.trim() && selectedFiles.length === 0) {
       toast.warning("Please upload a file, enter a project link, or type your response");
       return;
@@ -244,7 +259,7 @@ function AssignmentsContent() {
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
           try {
-            const publicUrl = await uploadFileToR2(file, submittingAssignment.courseId);
+            const publicUrl = await uploadFileToR2(file, submittingAssignment.courseId, submittingAssignment._id);
             submittedFiles.push(publicUrl);
           } catch (uploadErr: any) {
             toast.error(uploadErr.message || `Failed to upload ${file.name}`);
@@ -628,7 +643,7 @@ function AssignmentsContent() {
                             {/* View Brief Button */}
                             <button 
                               onClick={() => handleOpenBrief(assignment)}
-                              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-[#5A67D8] text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-[#5A67D8] text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                             >
                               <FiFileText className="text-sm" /> View Brief
                             </button>
@@ -639,21 +654,42 @@ function AssignmentsContent() {
                                   handleOpenBrief(assignment);
                                   setBriefSection('submission');
                                 }}
-                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl shadow-sm transition"
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
                               >
                                 View Grade
                               </button>
+                            ) : assignment.isClosed || assignment.status === 'Closed' ? (
+                              <div className="flex items-center gap-2">
+                                {assignment.submission && (
+                                  <button 
+                                    onClick={() => {
+                                      handleOpenBrief(assignment);
+                                      setBriefSection('submission');
+                                    }}
+                                    className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                                  >
+                                    View Submission
+                                  </button>
+                                )}
+                                <button 
+                                  disabled
+                                  className="px-4 py-2 bg-gray-100 text-gray-400 text-xs font-bold rounded-xl cursor-not-allowed border border-gray-200 flex items-center gap-1.5"
+                                  title="Instructor has closed submissions for this assignment"
+                                >
+                                  <FiLock className="text-xs" /> Submissions Closed
+                                </button>
+                              </div>
                             ) : assignment.status === 'Submitted' ? (
                               <button 
                                 onClick={() => handleOpenSubmitModal(assignment)}
-                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition"
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer"
                               >
                                 Resubmit
                               </button>
                             ) : (
                               <button 
                                 onClick={() => handleOpenSubmitModal(assignment)}
-                                className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-md transition ${
+                                className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer ${
                                   assignment.isUrgent 
                                     ? 'bg-[#ED8936] hover:bg-[#DD6B20]' 
                                     : 'bg-[#5A67D8] hover:bg-[#434190]'
@@ -696,18 +732,26 @@ function AssignmentsContent() {
                       ? 'bg-green-100 text-green-700' 
                       : viewingBrief.status === 'Submitted' 
                       ? 'bg-indigo-100 text-[#5A67D8]' 
+                      : viewingBrief.isClosed || viewingBrief.status === 'Closed'
+                      ? 'bg-gray-200 text-gray-700 flex items-center gap-1'
                       : viewingBrief.isOverdue 
                       ? 'bg-red-100 text-red-700' 
                       : 'bg-amber-100 text-amber-700'
                   }`}>
-                    {viewingBrief.status}
+                    {viewingBrief.isClosed || viewingBrief.status === 'Closed' ? (
+                      <>
+                        <FiLock className="text-xs" /> Submissions Closed
+                      </>
+                    ) : (
+                      viewingBrief.status
+                    )}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setViewingBrief(null)}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-xl transition"
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-xl transition cursor-pointer"
                   >
                     <FiX className="text-xl" />
                   </button>
@@ -743,8 +787,14 @@ function AssignmentsContent() {
               </div>
               <div className="p-3 bg-[#F7FAFC] rounded-2xl border border-gray-100">
                 <p className="text-[#A0AEC0] font-semibold text-[11px]">Time Remaining</p>
-                <p className={`font-bold mt-0.5 ${viewingBrief.isOverdue ? 'text-red-600' : 'text-[#ED8936]'}`}>
-                  {viewingBrief.timeLeft}
+                <p className={`font-bold mt-0.5 ${
+                  viewingBrief.isClosed || viewingBrief.status === 'Closed'
+                    ? 'text-gray-600'
+                    : viewingBrief.isOverdue 
+                    ? 'text-red-600' 
+                    : 'text-[#ED8936]'
+                }`}>
+                  {viewingBrief.isClosed || viewingBrief.status === 'Closed' ? 'Submissions Closed' : viewingBrief.timeLeft}
                 </p>
               </div>
             </div>
@@ -801,6 +851,19 @@ function AssignmentsContent() {
               {/* 1. OVERVIEW & TASK INSTRUCTIONS */}
               {briefSection === 'overview' && (
                 <div className="space-y-5">
+                  {(viewingBrief.isClosed || viewingBrief.status === 'Closed') && (
+                    <div className="p-4 bg-gray-100 border border-gray-300 rounded-2xl text-gray-700 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-gray-200 text-gray-700 flex items-center justify-center text-base shrink-0 font-bold">
+                        <FiLock />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900">Submissions Closed by Instructor</h4>
+                        <p className="text-[11px] text-gray-600 mt-0.5 leading-relaxed">
+                          The lecturer has disabled student submissions for this assignment. No further deliverables or files can be submitted.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {viewingBrief.attachmentUrl && (
                     <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                       <div className="flex items-center gap-3">
@@ -1036,17 +1099,26 @@ function AssignmentsContent() {
               </button>
 
               {viewingBrief.status !== 'Graded' && (
-                <button
-                  onClick={() => {
-                    const assign = viewingBrief;
-                    setViewingBrief(null);
-                    handleOpenSubmitModal(assign);
-                  }}
-                  className="px-6 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-md transition flex items-center gap-1.5"
-                >
-                  <FiUploadCloud className="text-sm" />
-                  {viewingBrief.submission ? 'Update Submission' : 'Submit Coursework'}
-                </button>
+                viewingBrief.isClosed || viewingBrief.status === 'Closed' ? (
+                  <button
+                    disabled
+                    className="px-5 py-2.5 bg-gray-100 text-gray-400 font-bold text-xs rounded-xl border border-gray-200 cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    <FiLock className="text-sm" /> Submissions Closed
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const assign = viewingBrief;
+                      setViewingBrief(null);
+                      handleOpenSubmitModal(assign);
+                    }}
+                    className="px-6 py-2.5 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FiUploadCloud className="text-sm" />
+                    {viewingBrief.submission ? 'Update Submission' : 'Submit Coursework'}
+                  </button>
+                )
               )}
             </div>
 

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Exam, { ExamDoc } from "@/lib/models/Exam";
-import Course, { AssessmentItem } from "@/lib/models/Course";
+import Course, { AssessmentItem, GradeBoundary } from "@/lib/models/Course";
 import Enrollment from "@/lib/models/Enrollment";
 import Notification from "@/lib/models/Notification";
 import { BadRequestError, NotFoundError } from "@/lib/core/errors";
@@ -10,6 +10,8 @@ import {
   buildPaginationMeta,
   createSafeSearchRegex,
 } from "@/lib/core/pagination";
+import { resolveGradeFromScale } from "@/lib/grading";
+import { calculateStudentCourseProgress } from "./enrollment.service";
 
 interface PopulatedExamDoc extends Omit<ExamDoc, "courseId"> {
   courseId: {
@@ -17,6 +19,7 @@ interface PopulatedExamDoc extends Omit<ExamDoc, "courseId"> {
     title?: string;
     category?: string;
     assessmentItems?: AssessmentItem[];
+    gradingScale?: GradeBoundary[];
   } | null;
 }
 
@@ -208,7 +211,7 @@ export async function createExam(
 }
 
 /**
- * Updates an exam or publishes its results.
+ * Updates an exam, reschedules it, or publishes its results.
  */
 export async function updateExam(
   examId: string,
@@ -224,7 +227,18 @@ export async function updateExam(
 ) {
   await connectToDatabase();
 
+  const existingExam = await Exam.findById(examId).populate("courseId", "title");
+  if (!existingExam) {
+    throw new NotFoundError("Exam not found");
+  }
+
+  const prevDate = new Date(existingExam.date);
+  const prevDuration = existingExam.duration || 120;
+  const prevLocation = existingExam.location || "";
+
   const updateFields: mongoose.UpdateQuery<ExamDoc> = {};
+  let dateChanged = false;
+
   if (input.title) updateFields.title = input.title.trim();
   if (input.date) {
     const updatedDate = new Date(input.date);
@@ -232,9 +246,16 @@ export async function updateExam(
       throw new BadRequestError("Invalid date format");
     }
     updateFields.date = updatedDate;
+    if (updatedDate.getTime() !== prevDate.getTime()) {
+      dateChanged = true;
+    }
   }
-  if (input.duration) updateFields.duration = Number(input.duration);
-  if (input.location) updateFields.location = input.location.trim();
+  if (input.duration !== undefined) {
+    updateFields.duration = Number(input.duration);
+  }
+  if (input.location !== undefined) {
+    updateFields.location = input.location.trim();
+  }
   if (input.type) updateFields.type = input.type;
   if (input.status) updateFields.status = input.status;
 
@@ -250,11 +271,14 @@ export async function updateExam(
     throw new NotFoundError("Exam not found");
   }
 
-  if (input.publishResults) {
-    const enrollments = await Enrollment.find({
-      courseId: updatedExam.courseId,
-    }).lean();
-    if (enrollments.length > 0) {
+  const enrollments = await Enrollment.find({
+    courseId: updatedExam.courseId,
+  }).lean();
+
+  const courseTitle = (updatedExam.courseId as any)?.title || "Course";
+
+  if (enrollments.length > 0) {
+    if (input.publishResults) {
       const notifications = enrollments.map((e) => ({
         userId: e.userId,
         type: "system",
@@ -262,10 +286,80 @@ export async function updateExam(
         link: "/student",
       }));
       await Notification.insertMany(notifications);
+    } else if (
+      dateChanged ||
+      (input.duration !== undefined && input.duration !== prevDuration) ||
+      (input.location !== undefined && input.location !== prevLocation) ||
+      input.status === "rescheduled"
+    ) {
+      // Dispatched Reschedule notification
+      const newExamDate = new Date(updatedExam.date);
+      const endExamDate = new Date(newExamDate.getTime() + (updatedExam.duration || 120) * 60 * 1000);
+      const dateFormatted = newExamDate.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const startTimeFormatted = newExamDate.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const endTimeFormatted = endExamDate.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      const notifications = enrollments.map((e) => ({
+        userId: e.userId,
+        type: "exam",
+        message: `Exam Rescheduled: "${updatedExam.title}" in ${courseTitle} is rescheduled to ${dateFormatted} (${startTimeFormatted} – ${endTimeFormatted}) at ${updatedExam.location || "Online"}`,
+        link: "/calendar",
+      }));
+      await Notification.insertMany(notifications);
+    } else if (input.status === "cancelled") {
+      const notifications = enrollments.map((e) => ({
+        userId: e.userId,
+        type: "exam",
+        message: `Exam Cancelled: "${updatedExam.title}" in ${courseTitle} scheduled for ${prevDate.toLocaleDateString()} has been cancelled.`,
+        link: "/calendar",
+      }));
+      await Notification.insertMany(notifications);
     }
   }
 
   return updatedExam;
+}
+
+/**
+ * Deletes an exam and notifies students.
+ */
+export async function deleteExam(examId: string) {
+  await connectToDatabase();
+
+  const exam = await Exam.findById(examId).populate("courseId", "title");
+  if (!exam) {
+    throw new NotFoundError("Exam not found");
+  }
+
+  const courseTitle = (exam.courseId as any)?.title || "Course";
+  const enrollments = await Enrollment.find({ courseId: exam.courseId }).lean();
+
+  await Exam.findByIdAndDelete(examId);
+
+  if (enrollments.length > 0) {
+    const notifications = enrollments.map((e) => ({
+      userId: e.userId,
+      type: "exam",
+      message: `Exam Cancelled: "${exam.title}" in ${courseTitle} has been removed from the schedule.`,
+      link: "/calendar",
+    }));
+    await Notification.insertMany(notifications);
+  }
+
+  return { id: examId };
 }
 
 /**
@@ -366,6 +460,7 @@ export async function getExamGradingRoster(
         : null,
       gradedCount: (exam as any).results?.length || 0,
       totalEnrolled: enrollments.length,
+      gradingScale: course?.gradingScale || [],
     },
     students,
   };
@@ -392,7 +487,7 @@ export async function saveExamGrades(
 ) {
   await connectToDatabase();
 
-  const exam = await Exam.findById(examId).populate("courseId", "title");
+  const exam = await Exam.findById(examId).populate("courseId", "title gradingScale");
   if (!exam) {
     throw new NotFoundError("Exam not found");
   }
@@ -404,15 +499,13 @@ export async function saveExamGrades(
     (g) => g.marks !== "" && g.marks !== null && g.marks !== undefined && !isNaN(Number(g.marks))
   );
 
+  const courseScale = (exam.courseId as any)?.gradingScale;
+
   const processedResults = validGrades.map((g) => {
     const marksNum = Math.max(0, Math.min(effectiveMax, Number(g.marks)));
     const pct = effectiveMax > 0 ? Math.round((marksNum / effectiveMax) * 100) : 0;
-    let letterGrade = "F";
-    if (pct >= 80) letterGrade = "A";
-    else if (pct >= 70) letterGrade = "B";
-    else if (pct >= 60) letterGrade = "C";
-    else if (pct >= 50) letterGrade = "S";
-    else letterGrade = "F";
+    const resolved = resolveGradeFromScale(pct, courseScale);
+    const letterGrade = resolved.grade;
 
     const attMarks =
       g.attendanceMarks !== "" &&
@@ -469,6 +562,20 @@ export async function saveExamGrades(
   }
 
   await exam.save();
+
+  // Recalculate enrollment course progress for all graded students
+  try {
+    const courseIdStr = (exam.courseId as any)?._id?.toString() || exam.courseId?.toString() || "";
+    if (courseIdStr) {
+      await Promise.all(
+        processedResults.map((r) =>
+          calculateStudentCourseProgress(r.studentId.toString(), courseIdStr).catch(() => {})
+        )
+      );
+    }
+  } catch (err) {
+    console.warn("Failed to recalculate course progress after exam grading:", err);
+  }
 
   return {
     exam,

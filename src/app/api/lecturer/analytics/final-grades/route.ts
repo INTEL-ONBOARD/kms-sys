@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const grade = searchParams.get("grade") || "ALL";
     const courseId = searchParams.get("courseId") || "ALL";
+    const batchId = searchParams.get("batchId") || searchParams.get("batch") || "ALL";
 
     const data = await getLecturerFinalGradesRoster(
       session.user.id,
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
         search,
         grade,
         courseId,
+        batchId,
       }
     );
 

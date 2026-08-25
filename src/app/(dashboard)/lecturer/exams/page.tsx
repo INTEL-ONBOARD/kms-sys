@@ -429,6 +429,8 @@ export default function LecturerExamsPage() {
                       className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                         isCompleted
                           ? "bg-emerald-100 text-emerald-700"
+                          : e.status === "rescheduled"
+                          ? "bg-amber-100 text-amber-700"
                           : e.status === "ongoing"
                           ? "bg-amber-100 text-amber-700"
                           : "bg-blue-100 text-blue-700"
@@ -451,9 +453,10 @@ export default function LecturerExamsPage() {
                       setEditingExam(e);
                       setShowModal(true);
                     }}
-                    className="px-3.5 py-2 bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-100 transition border border-gray-200 cursor-pointer"
+                    className="px-3.5 py-2 bg-purple-50 text-purple-700 font-bold text-xs rounded-xl hover:bg-purple-100 transition border border-purple-200 cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
-                    Edit Parameters
+                    <FiCalendar className="text-purple-600" />
+                    <span>Reschedule Exam</span>
                   </button>
                   <button
                     onClick={() => setGradingExamId(e._id)}

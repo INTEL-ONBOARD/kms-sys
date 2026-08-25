@@ -5,6 +5,7 @@ export const scheduleSlotSchema = z.object({
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
   location: z.string().optional().default(""),
+  type: z.enum(["physical", "online"]).optional().default("physical"),
 });
 
 export const assessmentItemSchema = z.object({
@@ -20,6 +21,14 @@ export const gradingBreakdownSchema = z.object({
   attendanceWeight: z.number().default(10),
 });
 
+export const gradeBoundarySchema = z.object({
+  grade: z.string().min(1, "Grade label is required").trim(),
+  minScore: z.number().min(0).max(100),
+  gpaPoint: z.number().min(0).max(4.0).default(4.0),
+  description: z.string().optional().default(""),
+  color: z.string().optional().default("emerald"),
+});
+
 export const createCourseSchema = z.object({
   title: z.string().min(1, "Title is required").trim(),
   description: z.string().trim().optional().default(""),
@@ -33,6 +42,8 @@ export const createCourseSchema = z.object({
   schedule: z.array(scheduleSlotSchema).optional().default([]),
   assessmentItems: z.array(assessmentItemSchema).optional(),
   gradingBreakdown: gradingBreakdownSchema.optional(),
+  gradingScale: z.array(gradeBoundarySchema).optional(),
+  credits: z.number().min(1).max(30).optional().default(3),
 });
 
 export const updateCourseSchema = z.object({
@@ -48,6 +59,8 @@ export const updateCourseSchema = z.object({
   schedule: z.array(scheduleSlotSchema).optional(),
   assessmentItems: z.array(assessmentItemSchema).optional(),
   gradingBreakdown: gradingBreakdownSchema.optional(),
+  gradingScale: z.array(gradeBoundarySchema).optional(),
+  credits: z.number().min(1).max(30).optional(),
 });
 
 export const enrollCourseSchema = z.object({

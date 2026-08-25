@@ -1,10 +1,11 @@
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import Enrollment from "@/lib/models/Enrollment";
-import Course, { AssessmentItem } from "@/lib/models/Course";
+import Course, { AssessmentItem, GradeBoundary } from "@/lib/models/Course";
 import Submission from "@/lib/models/Submission";
 import Exam from "@/lib/models/Exam";
 import User from "@/lib/models/User";
+import { resolveGradeFromScale } from "@/lib/grading";
 
 export interface AssessmentItemBreakdown {
   name: string;
@@ -21,6 +22,8 @@ export interface CourseGradeSummary {
   courseId: string;
   title: string;
   code: string;
+  credits: number;
+  qualityPoints: number;
   assignments: string;
   courseWork: string;
   finalExam: string;
@@ -65,6 +68,7 @@ interface PopulatedEnrollment {
     code?: string;
     semester?: string;
     instructor?: string;
+    credits?: number;
     assessmentItems?: AssessmentItem[];
     gradingBreakdown?: {
       assignmentsWeight?: number;
@@ -72,6 +76,7 @@ interface PopulatedEnrollment {
       finalExamWeight?: number;
       attendanceWeight?: number;
     };
+    gradingScale?: GradeBoundary[];
   } | null;
 }
 
@@ -239,39 +244,10 @@ export async function getStudentReport(
     let gpaPoint = 0.0;
 
     if (allAssessmentsCompleted) {
-      if (totalEarnedPoints >= 93) {
-        letterGrade = "A";
-        gradeColor = "text-green-600 bg-green-50 border border-green-200";
-        gpaPoint = 4.0;
-      } else if (totalEarnedPoints >= 88) {
-        letterGrade = "A -";
-        gradeColor = "text-green-500 bg-green-50 border border-green-200";
-        gpaPoint = 3.7;
-      } else if (totalEarnedPoints >= 82) {
-        letterGrade = "B +";
-        gradeColor = "text-orange-500 bg-orange-50 border border-orange-200";
-        gpaPoint = 3.3;
-      } else if (totalEarnedPoints >= 75) {
-        letterGrade = "B";
-        gradeColor = "text-blue-500 bg-blue-50 border border-blue-200";
-        gpaPoint = 3.0;
-      } else if (totalEarnedPoints >= 70) {
-        letterGrade = "B -";
-        gradeColor = "text-blue-400 bg-blue-50 border border-blue-200";
-        gpaPoint = 2.7;
-      } else if (totalEarnedPoints >= 65) {
-        letterGrade = "C +";
-        gradeColor = "text-yellow-600 bg-yellow-50 border border-yellow-200";
-        gpaPoint = 2.3;
-      } else if (totalEarnedPoints >= 50) {
-        letterGrade = "S";
-        gradeColor = "text-purple-700 bg-purple-50 border border-purple-200";
-        gpaPoint = 1.0;
-      } else {
-        letterGrade = "F";
-        gradeColor = "text-rose-700 bg-rose-50 border border-rose-200";
-        gpaPoint = 0.0;
-      }
+      const resolved = resolveGradeFromScale(totalEarnedPoints, course.gradingScale);
+      letterGrade = resolved.grade;
+      gradeColor = resolved.badgeClass;
+      gpaPoint = resolved.gpaPoint;
     }
 
     const assignItem = itemBreakdown.find((i) => i.type === "assignment") || itemBreakdown[0];
@@ -281,11 +257,16 @@ export async function getStudentReport(
     const examItem = itemBreakdown.find((i) => i.type === "exam") || itemBreakdown[2];
     const attItem = itemBreakdown.find((i) => i.type === "attendance") || itemBreakdown[3];
 
+    const courseCredits = Math.max(1, Number(course.credits) || 3);
+    const qualityPoints = Number((gpaPoint * courseCredits).toFixed(2));
+
     return {
       id: cIdStr || index + 1,
       courseId: cIdStr,
       title: course.title || "Untitled Course",
       code: courseCode,
+      credits: courseCredits,
+      qualityPoints,
       assignments: assignItem ? assignItem.score : "-- / 20",
       courseWork: cwItem ? cwItem.score : "-- / 30",
       finalExam: examItem ? examItem.score : "-- / 40",
@@ -331,20 +312,27 @@ export async function getStudentReport(
     });
   }
 
+  // Standard Credit-Weighted GPA Calculations: Sum(GPA * Credits) / Sum(Credits)
   const completedCourses = allGrades.filter(
     (g) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
   );
+  const totalCompletedCredits = completedCourses.reduce((acc, g) => acc + g.credits, 0);
+  const totalQualityPoints = completedCourses.reduce((acc, g) => acc + (g.gpaPoint * g.credits), 0);
+
   const avgCGPAPoints =
-    completedCourses.length > 0
-      ? (completedCourses.reduce((acc, g) => acc + g.gpaPoint, 0) / completedCourses.length).toFixed(1)
-      : "0.0";
+    totalCompletedCredits > 0
+      ? (totalQualityPoints / totalCompletedCredits).toFixed(2)
+      : "0.00";
 
   const filteredCompleted = filteredGrades.filter(
     (g) => g.allAssessmentsCompleted && typeof g.totalPoints === "number"
   );
+  const filteredSemesterCredits = filteredCompleted.reduce((acc, g) => acc + g.credits, 0);
+  const filteredSemesterQualityPoints = filteredCompleted.reduce((acc, g) => acc + (g.gpaPoint * g.credits), 0);
+
   const avgSemesterGPA =
-    filteredCompleted.length > 0
-      ? (filteredCompleted.reduce((acc, g) => acc + g.gpaPoint, 0) / filteredCompleted.length).toFixed(1)
+    filteredSemesterCredits > 0
+      ? (filteredSemesterQualityPoints / filteredSemesterCredits).toFixed(2)
       : avgCGPAPoints;
 
   const currentUser = await User.findById(userObjectId).select("name email role reportApproved").lean();

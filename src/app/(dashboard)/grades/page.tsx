@@ -41,6 +41,9 @@ interface CourseGrade {
   instructor?: string;
   totalPoints?: number | null;
   totalEarnedPoints?: number;
+  gpaPoint?: number;
+  credits?: number;
+  qualityPoints?: number;
   allAssessmentsCompleted?: boolean;
   publishedCount?: number;
   totalAssessmentCount?: number;
@@ -161,7 +164,7 @@ function GradesContent() {
   // Compute filtered GPA dynamically if filtered
   const displayGPA = useMemo(() => {
     const completedCourses = filteredGrades.filter(g => g.allAssessmentsCompleted && typeof g.totalPoints === 'number');
-    if (completedCourses.length === 0) return studentInfo.gpa || "0.0";
+    if (completedCourses.length === 0) return studentInfo.gpa || "0.00";
     const gradePointMap: Record<string, number> = {
       'A': 4.0,
       'A -': 3.7,
@@ -173,8 +176,13 @@ function GradesContent() {
       'D': 1.0,
       'F': 0.0,
     };
-    const totalPts = completedCourses.reduce((sum, g) => sum + (gradePointMap[g.grade] ?? 0.0), 0);
-    return (totalPts / completedCourses.length).toFixed(1);
+    const totalCredits = completedCourses.reduce((sum, g) => sum + (Number(g.credits) || 3), 0);
+    const totalQP = completedCourses.reduce((sum, g) => {
+      const cr = Number(g.credits) || 3;
+      const gp = typeof g.gpaPoint === 'number' ? g.gpaPoint : (gradePointMap[g.grade] ?? 0.0);
+      return sum + (gp * cr);
+    }, 0);
+    return totalCredits > 0 ? (totalQP / totalCredits).toFixed(2) : "0.00";
   }, [filteredGrades, studentInfo.gpa]);
 
   const showToast = (msg: string) => {
@@ -195,6 +203,9 @@ function GradesContent() {
         id: g.id,
         title: g.title,
         code: g.code,
+        credits: g.credits || 3,
+        gpaPoint: g.gpaPoint,
+        qualityPoints: g.qualityPoints,
         assignments: g.assignments,
         courseWork: g.courseWork,
         finalExam: g.finalExam,
@@ -602,9 +613,17 @@ function GradesContent() {
                         {/* Course Header & Grade Badge */}
                         <div className="flex justify-between items-start gap-3">
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
                               <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
                                 {course.code}
+                              </span>
+                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                                {course.credits || 3} Credits
+                              </span>
+                              <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                                {course.allAssessmentsCompleted && typeof course.gpaPoint === 'number'
+                                  ? `Module GPA: ${course.gpaPoint.toFixed(1)}`
+                                  : "GPA: In Progress"}
                               </span>
                               <span className="text-xs font-semibold text-gray-400">
                                 {course.semester}
@@ -618,17 +637,24 @@ function GradesContent() {
                             </p>
                           </div>
 
-                          {/* Final Grade Badge */}
-                          <div className="flex flex-col items-end shrink-0">
-                            <span className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide ${course.allAssessmentsCompleted
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}>
-                              {course.allAssessmentsCompleted ? `Grade ${course.grade}` : "In Progress"}
-                            </span>
-                            <span className="text-[10px] font-bold text-gray-400 mt-1">
+                          {/* Final Grade & Module GPA Badge */}
+                          <div className="flex flex-col items-end shrink-0 gap-1">
+                            <div className="flex items-center gap-1.5">
+                              {course.allAssessmentsCompleted && typeof course.gpaPoint === 'number' && (
+                                <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-amber-50 text-amber-800 border border-amber-200">
+                                  {course.gpaPoint.toFixed(1)} GPA
+                                </span>
+                              )}
+                              <span className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide ${course.allAssessmentsCompleted
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                                }`}>
+                                {course.allAssessmentsCompleted ? `Grade ${course.grade}` : "In Progress"}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400">
                               {course.allAssessmentsCompleted
-                                ? `${course.totalPoints} / 100 Pts`
+                                ? `${course.totalPoints} / 100 Pts (${(Number(course.gpaPoint || 0) * (course.credits || 3)).toFixed(1)} QP)`
                                 : `${course.publishedCount || 0}/${course.totalAssessmentCount || items.length} Published`}
                             </span>
                           </div>
@@ -751,6 +777,8 @@ function GradesContent() {
                     <thead>
                       <tr className="bg-gray-50/80 text-[#64748B] text-[11px] uppercase tracking-wider font-bold border-b border-gray-100">
                         <th className="px-6 py-4">Course & Module</th>
+                        <th className="px-3 py-4 text-center">Credits</th>
+                        <th className="px-3 py-4 text-center">Module GPA</th>
                         <th className="px-4 py-4 text-center">Assignments</th>
                         <th className="px-4 py-4 text-center">Coursework</th>
                         <th className="px-4 py-4 text-center">Final Exam</th>
@@ -780,6 +808,22 @@ function GradesContent() {
                                 ) : null}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-4 text-center">
+                            <span className="inline-block px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-xs font-black border border-indigo-100/80">
+                              {course.credits || 3} Cr
+                            </span>
+                          </td>
+                          <td className="px-3 py-4 text-center">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-black border ${
+                              course.allAssessmentsCompleted && typeof course.gpaPoint === 'number'
+                                ? "bg-amber-50 text-amber-800 border-amber-200/80"
+                                : "bg-gray-50 text-gray-400 border-gray-200"
+                            }`}>
+                              {course.allAssessmentsCompleted && typeof course.gpaPoint === 'number'
+                                ? `${course.gpaPoint.toFixed(1)}`
+                                : "--"}
+                            </span>
                           </td>
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.assignments}</td>
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.courseWork}</td>

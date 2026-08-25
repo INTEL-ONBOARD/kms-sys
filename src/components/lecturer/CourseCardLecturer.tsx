@@ -53,11 +53,18 @@ export default function CourseCardLecturer({ course, onUpdate }: CourseCardLectu
           {/* Banner */}
           <div className={`h-2 rounded-full bg-gradient-to-r ${bannerGradient} mb-4`} />
 
-          <div className="flex justify-between items-start mb-2">
+          <div className="flex justify-between items-start mb-2 gap-2">
             <div>
               <h4 className="font-bold text-[#2D3748] text-base line-clamp-1">{course.title}</h4>
               <p className="text-[11px] font-semibold text-[#A0AEC0] mt-0.5">{courseCode}</p>
             </div>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 ${
+              (course.published !== false && course.status !== "draft")
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            }`}>
+              {(course.published !== false && course.status !== "draft") ? "Published" : "Draft (Hidden)"}
+            </span>
           </div>
 
           {/* Completion Progress Bar */}

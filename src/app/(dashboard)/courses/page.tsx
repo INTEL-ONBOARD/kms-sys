@@ -95,6 +95,7 @@ interface Course {
   liveClassCount?: number;
   announcements?: { _id: string; message: string; createdAt: string }[];
   announcementCount?: number;
+  published?: boolean;
 }
 
 export default function CoursesPage() {
@@ -642,7 +643,17 @@ export default function CoursesPage() {
                     </span>
                   </div>
 
-                  {(selectedCourse.course.materials || []).length === 0 ? (
+                  {selectedCourse.course.published === false ? (
+                    <div className="text-center py-12 bg-amber-50/70 rounded-2xl border border-amber-200 text-amber-900 p-6 space-y-2">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl mx-auto font-bold">
+                        🔒
+                      </div>
+                      <h5 className="font-extrabold text-sm text-gray-800">Learning Materials Hidden by Instructor</h5>
+                      <p className="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed">
+                        Your course lecturer has set materials visibility to private/draft. Learning resources and lecture slides will become accessible once published.
+                      </p>
+                    </div>
+                  ) : (selectedCourse.course.materials || []).length === 0 ? (
                     <div className="text-center py-12 bg-[#F7FAFC] rounded-2xl border border-gray-100 text-gray-400">
                       <FiFileText className="text-4xl mx-auto mb-3 text-gray-300" />
                       <p className="font-bold text-gray-600 text-xs">No lecture materials uploaded yet</p>

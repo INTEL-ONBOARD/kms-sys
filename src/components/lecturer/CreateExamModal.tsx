@@ -238,11 +238,11 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
           </div>
           <div>
             <h3 className="text-lg font-extrabold text-[#2D3748]">
-              {isEdit ? "Edit Exam Parameters" : "Schedule New Exam"}
+              {isEdit ? "Reschedule / Edit Exam" : "Schedule New Exam"}
             </h3>
             <p className="text-xs text-[#A0AEC0]">
               {isEdit
-                ? "Update exam title, start & end time, category, or venue details"
+                ? "Update exam date, time window, venue, or status (students will receive real-time alerts)"
                 : "Schedule exam date, start & end time, and venue from Course Grade Breakdown"}
             </p>
           </div>
@@ -443,6 +443,7 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-[#F7FAFC]"
               >
                 <option value="scheduled">Scheduled</option>
+                <option value="rescheduled">Rescheduled</option>
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed / Published</option>
                 <option value="cancelled">Cancelled</option>
@@ -463,7 +464,7 @@ export default function CreateExamModal({ initialExam, onClose, onSuccess }: Cre
               disabled={submitting}
               className="px-5 py-2.5 bg-purple-600 text-white font-bold text-xs rounded-xl hover:bg-purple-700 shadow-sm transition disabled:opacity-50 cursor-pointer"
             >
-              {submitting ? "Saving..." : isEdit ? "Save Parameters" : "Schedule Exam"}
+              {submitting ? "Saving..." : isEdit ? "Reschedule & Notify Students" : "Schedule Exam"}
             </button>
           </div>
         </form>

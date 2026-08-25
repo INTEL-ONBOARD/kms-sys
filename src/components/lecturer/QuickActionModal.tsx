@@ -9,7 +9,9 @@ import {
   FiFileText, 
   FiTrash2, 
   FiLoader,
-  FiCheckCircle 
+  FiCheckCircle,
+  FiMapPin,
+  FiVideo 
 } from "react-icons/fi";
 import { useToast } from "@/contexts/ToastContext";
 import MaterialUploadModal from "./MaterialUploadModal";
@@ -40,6 +42,9 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
   const [courseId, setCourseId] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [duration, setDuration] = useState("60");
+  const [classType, setClassType] = useState<"online" | "physical">("online");
+  const [location, setLocation] = useState("Lecture Hall 1");
   const [maxPoints, setMaxPoints] = useState("100");
   const [weight, setWeight] = useState("20");
   const [link, setLink] = useState("");
@@ -309,7 +314,10 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
             courseId,
             date,
             time,
-            meetingLink: link,
+            duration: Number(duration) || 60,
+            classType,
+            location: classType === "physical" ? location.trim() : "Online",
+            meetingLink: classType === "online" ? link.trim() : "",
             description,
             materialId: uploadedMaterialId,
             materials: uploadedMaterialId ? [uploadedMaterialId] : [],
@@ -318,9 +326,9 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
 
         if (res.ok) {
           if (uploadedMaterialId) {
-            toast.success(`Live Class "${title}" scheduled and lecture material uploaded successfully!`);
+            toast.success(`${classType === "physical" ? "Physical Class" : "Live Class"} "${title}" scheduled and lecture material uploaded successfully!`);
           } else {
-            toast.success(`Live Class "${title}" scheduled successfully!`);
+            toast.success(`${classType === "physical" ? "Physical Class" : "Live Class"} "${title}" scheduled successfully!`);
           }
           if (onSuccess) onSuccess();
           onClose();
@@ -690,7 +698,39 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
           )}
 
           {type === "class" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Class Delivery Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setClassType("online")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    classType === "online"
+                      ? "bg-blue-50 border-blue-400 text-blue-700 shadow-xs"
+                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  <FiVideo className="text-sm" />
+                  <span>Online (Virtual)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClassType("physical")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    classType === "physical"
+                      ? "bg-teal-50 border-teal-400 text-teal-700 shadow-xs"
+                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  <FiMapPin className="text-sm" />
+                  <span>Physical (In-Person)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {type === "class" && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Date <span className="text-red-500">*</span>
@@ -731,17 +771,45 @@ export default function QuickActionModal({ type, onClose, onSuccess }: QuickActi
                   className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Duration</label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                >
+                  <option value="30">30 Mins</option>
+                  <option value="45">45 Mins</option>
+                  <option value="60">1 Hour</option>
+                  <option value="90">1.5 Hours</option>
+                  <option value="120">2 Hours</option>
+                </select>
+              </div>
             </div>
           )}
 
-          {type === "class" && (
+          {type === "class" && classType === "online" && (
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Meeting URL</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Meeting URL (Google Meet / Zoom)</label>
               <input
                 type="url"
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
                 placeholder="https://meet.google.com/xyz or Zoom link"
+                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
+              />
+            </div>
+          )}
+
+          {type === "class" && classType === "physical" && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Campus Venue / Room <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                required
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Lecture Hall 15, Engineering Block B"
                 className="w-full border border-gray-200 rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8]"
               />
             </div>

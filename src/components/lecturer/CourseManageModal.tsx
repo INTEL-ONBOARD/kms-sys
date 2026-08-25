@@ -14,11 +14,24 @@ import {
   FiUploadCloud,
   FiDownload,
   FiTrash2,
-  FiExternalLink
+  FiExternalLink,
+  FiClock,
+  FiMapPin,
+  FiCalendar,
+  FiAward,
+  FiSliders,
+  FiAlertCircle
 } from "react-icons/fi";
 import { useToast } from "@/contexts/ToastContext";
 import QuickActionModal from "./QuickActionModal";
 import MaterialUploadModal from "./MaterialUploadModal";
+import { 
+  DEFAULT_GRADING_SCALE, 
+  GRADING_SCALE_PRESETS, 
+  GradeBoundary, 
+  resolveGradeFromScale,
+  getGradeBadgeColors
+} from "@/lib/grading";
 
 interface CourseManageModalProps {
   course: {
@@ -31,6 +44,15 @@ interface CourseManageModalProps {
     assignmentCount: number;
     status?: string;
     published?: boolean;
+    schedule?: Array<{
+      dayOfWeek: string;
+      startTime: string;
+      endTime: string;
+      location: string;
+      type?: "physical" | "online";
+    }>;
+    gradingScale?: GradeBoundary[];
+    credits?: number;
     assessmentItems?: Array<{
       _id?: string;
       name: string;
@@ -44,21 +66,46 @@ interface CourseManageModalProps {
       attendanceWeight?: number;
     };
   };
-  initialTab?: "overview" | "grading" | "materials" | "assignments" | "classes" | "students" | "breakdown";
+  initialTab?: "overview" | "grading" | "scale" | "schedule" | "materials" | "assignments" | "classes" | "students" | "breakdown";
   onClose: () => void;
   onUpdate?: () => void;
 }
 
 export default function CourseManageModal({ course, initialTab, onClose, onUpdate }: CourseManageModalProps) {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "grading" | "materials" | "assignments" | "classes" | "students">(
+  const [activeTab, setActiveTab] = useState<"overview" | "grading" | "scale" | "schedule" | "materials" | "assignments" | "classes" | "students">(
     initialTab === "breakdown" ? "grading" : (initialTab as any) || "overview"
   );
 
   // Form states
   const [description, setDescription] = useState(course.description || "Comprehensive course curriculum.");
-  const [published, setPublished] = useState(course.published ?? true);
+  const [published, setPublished] = useState(
+    course.published !== undefined
+      ? Boolean(course.published)
+      : course.status !== "draft"
+  );
+  const [credits, setCredits] = useState<number>((course as any).credits || 3);
   const [saving, setSaving] = useState(false);
+
+  // Course-specific dynamic grading scale & cutoff thresholds (e.g. A >= 70)
+  const [gradingScale, setGradingScale] = useState<GradeBoundary[]>(() => {
+    if (course.gradingScale && course.gradingScale.length > 0) {
+      return course.gradingScale;
+    }
+    return DEFAULT_GRADING_SCALE;
+  });
+
+  // Interactive Live Score Simulator State
+  const [simulatorScore, setSimulatorScore] = useState("72");
+
+  // Weekly Schedule Slots state for Course Timetable
+  const [scheduleSlots, setScheduleSlots] = useState<Array<{
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    type?: "physical" | "online";
+  }>>(course.schedule || []);
 
   // Assessment & Grade Breakdown items (fully customizable by the lecturer)
   const [assessmentItems, setAssessmentItems] = useState<any[]>(() => {
@@ -99,12 +146,26 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
     const fetchCourseDetails = async () => {
       setLoadingData(true);
       try {
-        const [assignRes, classRes, studentRes, matRes] = await Promise.all([
+        const [assignRes, classRes, studentRes, matRes, courseRes] = await Promise.all([
           fetch("/api/lecturer/assignments?limit=50"),
           fetch("/api/lecturer/schedule?all=true"),
           fetch(`/api/lecturer/students?courseId=${course._id}`),
           fetch(`/api/materials?courseId=${course._id}`),
+          fetch(`/api/courses/${course._id}`),
         ]);
+
+        if (courseRes.ok) {
+          const cData = await courseRes.json();
+          if (cData && Array.isArray(cData.schedule)) {
+            setScheduleSlots(cData.schedule);
+          }
+          if (cData && Array.isArray(cData.gradingScale) && cData.gradingScale.length > 0) {
+            setGradingScale(cData.gradingScale);
+          }
+          if (cData && typeof cData.credits === "number") {
+            setCredits(cData.credits);
+          }
+        }
 
         if (assignRes.ok) {
           const assignData = await assignRes.json();
@@ -221,6 +282,107 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
     toast.success("Item removed from breakdown");
   };
 
+  // Grading Scale Handlers
+  const addGradeBoundary = () => {
+    setGradingScale((prev) => [
+      ...prev,
+      { grade: "A+", minScore: 90, gpaPoint: 4.0, description: "High Distinction", color: "emerald" },
+    ]);
+  };
+
+  const updateGradeBoundary = (index: number, field: string, value: any) => {
+    setGradingScale((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const deleteGradeBoundary = (index: number) => {
+    if (gradingScale.length <= 1) {
+      toast.error("Grading scale must have at least one grade tier");
+      return;
+    }
+    setGradingScale((prev) => prev.filter((_, i) => i !== index));
+    toast.success("Grade tier removed");
+  };
+
+  const applyGradingPreset = (presetKey: string) => {
+    const preset = GRADING_SCALE_PRESETS[presetKey];
+    if (preset) {
+      setGradingScale(preset.scale);
+      toast.success(`Applied preset: ${preset.name}`);
+    }
+  };
+
+  const handleSaveGradingScale = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/courses/${course._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gradingScale,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Course grading system & cutoffs updated! Enrolled students notified.");
+        if (onUpdate) onUpdate();
+      } else {
+        toast.error("Failed to update grading scale");
+      }
+    } catch {
+      toast.error("Error saving grading scale");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Schedule Slot Handlers for Weekly Timetable
+  const addScheduleSlot = () => {
+    setScheduleSlots((prev) => [
+      ...prev,
+      { dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", location: "Lecture Hall 1", type: "physical" },
+    ]);
+  };
+
+  const updateScheduleSlot = (index: number, field: string, value: string) => {
+    setScheduleSlots((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const removeScheduleSlot = (index: number) => {
+    setScheduleSlots((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveSchedule = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/courses/${course._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schedule: scheduleSlots,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Weekly course schedule & timetable updated! Enrolled students notified.");
+        if (onUpdate) onUpdate();
+      } else {
+        toast.error("Failed to update course schedule");
+      }
+    } catch {
+      toast.error("Error saving course schedule");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (totalAssessmentWeight !== 100) {
       toast.error(`Assessment weights must sum up to exactly 100% (Current total: ${totalAssessmentWeight}%)`);
@@ -229,12 +391,17 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
 
     setSaving(true);
     try {
+      const newStatus = published ? "published" : "draft";
       const res = await fetch(`/api/courses/${course._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           description,
           published,
+          status: newStatus,
+          credits: Math.max(1, Math.min(30, Number(credits) || 3)),
+          schedule: scheduleSlots,
+          gradingScale,
           assessmentItems: assessmentItems.map((item) => ({
             name: item.name,
             type: item.type,
@@ -244,14 +411,15 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
       });
 
       if (res.ok) {
-        toast.success(`Course assessment & grade breakdown updated!`);
+        toast.success(`Course settings updated! Status set to ${published ? "Published" : "Draft (Hidden)"}.`);
         if (onUpdate) onUpdate();
         onClose();
       } else {
         toast.error("Failed to update course settings");
       }
     } catch (err) {
-      toast.error("Failed to update course");
+      console.error("Error saving course:", err);
+      toast.error("An error occurred while saving course parameters");
     } finally {
       setSaving(false);
     }
@@ -259,95 +427,115 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in font-sans">
-        <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-[#F7FAFC]">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-[#EEF2FF] text-[#5A67D8]">
-                  {course.category}
-                </span>
-                <span className="text-xs text-[#A0AEC0] font-semibold">
-                  WISE-{course._id.substring(0, 4).toUpperCase()}
-                </span>
-              </div>
-              <h2 className="text-xl font-extrabold text-[#2D3748]">{course.title}</h2>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 font-sans">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-[#F7FAFC]">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-[#EEF2FF] text-[#5A67D8]">
+                {course.category}
+              </span>
+              <span className="text-xs text-[#A0AEC0] font-semibold">
+                WISE-{course._id.substring(0, 4).toUpperCase()}
+              </span>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition"
-            >
-              <FiX className="text-xl" />
-            </button>
+            <h2 className="text-xl font-extrabold text-[#2D3748]">{course.title}</h2>
           </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition cursor-pointer"
+          >
+            <FiX className="text-xl" />
+          </button>
+        </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex border-b border-gray-100 px-6 bg-white text-xs font-bold text-gray-500 gap-6 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "overview"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiBookOpen /> Overview & Settings
-            </button>
-            <button
-              onClick={() => setActiveTab("grading")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "grading"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiEdit /> Grade Breakdown
-            </button>
-            <button
-              onClick={() => setActiveTab("materials")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "materials"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiFileText /> Materials ({materials.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("assignments")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "assignments"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiClipboard /> Assignments ({assignments.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("classes")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "classes"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiVideo /> Live Classes ({liveClasses.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("students")}
-              className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 ${
-                activeTab === "students"
-                  ? "border-[#5A67D8] text-[#5A67D8]"
-                  : "border-transparent hover:text-gray-800"
-              }`}
-            >
-              <FiUsers /> Students ({course.studentCount || students.length})
-            </button>
-          </div>
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-gray-100 px-6 bg-white text-xs font-bold text-gray-500 gap-6 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "overview"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiBookOpen /> Overview & Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("grading")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "grading"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiEdit /> Grade Breakdown
+          </button>
+          <button
+            onClick={() => setActiveTab("scale")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "scale"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiAward /> Grading System & Cutoffs ({gradingScale.length} Tiers)
+          </button>
+          <button
+            onClick={() => setActiveTab("schedule")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "schedule"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiClock /> Weekly Timetable ({scheduleSlots.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("materials")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "materials"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiFileText /> Materials ({materials.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("assignments")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "assignments"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiClipboard /> Assignments ({assignments.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("classes")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "classes"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiVideo /> Live Classes ({liveClasses.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("students")}
+            className={`py-3 border-b-2 transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === "students"
+                ? "border-[#5A67D8] text-[#5A67D8]"
+                : "border-transparent hover:text-gray-800"
+            }`}
+          >
+            <FiUsers /> Students ({course.studentCount || students.length})
+          </button>
+        </div>
 
-          {/* Tab Content Body */}
-          <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        {/* Tab Content Body */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
             {/* TAB 1: OVERVIEW */}
             {activeTab === "overview" && (
               <div className="space-y-4">
@@ -376,20 +564,57 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-[#F7FAFC] rounded-xl border border-gray-100">
+                {/* Course Academic Credits Input */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-[#F7FAFC] rounded-xl border border-gray-100">
                   <div>
-                    <h4 className="text-xs font-bold text-[#2D3748]">Course Visibility</h4>
-                    <p className="text-[11px] text-[#A0AEC0]">Allow enrolled students to access learning materials</p>
+                    <h4 className="text-xs font-bold text-[#2D3748] flex items-center gap-1.5">
+                      <FiAward className="text-[#5A67D8]" /> Course Academic Credits
+                    </h4>
+                    <p className="text-[11px] text-[#A0AEC0] mt-0.5">
+                      Assigned credit weighting used for standard weighted GPA & CGPA calculations: &sum;(GPA &times; Credits) / &sum;Credits.
+                    </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
+                  <div className="flex items-center gap-2 shrink-0">
                     <input
-                      type="checkbox"
-                      checked={published}
-                      onChange={(e) => setPublished(e.target.checked)}
-                      className="sr-only peer"
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={credits}
+                      onChange={(e) => setCredits(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+                      className="w-20 border border-gray-200 rounded-xl p-2 text-xs font-bold text-center outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white shadow-2xs"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
-                  </label>
+                    <span className="text-xs font-bold text-gray-500">Credits</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-[#F7FAFC] rounded-xl border border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-[#2D3748]">Course Visibility</h4>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          published ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {published ? "Visible to Students" : "Hidden from Students (Draft)"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#A0AEC0] mt-0.5">Allow enrolled students to access learning materials</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={published}
+                        onChange={(e) => setPublished(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5A67D8]"></div>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-gray-500 bg-white p-2.5 rounded-lg border border-gray-100">
+                    {published
+                      ? "✓ Course materials, lecture notes, and slides are accessible to enrolled students."
+                      : "🔒 Learning materials are hidden. Enrolled students cannot view or download materials for this course until enabled."}
+                  </p>
                 </div>
               </div>
             )}
@@ -590,6 +815,394 @@ export default function CourseManageModal({ course, initialTab, onClose, onUpdat
                   <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-white shadow-xs">
                     {assessmentItems.length} Components = {totalAssessmentWeight}%
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: GRADING SYSTEM & SCORE CUTOFF THRESHOLDS (CONFIGURABLE BY LECTURER) */}
+            {activeTab === "scale" && (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#2D3748] flex items-center gap-2">
+                      <FiAward className="text-indigo-600" /> Course Grading System & Cutoff Thresholds
+                    </h3>
+                    <p className="text-xs text-[#A0AEC0] mt-0.5">
+                      Configure letter grade cutoff boundaries (e.g. give an &quot;A&quot; pass for all students scoring above 70%), GPA points, and honors.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addGradeBoundary}
+                      className="px-3 py-1.5 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <FiPlus /> Add Grade Tier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveGradingScale}
+                      disabled={saving}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {saving ? "Saving..." : "Save Grading Scale"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Presets Selector Bar */}
+                <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                      <FiSliders className="text-indigo-600 text-sm" /> Apply Standard Scheme Presets:
+                    </span>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Quickly apply pre-configured cutoff templates</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => applyGradingPreset("lenient")}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      title="Grades all students >= 70% with an 'A'"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>Lenient (70%+ &rarr; A)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => applyGradingPreset("standard")}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-[#5A67D8] font-bold rounded-xl border border-indigo-200 transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                      <span>Standard (80%+ &rarr; A)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => applyGradingPreset("detailed")}
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl border border-purple-200 transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      <span>9-Tier (A+, A, A-...)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* LIVE INTERACTIVE SCORE SIMULATOR */}
+                {(() => {
+                  const testScoreNum = Number(simulatorScore) || 0;
+                  const simResult = resolveGradeFromScale(testScoreNum, gradingScale);
+                  return (
+                    <div className="p-4 bg-gradient-to-r from-indigo-50/70 to-purple-50/70 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-indigo-600 text-lg font-bold shrink-0">
+                          %
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#1E293B]">Live Threshold Simulator</p>
+                          <p className="text-[11px] text-gray-500">Test how student marks map to this course&apos;s active scale</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs">
+                          <label className="text-[11px] font-bold text-gray-400">Score:</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={simulatorScore}
+                            onChange={(e) => setSimulatorScore(e.target.value)}
+                            className="w-14 text-center font-black text-xs text-[#1E293B] outline-none"
+                          />
+                          <span className="text-xs font-bold text-gray-400">%</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1.5 rounded-xl font-black text-sm border shadow-xs ${simResult.badgeClass}`}>
+                            Grade: {simResult.grade}
+                          </span>
+                          <span className="px-2.5 py-1.5 rounded-xl bg-white text-gray-700 font-bold text-xs border border-gray-200 shadow-xs">
+                            {simResult.gpaPoint.toFixed(1)} GPA
+                          </span>
+                          {simResult.description && (
+                            <span className="text-[11px] font-semibold text-gray-500 hidden md:inline">
+                              ({simResult.description})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Grade Boundaries Table & Form */}
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[11px] font-extrabold text-gray-400 uppercase">
+                    <div className="col-span-2">Grade Letter</div>
+                    <div className="col-span-3">Min Cutoff Score (%)</div>
+                    <div className="col-span-2">GPA Points</div>
+                    <div className="col-span-3">Honor / Description</div>
+                    <div className="col-span-2 text-right">Actions</div>
+                  </div>
+
+                  {gradingScale.map((tier, idx) => {
+                    const badge = getGradeBadgeColors(tier.color, tier.grade);
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3 bg-[#F7FAFC] hover:bg-white rounded-2xl border border-gray-100 transition shadow-xs grid grid-cols-12 gap-2 items-center text-xs"
+                      >
+                        {/* Grade Letter */}
+                        <div className="col-span-2 flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            required
+                            value={tier.grade}
+                            onChange={(e) => updateGradeBoundary(idx, "grade", e.target.value.toUpperCase())}
+                            placeholder="e.g. A"
+                            className={`w-14 p-1.5 text-center font-black text-xs rounded-xl border outline-none ${badge.border} ${badge.bg} ${badge.text}`}
+                          />
+                        </div>
+
+                        {/* Minimum Cutoff Score */}
+                        <div className="col-span-3">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] font-bold text-gray-400">&ge;</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              required
+                              value={tier.minScore}
+                              onChange={(e) => updateGradeBoundary(idx, "minScore", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                              className="w-20 border border-gray-200 rounded-xl p-1.5 text-xs font-bold text-center outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                            />
+                            <span className="text-[11px] font-bold text-gray-400">%</span>
+                          </div>
+                        </div>
+
+                        {/* GPA Point */}
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="4.0"
+                            required
+                            value={tier.gpaPoint}
+                            onChange={(e) => updateGradeBoundary(idx, "gpaPoint", Math.max(0, Math.min(4.0, Number(e.target.value) || 0)))}
+                            className="w-16 border border-gray-200 rounded-xl p-1.5 text-xs font-bold text-center outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                          />
+                        </div>
+
+                        {/* Honor / Description */}
+                        <div className="col-span-3">
+                          <input
+                            type="text"
+                            value={tier.description || ""}
+                            onChange={(e) => updateGradeBoundary(idx, "description", e.target.value)}
+                            placeholder="e.g. Distinction / Honors"
+                            className="w-full border border-gray-200 rounded-xl p-1.5 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                          />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="col-span-2 flex items-center justify-end gap-1.5">
+                          <select
+                            value={tier.color || "emerald"}
+                            onChange={(e) => updateGradeBoundary(idx, "color", e.target.value)}
+                            className="text-[10px] font-semibold border border-gray-200 rounded-lg p-1 bg-white outline-none cursor-pointer"
+                            title="Badge color"
+                          >
+                            <option value="emerald">Emerald</option>
+                            <option value="blue">Blue</option>
+                            <option value="amber">Amber</option>
+                            <option value="purple">Purple</option>
+                            <option value="rose">Rose</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteGradeBoundary(idx)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Delete tier"
+                          >
+                            <FiTrash2 className="text-sm" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 text-blue-900 text-[11px] leading-relaxed flex items-start gap-2">
+                  <FiAlertCircle className="text-blue-600 text-sm shrink-0 mt-0.5" />
+                  <p>
+                    All enrolled students in this course will have their cumulative GPAs, report cards, and Gradebook letter marks automatically calculated based on this custom scale.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: WEEKLY SCHEDULE & TIMETABLE (RESCHEDULABLE) */}
+            {activeTab === "schedule" && (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#2D3748]">Course Weekly Timetable & Schedule</h3>
+                    <p className="text-xs text-[#A0AEC0] mt-0.5">
+                      Configure recurring weekly physical classroom lectures and online sessions for students.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addScheduleSlot}
+                      className="px-3 py-1.5 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <FiPlus /> Add Weekly Slot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveSchedule}
+                      disabled={saving}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {saving ? "Saving..." : "Save Timetable"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-start gap-2.5">
+                  <FiClock className="text-indigo-600 text-base shrink-0 mt-0.5" />
+                  <p className="text-[11px] leading-relaxed">
+                    Changes made here directly update the student weekly calendar and timetable. Any rescheduled times or room adjustments trigger instant alerts to all enrolled students.
+                  </p>
+                </div>
+
+                {/* Slots List */}
+                <div className="space-y-3">
+                  {scheduleSlots.length === 0 ? (
+                    <div className="text-center py-10 bg-[#F7FAFC] rounded-2xl border border-dashed border-gray-200">
+                      <FiClock className="text-3xl text-gray-300 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-gray-700">No weekly schedule slots configured yet.</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 mb-3">Add recurring slots to build the course timetable.</p>
+                      <button
+                        type="button"
+                        onClick={addScheduleSlot}
+                        className="px-3 py-1.5 bg-[#5A67D8] text-white font-bold text-xs rounded-lg hover:bg-[#434190] transition"
+                      >
+                        Add First Weekly Slot
+                      </button>
+                    </div>
+                  ) : (
+                    scheduleSlots.map((slot, sIdx) => {
+                      const isPhysical = slot.type !== "online";
+                      return (
+                        <div
+                          key={sIdx}
+                          className="p-4 bg-[#F7FAFC] hover:bg-white rounded-2xl border border-gray-100 transition space-y-3 shadow-xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-indigo-100 text-[#5A67D8] font-bold text-[10px] flex items-center justify-center shrink-0">
+                                {sIdx + 1}
+                              </span>
+                              <span className="font-extrabold text-xs text-[#1E293B]">
+                                Slot #{sIdx + 1} &bull; {slot.dayOfWeek}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => removeScheduleSlot(sIdx)}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Delete slot"
+                            >
+                              <FiTrash2 className="text-sm" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                            {/* Day of Week */}
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-600 mb-1">Day of Week</label>
+                              <select
+                                value={slot.dayOfWeek}
+                                onChange={(e) => updateScheduleSlot(sIdx, "dayOfWeek", e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                              >
+                                <option value="Monday">Monday</option>
+                                <option value="Tuesday">Tuesday</option>
+                                <option value="Wednesday">Wednesday</option>
+                                <option value="Thursday">Thursday</option>
+                                <option value="Friday">Friday</option>
+                                <option value="Saturday">Saturday</option>
+                                <option value="Sunday">Sunday</option>
+                              </select>
+                            </div>
+
+                            {/* Start Time */}
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-600 mb-1">Start Time</label>
+                              <input
+                                type="time"
+                                value={slot.startTime}
+                                onChange={(e) => updateScheduleSlot(sIdx, "startTime", e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                              />
+                            </div>
+
+                            {/* End Time */}
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-600 mb-1">End Time</label>
+                              <input
+                                type="time"
+                                value={slot.endTime}
+                                onChange={(e) => updateScheduleSlot(sIdx, "endTime", e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                              />
+                            </div>
+
+                            {/* Delivery Mode */}
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-600 mb-1">Delivery Mode</label>
+                              <select
+                                value={slot.type || "physical"}
+                                onChange={(e) => updateScheduleSlot(sIdx, "type", e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                              >
+                                <option value="physical">Physical (In-Person)</option>
+                                <option value="online">Online (Virtual)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Location / Venue / Virtual Link */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-600 mb-1">
+                              {isPhysical ? "Campus Venue / Lecture Hall" : "Meeting Link / Virtual Room"}
+                            </label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                {isPhysical ? <FiMapPin className="text-xs" /> : <FiVideo className="text-xs" />}
+                              </div>
+                              <input
+                                type="text"
+                                value={slot.location || ""}
+                                onChange={(e) => updateScheduleSlot(sIdx, "location", e.target.value)}
+                                placeholder={isPhysical ? "e.g. Hall 15, Engineering Block Room 204" : "e.g. Google Meet / Zoom URL"}
+                                className="w-full pl-8 border border-gray-200 rounded-xl p-2 text-xs outline-none focus:ring-1 focus:ring-[#5A67D8] bg-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}

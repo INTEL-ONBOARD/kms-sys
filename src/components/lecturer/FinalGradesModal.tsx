@@ -20,6 +20,8 @@ export interface StudentFinalGrade {
   image?: string;
   courseId: string;
   courseTitle: string;
+  batchId?: string;
+  batchName?: string;
   progress: number;
   totalAssignments: number;
   completedAssignments: number;
@@ -59,6 +61,7 @@ export default function FinalGradesModal({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string>(initialGradeFilter);
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
+  const [batchFilter, setBatchFilter] = useState<string>("ALL");
 
   const [students, setStudents] = useState<StudentFinalGrade[]>([]);
   const [counts, setCounts] = useState<{
@@ -81,6 +84,8 @@ export default function FinalGradesModal({
     TOTAL: 0,
   });
   const [courses, setCourses] = useState<Array<{ id: string; title: string }>>([]);
+  const [batches, setBatches] = useState<Array<{ id: string; name: string }>>([]);
+  const [hasUnassignedBatch, setHasUnassignedBatch] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -102,6 +107,7 @@ export default function FinalGradesModal({
         search: debouncedSearch,
         grade: gradeFilter,
         courseId: courseFilter,
+        batchId: batchFilter,
       });
 
       const res = await fetch(`/api/lecturer/analytics/final-grades?${params.toString()}`);
@@ -111,13 +117,15 @@ export default function FinalGradesModal({
         setStudents(data.students || []);
         if (data.counts) setCounts(data.counts);
         if (data.courses) setCourses(data.courses);
+        if (data.batches) setBatches(data.batches);
+        if (data.hasUnassignedBatch !== undefined) setHasUnassignedBatch(data.hasUnassignedBatch);
       }
     } catch (err) {
       console.error("Backend final grades filter fetch error:", err);
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, gradeFilter, courseFilter]);
+  }, [debouncedSearch, gradeFilter, courseFilter, batchFilter]);
 
   useEffect(() => {
     fetchFilteredRoster();
@@ -149,7 +157,7 @@ export default function FinalGradesModal({
                 Final Course Grades & Student Breakdown
               </h2>
               <p className="text-xs text-gray-400">
-                Live backend search, grade filters, and student completion metrics
+                Live backend search, batch filters, grade filters, and student completion metrics
               </p>
             </div>
           </div>
@@ -164,13 +172,13 @@ export default function FinalGradesModal({
 
         {/* Filters and Search Bar (Backend Filters) */}
         <div className="p-4 bg-gray-50 border-b border-gray-100 space-y-3 shrink-0">
-          {/* Top row: Search and Course selector */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="relative flex-1 sm:max-w-xs">
+          {/* Top row: Search, Batch selector, and Course selector */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
               <input
                 type="text"
-                placeholder="Backend search student or email..."
+                placeholder="Search student, email, batch..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white text-xs text-gray-700 rounded-xl py-2 pl-8 pr-3 border border-gray-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition font-medium"
@@ -180,23 +188,48 @@ export default function FinalGradesModal({
               )}
             </div>
 
-            {courses.length > 1 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Course:</span>
-                <select
-                  value={courseFilter}
-                  onChange={(e) => setCourseFilter(e.target.value)}
-                  className="bg-white border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="ALL">All Assigned Courses</option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Batch Filter Dropdown */}
+              {(batches.length > 0 || hasUnassignedBatch) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Batch:</span>
+                  <select
+                    value={batchFilter}
+                    onChange={(e) => setBatchFilter(e.target.value)}
+                    className="bg-white border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    <option value="ALL">All Students</option>
+                    {batches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                    {hasUnassignedBatch && (
+                      <option value="NO_BATCH">No Batch (Unassigned)</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {/* Course Filter Dropdown */}
+              {courses.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Course:</span>
+                  <select
+                    value={courseFilter}
+                    onChange={(e) => setCourseFilter(e.target.value)}
+                    className="bg-white border border-gray-200 text-xs font-semibold text-gray-700 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    <option value="ALL">All Assigned Courses</option>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Grade filter tabs */}
@@ -270,9 +303,20 @@ export default function FinalGradesModal({
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-gray-900 truncate">{student.name}</p>
                         <p className="text-[10px] text-gray-400 truncate">{student.email}</p>
-                        <span className="inline-block mt-0.5 text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded truncate max-w-[200px]">
-                          {student.courseTitle}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="inline-block text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded truncate max-w-[170px]">
+                            {student.courseTitle}
+                          </span>
+                          {student.batchName ? (
+                            <span className="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/80 px-1.5 py-0.2 rounded shrink-0">
+                              {student.batchName}
+                            </span>
+                          ) : (
+                            <span className="inline-block text-[10px] font-medium text-gray-400 bg-gray-100 border border-gray-200/60 px-1.5 py-0.2 rounded shrink-0">
+                              No Batch
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 

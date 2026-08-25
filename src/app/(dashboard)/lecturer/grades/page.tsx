@@ -22,6 +22,7 @@ import {
   FiLink
 } from "react-icons/fi";
 import { useToast } from "@/contexts/ToastContext";
+import { resolveGradeFromScale, GradeBoundary } from "@/lib/grading";
 
 export default function LecturerGradebookPage() {
   const toast = useToast();
@@ -205,17 +206,8 @@ export default function LecturerGradebookPage() {
     });
   }, [gradedQueue, selectedCourse, selectedGradeRange]);
 
-  const getGradeBadge = (grade: number) => {
-    if (grade >= 85) {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    }
-    if (grade >= 70) {
-      return "bg-blue-50 text-blue-700 border-blue-200";
-    }
-    if (grade >= 50) {
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    }
-    return "bg-rose-50 text-rose-700 border-rose-200";
+  const getGradeInfo = (grade: number, scale?: GradeBoundary[]) => {
+    return resolveGradeFromScale(grade, scale);
   };
 
   return (
@@ -531,10 +523,22 @@ export default function LecturerGradebookPage() {
                         </td>
 
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border ${getGradeBadge(gradeNumber)}`}>
-                            <FiAward className="text-xs" />
-                            {gradeNumber} / {item.maxPoints || 100} ({Math.round((gradeNumber / (item.maxPoints || 100)) * 100)}%)
-                          </span>
+                          {(() => {
+                            const info = getGradeInfo(gradeNumber, item.gradingScale);
+                            return (
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border ${info.badgeClass}`}>
+                                  <FiAward className="text-xs" />
+                                  Grade {info.grade} &bull; {gradeNumber} / {item.maxPoints || 100}
+                                </span>
+                                {info.description && (
+                                  <span className="text-[10px] text-gray-400 font-semibold pl-1">
+                                    {info.description}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         <td className="px-6 py-4 max-w-xs">
@@ -756,6 +760,20 @@ export default function LecturerGradebookPage() {
                     / 100
                   </span>
                 </div>
+
+                {gradeValue.trim() !== "" && !isNaN(Number(gradeValue)) && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-gray-500">Resulting Grade:</span>
+                    {(() => {
+                      const res = resolveGradeFromScale(Number(gradeValue), gradingItem.gradingScale);
+                      return (
+                        <span className={`px-2.5 py-0.5 rounded-lg text-xs font-extrabold border ${res.badgeClass}`}>
+                          Grade {res.grade} &bull; {res.gpaPoint.toFixed(1)} GPA {res.description ? `(${res.description})` : ""}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               <div>

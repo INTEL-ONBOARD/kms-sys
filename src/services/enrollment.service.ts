@@ -117,7 +117,7 @@ export async function getStudentDashboard(userId: string) {
   const enrollments = await Enrollment.find({
     $or: [{ userId: userObjectId }, { userId }],
   })
-    .populate("courseId", "title instructor category schedule colorCode")
+    .populate("courseId", "title instructor category schedule colorCode credits")
     .sort({ createdAt: -1 })
     .lean();
 
@@ -185,11 +185,15 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 5. Recent course materials
+  // 5. Recent course materials (only from courses with visibility enabled)
+  const publishedCourseIds = validEnrollments
+    .filter((e: any) => e.courseId && e.courseId.published !== false)
+    .map((e: any) => e.courseId._id);
+
   const materials =
-    allCourseIds.length > 0
+    publishedCourseIds.length > 0
       ? await CourseMaterial.find({
-          courseId: { $in: allCourseIds },
+          courseId: { $in: publishedCourseIds },
           isPublished: true,
         })
           .populate("courseId", "title")
@@ -211,15 +215,16 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 7. Calculate dynamic Credits, Attendance, and GPA
+  // 7. Calculate dynamic Credits, Total Courses, Attendance, and GPA based on enrolled courses
   let credits = 0;
   let attendance = 0;
   let gpa = "0.0";
 
   if (validEnrollments.length > 0) {
+    // Total credits sum based on assigned course credits
     credits = validEnrollments.reduce((sum: number, e: any) => {
-      const prog = typeof e.progress === "number" ? e.progress : 0;
-      return sum + (prog >= 100 ? 4 : Math.floor((prog / 100) * 4));
+      const courseCr = typeof e.courseId?.credits === "number" ? e.courseId.credits : 3;
+      return sum + courseCr;
     }, 0);
 
     const totalProgress = validEnrollments.reduce(
@@ -242,6 +247,7 @@ export async function getStudentDashboard(userId: string) {
 
   return {
     enrollments: validEnrollments,
+    totalCourses: validEnrollments.length,
     assignments,
     exams,
     liveClasses,
@@ -397,21 +403,22 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
           durationHours: Math.max(1, Math.min(4, endHour - startHour)),
           startTime: slot.startTime,
           endTime: slot.endTime,
-          location: slot.location || "Main Lecture Hall",
+          location: slot.location || (slot.type === "online" ? "Online Virtual Room" : "Main Lecture Hall"),
           instructor: c.instructor || "Faculty Lecturer",
           colorCode,
           category: c.category || "Lecture",
           eventType: "lecture",
+          slotType: slot.type || "physical",
         });
       });
     }
   });
 
-  // Add Scheduled Live Classes to Timetable
+  // Add Scheduled Live/Physical Classes to Timetable
   liveClasses.forEach((lc: any) => {
     const c = lc.courseId as any;
     const courseIdStr = c?._id?.toString() || lc.courseId?.toString() || "";
-    const courseTitle = c?.title || "Live Session";
+    const courseTitle = c?.title || "Class Session";
     const startDate = new Date(lc.startTime);
     const endDate = new Date(lc.endTime);
 
@@ -438,21 +445,24 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
       hour12: true,
     });
 
+    const isPhysical = lc.classType === "physical";
+
     events.push({
       id: `live-${lc._id.toString()}`,
       courseId: courseIdStr,
       courseTitle,
-      title: lc.title || `${courseTitle} (Live Class)`,
+      title: lc.title || `${courseTitle} (${isPhysical ? "Class" : "Live Session"})`,
       dayOfWeek,
       startHour: Math.min(16, Math.max(8, startHour)),
       durationHours: Math.min(4, durationHours),
       startTime: startTimeFormatted,
       endTime: endTimeFormatted,
-      location: "Online (Live Stream)",
+      location: isPhysical ? (lc.location || "Campus Lecture Hall") : "Online (Live Session)",
       instructor: lc.instructor || c?.instructor || "Course Lecturer",
-      colorCode: "#2563EB",
-      category: "Live Class",
+      colorCode: isPhysical ? "#0D9488" : "#2563EB",
+      category: isPhysical ? "Physical Class" : "Live Class",
       eventType: "live_class",
+      classType: lc.classType || "online",
       meetingLink: lc.meetingLink || "",
       date: startDate.toISOString(),
       dateFormatted: startDate.toLocaleDateString("en-US", {
@@ -562,6 +572,8 @@ export async function getStudentCalendar(userId: string, courseFilter?: string) 
         instructor: lc.instructor || c?.instructor || "Course Lecturer",
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
+        classType: lc.classType || "online",
+        location: lc.location || (lc.classType === "physical" ? "Campus Lecture Hall" : "Online"),
         dateFormatted: startDate.toLocaleDateString("en-US", {
           weekday: "short",
           month: "short",
@@ -666,6 +678,8 @@ export async function getStudentLiveClasses(userId: string, courseFilter?: strin
       instructor: c.instructor || c.courseId?.instructor || "Course Lecturer",
       startTime: c.startTime,
       endTime: c.endTime,
+      classType: (c as any).classType || "online",
+      location: (c as any).location || ((c as any).classType === "physical" ? "Campus Hall" : "Online"),
       startTimeFormatted: start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       endTimeFormatted: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       dateFormatted: start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -687,3 +701,139 @@ export async function getStudentLiveClasses(userId: string, courseFilter?: strin
     allSessions,
   };
 }
+
+/**
+ * Calculates and updates a student's course progress percentage based on completed coursework and exams.
+ */
+export async function calculateStudentCourseProgress(userId: string, courseId: string): Promise<number> {
+  await connectToDatabase();
+
+  const userObjId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  const courseObjId = mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId;
+  const uIdStr = userId.toString();
+  const cIdStr = courseId.toString();
+
+  const [course, assignments, exams, submissions, enrollment] = await Promise.all([
+    Course.findById(courseObjId).lean(),
+    Assignment.find({ courseId: courseObjId }).lean(),
+    Exam.find({ courseId: courseObjId }).lean(),
+    Submission.find({
+      studentId: { $in: [userObjId, userId] },
+      courseId: { $in: [courseObjId, courseId] },
+    }).lean(),
+    Enrollment.findOne({
+      userId: { $in: [userObjId, userId] },
+      courseId: { $in: [courseObjId, courseId] },
+    }),
+  ]);
+
+  if (!course) return 0;
+
+  const totalAssignments = assignments.length;
+  const totalExams = exams.length;
+
+  const completedAssignments = assignments.filter((assign: any) => {
+    const assignIdStr = assign._id.toString();
+    const sub = submissions.find((s: any) => {
+      const sAssignId = s.assignmentId?._id ? s.assignmentId._id.toString() : s.assignmentId?.toString();
+      const sStudentId = s.studentId?._id ? s.studentId._id.toString() : s.studentId?.toString();
+      return sAssignId === assignIdStr && sStudentId === uIdStr;
+    });
+    return (
+      sub &&
+      (sub.status === "submitted" ||
+        sub.status === "graded" ||
+        sub.status === "late" ||
+        (sub.files && sub.files.length > 0) ||
+        sub.content)
+    );
+  });
+
+  const completedExams = exams.filter((ex: any) => {
+    const res = (ex.results || []).find(
+      (r: any) => (r.studentId?._id ? r.studentId._id.toString() : r.studentId?.toString()) === uIdStr
+    );
+    return (
+      (res && res.marks !== null && res.marks !== undefined) ||
+      ex.status === "completed" ||
+      ex.status === "graded"
+    );
+  });
+
+  let calculatedProgress = 0;
+
+  if (course.assessmentItems && Array.isArray(course.assessmentItems) && course.assessmentItems.length > 0) {
+    let totalWeight = 0;
+    let earnedWeight = 0;
+
+    for (const item of course.assessmentItems) {
+      const weight = Number(item.weight) || 0;
+      if (weight <= 0) continue;
+      totalWeight += weight;
+
+      if (item.type === "attendance") {
+        if (
+          enrollment &&
+          (enrollment as any).attendanceMarks !== undefined &&
+          (enrollment as any).attendanceMarks !== null &&
+          Number((enrollment as any).attendanceMarks) > 0
+        ) {
+          earnedWeight += weight;
+        }
+      } else if (item.type === "exam") {
+        if (completedExams.length > 0) {
+          earnedWeight += weight;
+        }
+      } else {
+        const matchedAssignment = assignments.find(
+          (a: any) =>
+            a.title.trim().toLowerCase() === (item.name || "").trim().toLowerCase() ||
+            (item.type && a.category?.toLowerCase() === item.type.toLowerCase())
+        );
+        if (matchedAssignment) {
+          const isDone = completedAssignments.some(
+            (ca: any) => ca._id.toString() === matchedAssignment._id.toString()
+          );
+          if (isDone) {
+            earnedWeight += weight;
+          }
+        } else if (completedAssignments.length > 0) {
+          const ratio = totalAssignments > 0 ? completedAssignments.length / totalAssignments : 0;
+          earnedWeight += weight * ratio;
+        }
+      }
+    }
+
+    if (totalWeight > 0) {
+      calculatedProgress = Math.round((earnedWeight / totalWeight) * 100);
+    }
+  }
+
+  if (calculatedProgress === 0) {
+    const totalDeliverables = totalAssignments + totalExams;
+    const completedDeliverables = completedAssignments.length + completedExams.length;
+
+    if (totalDeliverables > 0) {
+      calculatedProgress = Math.round((completedDeliverables / totalDeliverables) * 100);
+    }
+  }
+
+  if (
+    enrollment &&
+    typeof enrollment.progress === "number" &&
+    enrollment.progress > calculatedProgress &&
+    totalAssignments === 0 &&
+    totalExams === 0
+  ) {
+    calculatedProgress = enrollment.progress;
+  }
+
+  const finalProgress = Math.min(100, Math.max(0, calculatedProgress));
+
+  if (enrollment && enrollment.progress !== finalProgress) {
+    await Enrollment.updateOne({ _id: enrollment._id }, { $set: { progress: finalProgress } });
+  }
+
+  return finalProgress;
+}
+

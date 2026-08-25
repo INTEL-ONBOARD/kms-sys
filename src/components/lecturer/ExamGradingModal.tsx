@@ -11,6 +11,7 @@ import {
   FiLoader
 } from "react-icons/fi";
 import { useToast } from "@/contexts/ToastContext";
+import { resolveGradeFromScale } from "@/lib/grading";
 
 interface StudentGradeEntry {
   studentId: string;
@@ -58,17 +59,16 @@ export default function ExamGradingModal({
       const res = await fetch(`/api/lecturer/exams/${examId}/grades`);
       if (res.ok) {
         const json = await res.json();
-        const data = json.data || json;
-        setExamData(data.exam);
-        setMaxMarks(data.exam?.maxMarks || 100);
-        setStudents(data.students || []);
+        setExamData(json.exam);
+        setStudents(json.students || []);
+        if (json.exam?.maxMarks) {
+          setMaxMarks(Number(json.exam.maxMarks));
+        }
       } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.message || "Failed to load exam gradebook");
+        toast.error("Failed to load exam student list");
       }
-    } catch (err) {
-      console.error("Failed to load exam roster:", err);
-      toast.error("Failed to load exam roster");
+    } catch {
+      toast.error("Error fetching exam roster");
     } finally {
       setLoading(false);
     }
@@ -86,11 +86,8 @@ export default function ExamGradingModal({
     if (isNaN(num)) return { grade: "—", color: "text-gray-400 bg-gray-50 border-gray-200" };
     const pct = max > 0 ? (num / max) * 100 : 0;
 
-    if (pct >= 80) return { grade: "A", color: "text-emerald-700 bg-emerald-50 border-emerald-200" };
-    if (pct >= 70) return { grade: "B", color: "text-blue-700 bg-blue-50 border-blue-200" };
-    if (pct >= 60) return { grade: "C", color: "text-amber-700 bg-amber-50 border-amber-200" };
-    if (pct >= 50) return { grade: "S", color: "text-purple-700 bg-purple-50 border-purple-200" };
-    return { grade: "F", color: "text-rose-700 bg-rose-50 border-rose-200" };
+    const resolved = resolveGradeFromScale(pct, examData?.gradingScale);
+    return { grade: resolved.grade, color: resolved.badgeClass };
   };
 
   const handleMarkChange = (studentId: string, value: string) => {

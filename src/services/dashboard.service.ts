@@ -7,7 +7,9 @@ import LiveClass from "@/lib/models/LiveClass";
 import Submission from "@/lib/models/Submission";
 import Announcement from "@/lib/models/Announcement";
 import Exam from "@/lib/models/Exam";
+import Batch from "@/lib/models/Batch";
 import { createSafeSearchRegex } from "@/lib/core/pagination";
+import { resolveGradeFromScale } from "@/lib/grading";
 
 // Ensure models are registered
 User;
@@ -18,6 +20,7 @@ LiveClass;
 Submission;
 Announcement;
 Exam;
+Batch;
 
 /**
  * Retrieves aggregate statistics for the Admin Dashboard.
@@ -325,6 +328,28 @@ export async function getLecturerDashboard(userId: string, userName: string) {
     Exam.find({ courseId: { $in: courseIds } }).lean(),
   ]);
 
+  // Extract enrolled student IDs and fetch their batch assignments
+  const enrolledStudentIds = (allEnrollments || [])
+    .map((e: any) => (e.userId?._id ? e.userId._id.toString() : e.userId?.toString()))
+    .filter(Boolean);
+
+  const studentBatches = enrolledStudentIds.length > 0
+    ? await Batch.find({ students: { $in: enrolledStudentIds } }).lean()
+    : [];
+
+  const studentBatchMap = new Map<string, { batchId: string; batchName: string }>();
+  studentBatches.forEach((b: any) => {
+    (b.students || []).forEach((stId: any) => {
+      const sIdStr = stId?.toString();
+      if (sIdStr && !studentBatchMap.has(sIdStr)) {
+        studentBatchMap.set(sIdStr, {
+          batchId: b._id.toString(),
+          batchName: b.name || "Batch",
+        });
+      }
+    });
+  });
+
   // Format Course cards with stats
   const courseStatsMap = new Map();
   allCourseEnrollments.forEach((e: any) => {
@@ -553,65 +578,56 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       completedStudentsCount += 1;
       completedStudentsTotalFinalScore += finalGrade;
 
-      if (finalGrade >= 80) {
-        finalLetterGrade = "A";
-        finalGradeColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
-        gpaPoint = 4.0;
-        finalGradeBuckets.A += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 70) {
-        finalLetterGrade = "B";
-        finalGradeColor = "text-blue-700 bg-blue-50 border-blue-200";
-        gpaPoint = 3.0;
-        finalGradeBuckets.B += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 60) {
-        finalLetterGrade = "C";
-        finalGradeColor = "text-amber-700 bg-amber-50 border-amber-200";
-        gpaPoint = 2.0;
-        finalGradeBuckets.C += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 50) {
-        finalLetterGrade = "S";
-        finalGradeColor = "text-purple-700 bg-purple-50 border-purple-200";
-        gpaPoint = 1.0;
-        finalGradeBuckets.S += 1;
-        completedPassingCount += 1;
+      const resolved = resolveGradeFromScale(finalGrade, course?.gradingScale);
+      finalLetterGrade = resolved.grade;
+      finalGradeColor = resolved.badgeClass;
+      gpaPoint = resolved.gpaPoint;
+
+      const letterKey = resolved.grade.charAt(0).toUpperCase();
+      if (letterKey in finalGradeBuckets) {
+        (finalGradeBuckets as any)[letterKey] += 1;
       } else {
-        finalLetterGrade = "F";
-        finalGradeColor = "text-rose-700 bg-rose-50 border-rose-200";
-        gpaPoint = 0.0;
-        finalGradeBuckets.F += 1;
+        finalGradeBuckets.A += 1;
+      }
+
+      if (resolved.isPassing) {
+        completedPassingCount += 1;
       }
       status = "Completed";
     }
 
-    return {
-      enrollmentId: enrollment._id.toString(),
-      studentId: studentIdStr,
-      name: student?.name || "Student",
-      email: student?.email || "",
-      image: student?.image || "",
-      courseId: courseIdStr,
-      courseTitle,
-      progress: enrollment.progress || 0,
-      totalAssignments: totalCourseAssignments,
-      completedAssignments: studentGradedCount,
-      pendingAssignments: Math.max(0, totalCourseAssignments - studentGradedCount),
-      totalExams: totalCourseExams,
-      completedExams: completedExamsCount,
-      allAssignmentsCompleted,
-      finalExamCompleted,
-      isCompleted,
-      assignmentScores,
-      assignmentAverageScore,
-      finalGrade,
-      finalLetterGrade,
-      finalGradeColor,
-      gpaPoint,
-      status,
-    };
-  });
+      const batchInfo = studentBatchMap.get(studentIdStr) || { batchId: "", batchName: "" };
+
+      return {
+        enrollmentId: enrollment._id.toString(),
+        studentId: studentIdStr,
+        name: student?.name || "Student",
+        email: student?.email || "",
+        image: student?.image || "",
+        courseId: courseIdStr,
+        courseTitle,
+        batchId: batchInfo.batchId,
+        batchName: batchInfo.batchName,
+        progress: enrollment.progress || 0,
+        totalAssignments: totalCourseAssignments,
+        completedAssignments: studentGradedCount,
+        pendingAssignments: Math.max(0, totalCourseAssignments - studentGradedCount),
+        totalExams: totalCourseExams,
+        completedExams: completedExamsCount,
+        allAssignmentsCompleted,
+        finalExamCompleted,
+        isCompleted,
+        assignmentScores,
+        assignmentAverageScore,
+        finalGrade,
+        finalLetterGrade,
+        finalGradeColor,
+        gpaPoint,
+        credits: course?.credits || 3,
+        qualityPoints: typeof gpaPoint === "number" ? Number((gpaPoint * (course?.credits || 3)).toFixed(2)) : null,
+        status,
+      };
+    });
 
   const finalGradeAverage =
     completedStudentsCount > 0
@@ -810,7 +826,7 @@ export async function getLecturerActivity(userId: string, userName: string) {
 }
 
 /**
- * Retrieves student final grades roster with server-side backend filtering.
+ * Retrieves student final grades roster with server-side backend filtering including batches.
  */
 export async function getLecturerFinalGradesRoster(
   userId: string,
@@ -819,23 +835,28 @@ export async function getLecturerFinalGradesRoster(
     search?: string;
     grade?: string;
     courseId?: string;
+    batchId?: string;
   }
 ) {
   const data = await getLecturerDashboard(userId, userName);
   const allStudents = data.performance?.students || [];
 
-  const completed = allStudents.filter((s: any) => s.isCompleted);
-  const counts = {
-    ALL: completed.length,
-    A: completed.filter((s: any) => s.finalLetterGrade === "A").length,
-    B: completed.filter((s: any) => s.finalLetterGrade === "B").length,
-    C: completed.filter((s: any) => s.finalLetterGrade === "C").length,
-    S: completed.filter((s: any) => s.finalLetterGrade === "S").length,
-    F: completed.filter((s: any) => s.finalLetterGrade === "F").length,
-    IN_PROGRESS: allStudents.filter((s: any) => !s.isCompleted).length,
-    TOTAL: allStudents.length,
-  };
+  const { search = "", grade = "ALL", courseId = "ALL", batchId = "ALL" } = filterParams;
 
+  // Extract unique batches assigned to lecturer's students
+  const batchMap = new Map<string, string>();
+  allStudents.forEach((s: any) => {
+    if (s.batchId && s.batchName) {
+      batchMap.set(s.batchId, s.batchName);
+    }
+  });
+  const batches = Array.from(batchMap.entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const hasUnassignedBatch = allStudents.some((s: any) => !s.batchId || s.batchId === "");
+
+  // Extract unique courses
   const courseMap = new Map<string, string>();
   allStudents.forEach((s: any) => {
     if (s.courseId && s.courseTitle) {
@@ -844,13 +865,32 @@ export async function getLecturerFinalGradesRoster(
   });
   const courses = Array.from(courseMap.entries()).map(([id, title]) => ({ id, title }));
 
-  const { search = "", grade = "ALL", courseId = "ALL" } = filterParams;
-
-  const filtered = allStudents.filter((s: any) => {
-    if (courseId !== "ALL" && s.courseId !== courseId) {
+  // Filter students by course and batch first to get contextual grade counts
+  const scopedStudents = allStudents.filter((s: any) => {
+    if (courseId !== "ALL" && courseId !== "all" && s.courseId !== courseId) {
       return false;
     }
+    if (batchId === "NO_BATCH" || batchId === "none" || batchId === "unassigned") {
+      if (s.batchId && s.batchId !== "") return false;
+    } else if (batchId !== "ALL" && batchId !== "all" && s.batchId !== batchId) {
+      return false;
+    }
+    return true;
+  });
 
+  const completed = scopedStudents.filter((s: any) => s.isCompleted);
+  const counts = {
+    ALL: completed.length,
+    A: completed.filter((s: any) => s.finalLetterGrade === "A").length,
+    B: completed.filter((s: any) => s.finalLetterGrade === "B").length,
+    C: completed.filter((s: any) => s.finalLetterGrade === "C").length,
+    S: completed.filter((s: any) => s.finalLetterGrade === "S").length,
+    F: completed.filter((s: any) => s.finalLetterGrade === "F").length,
+    IN_PROGRESS: scopedStudents.filter((s: any) => !s.isCompleted).length,
+    TOTAL: scopedStudents.length,
+  };
+
+  const filtered = scopedStudents.filter((s: any) => {
     if (grade === "ALL") {
       if (!s.isCompleted) return false;
     } else if (grade === "IN_PROGRESS") {
@@ -861,10 +901,11 @@ export async function getLecturerFinalGradesRoster(
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      const matchName = s.name.toLowerCase().includes(q);
-      const matchEmail = s.email.toLowerCase().includes(q);
-      const matchCourse = s.courseTitle.toLowerCase().includes(q);
-      if (!matchName && !matchEmail && !matchCourse) return false;
+      const matchName = s.name?.toLowerCase().includes(q);
+      const matchEmail = s.email?.toLowerCase().includes(q);
+      const matchCourse = s.courseTitle?.toLowerCase().includes(q);
+      const matchBatch = (s.batchName || "no batch unassigned")?.toLowerCase().includes(q);
+      if (!matchName && !matchEmail && !matchCourse && !matchBatch) return false;
     }
 
     return true;
@@ -874,6 +915,8 @@ export async function getLecturerFinalGradesRoster(
     students: filtered,
     counts,
     courses,
+    batches,
+    hasUnassignedBatch,
     total: filtered.length,
   };
 }
