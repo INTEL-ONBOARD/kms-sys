@@ -3,6 +3,9 @@ import { connectToDatabase } from "@/lib/db";
 import Course, { CourseDoc } from "@/models/Course";
 import Enrollment from "@/models/Enrollment";
 import Assignment from "@/models/Assignment";
+import Notification from "@/models/Notification";
+import Exam from "@/models/Exam";
+import { resolveGradeFromScale } from "@/lib/grading";
 import { NotFoundError } from "../core/errors";
 import {
   PaginationParams,
@@ -92,6 +95,7 @@ export async function createCourse(input: CreateCourseInput, creatorId?: string)
     ),
     assessmentItems: input.assessmentItems,
     gradingBreakdown: input.gradingBreakdown,
+    credits: typeof input.credits === "number" ? input.credits : 3,
     enrollments: 0,
   });
 
@@ -114,6 +118,7 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
   if (input.status !== undefined) updatePayload.status = input.status;
   if (input.published !== undefined) updatePayload.published = input.published;
   if (input.colorCode !== undefined) updatePayload.colorCode = input.colorCode.trim();
+  if (input.credits !== undefined) updatePayload.credits = Math.max(1, Math.min(30, Number(input.credits) || 3));
   if (input.schedule !== undefined) {
     updatePayload.schedule = input.schedule.filter(
       (s) => s.dayOfWeek && s.startTime && s.endTime
@@ -147,6 +152,16 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
     };
   }
 
+  if (input.gradingScale !== undefined && Array.isArray(input.gradingScale)) {
+    updatePayload.gradingScale = input.gradingScale.map((b: any) => ({
+      grade: String(b.grade || "").trim().toUpperCase(),
+      minScore: Math.max(0, Math.min(100, Number(b.minScore) || 0)),
+      gpaPoint: Math.max(0, Math.min(4.0, Number(b.gpaPoint) || 0)),
+      description: String(b.description || "").trim(),
+      color: String(b.color || "emerald").trim(),
+    }));
+  }
+
   const updatedCourse = await Course.findByIdAndUpdate(id, updatePayload, {
     new: true,
     runValidators: true,
@@ -154,6 +169,71 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
 
   if (!updatedCourse) {
     throw new NotFoundError("Course not found to update");
+  }
+
+  // If weekly schedule was updated / rescheduled, notify enrolled students
+  if (input.schedule !== undefined) {
+    try {
+      const enrollments = await Enrollment.find({ courseId: id }).lean();
+      if (enrollments.length > 0) {
+        const notifications = enrollments.map((e) => ({
+          userId: e.userId,
+          type: "class",
+          message: `Timetable Updated: Weekly class schedule for "${updatedCourse.title}" has been updated.`,
+          link: "/calendar",
+        }));
+        await Notification.insertMany(notifications);
+      }
+    } catch (notifErr) {
+      console.warn("Could not dispatch schedule update notifications:", notifErr);
+    }
+  }
+
+  // If grading scale was updated, recalculate all existing exam results & notify enrolled students
+  if (input.gradingScale !== undefined) {
+    try {
+      // 1. Recalculate student letter grades on all existing exams for this course
+      const exams = await Exam.find({ courseId: id });
+      for (const exam of exams) {
+        if (exam.results && exam.results.length > 0) {
+          let hasChanges = false;
+          for (const r of exam.results as any[]) {
+            const effectiveMax = Number(r.maxMarks || exam.maxMarks) || 100;
+            const marksNum = Number(r.marks) || 0;
+            const pct = effectiveMax > 0 ? Math.round((marksNum / effectiveMax) * 100) : 0;
+            const resolved = resolveGradeFromScale(pct, updatedCourse.gradingScale);
+            if (r.grade !== resolved.grade || r.percentage !== pct) {
+              hasChanges = true;
+              r.percentage = pct;
+              r.grade = resolved.grade;
+              r.maxMarks = effectiveMax;
+            }
+          }
+
+          if (hasChanges) {
+            exam.markModified("results");
+            await exam.save();
+          }
+        }
+      }
+    } catch (examSyncErr) {
+      console.warn("Could not sync exam results with new grading scale:", examSyncErr);
+    }
+
+    try {
+      const enrollments = await Enrollment.find({ courseId: id }).lean();
+      if (enrollments.length > 0) {
+        const notifications = enrollments.map((e) => ({
+          userId: e.userId,
+          type: "announcement",
+          message: `Grading Scale Updated: The grading scale and score thresholds for "${updatedCourse.title}" have been updated by your lecturer.`,
+          link: "/grades",
+        }));
+        await Notification.insertMany(notifications);
+      }
+    } catch (notifErr) {
+      console.warn("Could not dispatch grading scale update notifications:", notifErr);
+    }
   }
 
   return updatedCourse;

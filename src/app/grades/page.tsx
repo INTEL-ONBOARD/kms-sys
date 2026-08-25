@@ -41,6 +41,9 @@ interface CourseGrade {
   instructor?: string;
   totalPoints?: number | null;
   totalEarnedPoints?: number;
+  gpaPoint?: number;
+  credits?: number;
+  qualityPoints?: number;
   allAssessmentsCompleted?: boolean;
   publishedCount?: number;
   totalAssessmentCount?: number;
@@ -161,7 +164,7 @@ function GradesContent() {
   // Compute filtered GPA dynamically if filtered
   const displayGPA = useMemo(() => {
     const completedCourses = filteredGrades.filter(g => g.allAssessmentsCompleted && typeof g.totalPoints === 'number');
-    if (completedCourses.length === 0) return studentInfo.gpa || "0.0";
+    if (completedCourses.length === 0) return studentInfo.gpa || "0.00";
     const gradePointMap: Record<string, number> = {
       'A': 4.0,
       'A -': 3.7,
@@ -173,8 +176,13 @@ function GradesContent() {
       'D': 1.0,
       'F': 0.0,
     };
-    const totalPts = completedCourses.reduce((sum, g) => sum + (gradePointMap[g.grade] ?? 0.0), 0);
-    return (totalPts / completedCourses.length).toFixed(1);
+    const totalCredits = completedCourses.reduce((sum, g) => sum + (Number(g.credits) || 3), 0);
+    const totalQP = completedCourses.reduce((sum, g) => {
+      const cr = Number(g.credits) || 3;
+      const gp = typeof g.gpaPoint === 'number' ? g.gpaPoint : (gradePointMap[g.grade] ?? 0.0);
+      return sum + (gp * cr);
+    }, 0);
+    return totalCredits > 0 ? (totalQP / totalCredits).toFixed(2) : "0.00";
   }, [filteredGrades, studentInfo.gpa]);
 
   const showToast = (msg: string) => {
@@ -195,6 +203,7 @@ function GradesContent() {
         id: g.id,
         title: g.title,
         code: g.code,
+        credits: g.credits || 3,
         assignments: g.assignments,
         courseWork: g.courseWork,
         finalExam: g.finalExam,
@@ -606,6 +615,9 @@ function GradesContent() {
                               <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
                                 {course.code}
                               </span>
+                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                                {course.credits || 3} Credits
+                              </span>
                               <span className="text-xs font-semibold text-gray-400">
                                 {course.semester}
                               </span>
@@ -628,7 +640,7 @@ function GradesContent() {
                             </span>
                             <span className="text-[10px] font-bold text-gray-400 mt-1">
                               {course.allAssessmentsCompleted
-                                ? `${course.totalPoints} / 100 Pts`
+                                ? `${course.totalPoints} / 100 Pts (${(Number(course.gpaPoint || 0) * (course.credits || 3)).toFixed(1)} QP)`
                                 : `${course.publishedCount || 0}/${course.totalAssessmentCount || items.length} Published`}
                             </span>
                           </div>
@@ -751,6 +763,7 @@ function GradesContent() {
                     <thead>
                       <tr className="bg-gray-50/80 text-[#64748B] text-[11px] uppercase tracking-wider font-bold border-b border-gray-100">
                         <th className="px-6 py-4">Course & Module</th>
+                        <th className="px-3 py-4 text-center">Credits</th>
                         <th className="px-4 py-4 text-center">Assignments</th>
                         <th className="px-4 py-4 text-center">Coursework</th>
                         <th className="px-4 py-4 text-center">Final Exam</th>
@@ -780,6 +793,11 @@ function GradesContent() {
                                 ) : null}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-4 text-center">
+                            <span className="inline-block px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-xs font-black border border-indigo-100/80">
+                              {course.credits || 3} Cr
+                            </span>
                           </td>
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.assignments}</td>
                           <td className="px-4 py-4 text-center text-sm font-semibold text-[#334155]">{course.courseWork}</td>

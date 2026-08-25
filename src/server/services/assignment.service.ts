@@ -314,7 +314,7 @@ export async function getGradingQueue(userId: string, userName: string) {
     })
       .populate("assignmentId", "title description dueDate maxPoints")
       .populate("studentId", "name email")
-      .populate("courseId", "title")
+      .populate("courseId", "title gradingScale")
       .sort({ submittedAt: 1 })
       .lean(),
     Submission.find({
@@ -323,7 +323,7 @@ export async function getGradingQueue(userId: string, userName: string) {
     })
       .populate("assignmentId", "title description dueDate maxPoints")
       .populate("studentId", "name email")
-      .populate("courseId", "title")
+      .populate("courseId", "title gradingScale")
       .sort({ updatedAt: -1, submittedAt: -1 })
       .lean(),
   ]);
@@ -344,6 +344,7 @@ export async function getGradingQueue(userId: string, userName: string) {
         assignmentDescription: sub.assignmentId?.description || "",
         maxPoints: sub.assignmentId?.maxPoints || 100,
         courseTitle: sub.courseId?.title || "General Course",
+        gradingScale: sub.courseId?.gradingScale || [],
         studentName: sub.studentId?.name || "Student",
         studentEmail: sub.studentId?.email || "",
         dueDate: dueDate.toISOString(),
@@ -375,6 +376,7 @@ export async function getGradingQueue(userId: string, userName: string) {
       assignmentDescription: sub.assignmentId?.description || "",
       maxPoints: sub.assignmentId?.maxPoints || 100,
       courseTitle: sub.courseId?.title || "General Course",
+      gradingScale: sub.courseId?.gradingScale || [],
       studentName: sub.studentId?.name || "Student",
       studentEmail: sub.studentId?.email || "",
       dueDate: dueDate.toISOString(),

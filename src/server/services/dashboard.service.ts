@@ -8,6 +8,7 @@ import Submission from "@/models/Submission";
 import Announcement from "@/models/Announcement";
 import Exam from "@/models/Exam";
 import { createSafeSearchRegex } from "../core/pagination";
+import { resolveGradeFromScale } from "@/lib/grading";
 
 // Ensure models are registered
 User;
@@ -553,35 +554,20 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       completedStudentsCount += 1;
       completedStudentsTotalFinalScore += finalGrade;
 
-      if (finalGrade >= 80) {
-        finalLetterGrade = "A";
-        finalGradeColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
-        gpaPoint = 4.0;
-        finalGradeBuckets.A += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 70) {
-        finalLetterGrade = "B";
-        finalGradeColor = "text-blue-700 bg-blue-50 border-blue-200";
-        gpaPoint = 3.0;
-        finalGradeBuckets.B += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 60) {
-        finalLetterGrade = "C";
-        finalGradeColor = "text-amber-700 bg-amber-50 border-amber-200";
-        gpaPoint = 2.0;
-        finalGradeBuckets.C += 1;
-        completedPassingCount += 1;
-      } else if (finalGrade >= 50) {
-        finalLetterGrade = "S";
-        finalGradeColor = "text-purple-700 bg-purple-50 border-purple-200";
-        gpaPoint = 1.0;
-        finalGradeBuckets.S += 1;
-        completedPassingCount += 1;
+      const resolved = resolveGradeFromScale(finalGrade, course?.gradingScale);
+      finalLetterGrade = resolved.grade;
+      finalGradeColor = resolved.badgeClass;
+      gpaPoint = resolved.gpaPoint;
+
+      const letterKey = resolved.grade.charAt(0).toUpperCase();
+      if (letterKey in finalGradeBuckets) {
+        (finalGradeBuckets as any)[letterKey] += 1;
       } else {
-        finalLetterGrade = "F";
-        finalGradeColor = "text-rose-700 bg-rose-50 border-rose-200";
-        gpaPoint = 0.0;
-        finalGradeBuckets.F += 1;
+        finalGradeBuckets.A += 1;
+      }
+
+      if (resolved.isPassing) {
+        completedPassingCount += 1;
       }
       status = "Completed";
     }
@@ -609,6 +595,8 @@ export async function getLecturerDashboard(userId: string, userName: string) {
       finalLetterGrade,
       finalGradeColor,
       gpaPoint,
+      credits: course?.credits || 3,
+      qualityPoints: typeof gpaPoint === "number" ? Number((gpaPoint * (course?.credits || 3)).toFixed(2)) : null,
       status,
     };
   });

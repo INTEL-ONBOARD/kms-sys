@@ -5,6 +5,8 @@ export interface CourseGradeItem {
   id: number | string;
   title: string;
   code: string;
+  credits?: number;
+  qualityPoints?: number;
   assignments: string;
   courseWork: string;
   finalExam: string;
@@ -44,12 +46,13 @@ export function generateCSVReport(reportData: StudentReportData): string {
   lines.push(``); // Empty row separator
 
   // Table headers
-  lines.push(`"Course Title","Course Code","Assignments","Course Work 1","Final Exam","Attendance","Grade"`);
+  lines.push(`"Course Title","Course Code","Credits","Assignments","Course Work 1","Final Exam","Attendance","Grade"`);
 
   // Data rows
   reportData.grades.forEach((item) => {
     const cleanTitle = item.title.replace(/"/g, '""');
     const cleanCode = item.code.replace(/"/g, '""');
+    const cleanCredits = String(item.credits || 3);
     const cleanAssignments = item.assignments.replace(/"/g, '""');
     const cleanCourseWork = item.courseWork.replace(/"/g, '""');
     const cleanFinalExam = item.finalExam.replace(/"/g, '""');
@@ -57,24 +60,23 @@ export function generateCSVReport(reportData: StudentReportData): string {
     const cleanGrade = item.grade.replace(/"/g, '""');
 
     lines.push(
-      `"${cleanTitle}","${cleanCode}","${cleanAssignments}","${cleanCourseWork}","${cleanFinalExam}","${cleanAttendance}","${cleanGrade}"`
+      `"${cleanTitle}","${cleanCode}","${cleanCredits}","${cleanAssignments}","${cleanCourseWork}","${cleanFinalExam}","${cleanAttendance}","${cleanGrade}"`
     );
   });
 
-  return lines.join('\r\n');
+  return lines.join('\n');
 }
 
 /**
- * Helper to trigger client browser download of text/CSV content.
+ * Downloads a file to the user's computer via browser.
  */
 export function downloadFile(content: string, filename: string, mimeType: string = 'text/csv;charset=utf-8;'): void {
-  if (typeof window === 'undefined') return;
-
-  const blob = new Blob(['\uFEFF' + content], { type: mimeType });
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
+  link.setAttribute('href', url);
   link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -111,6 +113,7 @@ export function generatePrintableHTML(reportData: StudentReportData): string {
         <div style="font-weight: 700; color: #1E293B; font-size: 13px;">${course.title}</div>
         <div style="font-size: 10px; font-weight: 600; color: #64748B; margin-top: 2px; font-family: monospace;">CODE: ${course.code}</div>
       </td>
+      <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 700; color: #1E293B; font-size: 12px;">${course.credits || 3}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.assignments}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.courseWork}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.finalExam}</td>
@@ -498,6 +501,7 @@ export function generatePrintableHTML(reportData: StudentReportData): string {
             <thead>
               <tr>
                 <th>Course Details</th>
+                <th class="center">Credits</th>
                 <th class="center">Assignments</th>
                 <th class="center">Coursework</th>
                 <th class="center">Final Exam</th>

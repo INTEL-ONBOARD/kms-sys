@@ -3,6 +3,7 @@ export type ScheduleSlot = {
   startTime: string; // "08:00"
   endTime: string;   // "10:00"
   location: string;  // "Hall 15"
+  type?: "physical" | "online";
 };
 
 export type AssessmentItem = {
@@ -19,6 +20,14 @@ export type GradingBreakdown = {
   attendanceWeight?: number;
 };
 
+export type GradeBoundary = {
+  grade: string;
+  minScore: number;
+  gpaPoint: number;
+  description?: string;
+  color?: string;
+};
+
 export type CourseInput = {
   title: string;
   description?: string;
@@ -31,6 +40,8 @@ export type CourseInput = {
   schedule?: ScheduleSlot[];
   gradingBreakdown?: GradingBreakdown;
   assessmentItems?: AssessmentItem[];
+  gradingScale?: GradeBoundary[];
+  credits?: number;
 };
 
 export type EnrollmentInput = {
