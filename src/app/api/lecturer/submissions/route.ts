@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireAuth, requireRole } from "@/server/core/auth-context";
-import { validateBody } from "@/server/core/validator";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { gradeSubmissionSchema } from "@/server/dtos/assignment.dto";
-import * as AssignmentService from "@/server/services/assignment.service";
+import { requireAuth, requireRole } from "@/lib/core/auth-context";
+import { validateBody } from "@/lib/core/validator";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { gradeSubmissionSchema } from "@/types/dtos/assignment.dto";
+import * as AssignmentService from "@/services/assignment.service";
 
 export async function POST(req: NextRequest) {
   try {

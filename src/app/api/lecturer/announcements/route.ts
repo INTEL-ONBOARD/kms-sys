@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError } from "@/server/core/errors";
-import * as AnnouncementService from "@/server/services/announcement.service";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError } from "@/lib/core/errors";
+import * as AnnouncementService from "@/services/announcement.service";
 
 export async function POST(req: NextRequest) {
   try {

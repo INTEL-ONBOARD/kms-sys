@@ -1,0 +1,13 @@
+export * as AnnouncementService from "./announcement.service";
+export * as AssignmentService from "./assignment.service";
+export * as AuthService from "./auth.service";
+export * as CourseService from "./course.service";
+export * as DashboardService from "./dashboard.service";
+export * as EnrollmentService from "./enrollment.service";
+export * as ExamService from "./exam.service";
+export * as MaterialService from "./material.service";
+export * as NotificationService from "./notification.service";
+export * as ReportService from "./report.service";
+export * as ScheduleService from "./schedule.service";
+export * as SettingsService from "./settings.service";
+export * as UserService from "./user.service";

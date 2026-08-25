@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/db";
-import User from "@/models/User";
+import User from "@/lib/models/User";
 import bcrypt from "bcryptjs";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { BadRequestError, ForbiddenError } from "@/server/core/errors";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { BadRequestError, ForbiddenError } from "@/lib/core/errors";
 
 export async function GET(req: NextRequest) {
   try {

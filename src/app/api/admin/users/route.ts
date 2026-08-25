@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { validateBody } from "@/server/core/validator";
-import { successResponse, handleApiError } from "@/server/core/api-response";
-import { parsePaginationParams } from "@/server/core/pagination";
-import { createUserSchema } from "@/server/dtos/user.dto";
-import * as UserService from "@/server/services/user.service";
+import { requireRole } from "@/lib/core/auth-context";
+import { validateBody } from "@/lib/core/validator";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
+import { parsePaginationParams } from "@/lib/core/pagination";
+import { createUserSchema } from "@/types/dtos/user.dto";
+import * as UserService from "@/services/user.service";
 
 export async function GET(req: NextRequest) {
   try {

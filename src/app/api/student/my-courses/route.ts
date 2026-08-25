@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
-import { requireRole } from "@/server/core/auth-context";
-import { successResponse, handleApiError } from "@/server/core/api-response";
+import { requireRole } from "@/lib/core/auth-context";
+import { successResponse, handleApiError } from "@/lib/core/api-response";
 import { connectToDatabase } from "@/lib/db";
-import Enrollment from "@/models/Enrollment";
-import Course from "@/models/Course";
-import Assignment from "@/models/Assignment";
-import LiveClass from "@/models/LiveClass";
-import Exam from "@/models/Exam";
-import Announcement from "@/models/Announcement";
-import CourseMaterial from "@/models/CourseMaterial";
+import Enrollment from "@/lib/models/Enrollment";
+import Course from "@/lib/models/Course";
+import Assignment from "@/lib/models/Assignment";
+import LiveClass from "@/lib/models/LiveClass";
+import Exam from "@/lib/models/Exam";
+import Announcement from "@/lib/models/Announcement";
+import CourseMaterial from "@/lib/models/CourseMaterial";
 import mongoose from "mongoose";
 
 export async function GET(req: NextRequest) {

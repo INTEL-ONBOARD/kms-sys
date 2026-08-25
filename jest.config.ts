@@ -13,12 +13,12 @@ const config: Config = {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   testMatch: [
-    "<rootDir>/__tests__/**/*.{ts,tsx}",
+    "<rootDir>/tests/**/*.{ts,tsx}",
   ],
   testPathIgnorePatterns: [
     "<rootDir>/node_modules/",
     "<rootDir>/.next/",
-    "<rootDir>/e2e/",
+    "<rootDir>/tests/e2e/",
     "<rootDir>/test.js",
   ],
   collectCoverageFrom: [
