@@ -56,6 +56,15 @@ export async function generateUploadUrl(
     throw new BadRequestError(`File exceeds maximum allowed size of ${maxAllowedLabel}.`);
   }
 
+  if (input.assignmentId) {
+    await connectToDatabase();
+    const AssignmentModel = (await import("@/lib/models/Assignment")).default;
+    const targetAssignment = await AssignmentModel.findById(input.assignmentId).lean();
+    if (targetAssignment && targetAssignment.status === "closed") {
+      throw new BadRequestError("Submissions for this assignment have been closed. File upload is not permitted.");
+    }
+  }
+
   if (user?.role === "lecturer") {
     await connectToDatabase();
     const course = await Course.findById(input.courseId).lean();

@@ -701,3 +701,139 @@ export async function getStudentLiveClasses(userId: string, courseFilter?: strin
     allSessions,
   };
 }
+
+/**
+ * Calculates and updates a student's course progress percentage based on completed coursework and exams.
+ */
+export async function calculateStudentCourseProgress(userId: string, courseId: string): Promise<number> {
+  await connectToDatabase();
+
+  const userObjId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  const courseObjId = mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId;
+  const uIdStr = userId.toString();
+  const cIdStr = courseId.toString();
+
+  const [course, assignments, exams, submissions, enrollment] = await Promise.all([
+    Course.findById(courseObjId).lean(),
+    Assignment.find({ courseId: courseObjId }).lean(),
+    Exam.find({ courseId: courseObjId }).lean(),
+    Submission.find({
+      studentId: { $in: [userObjId, userId] },
+      courseId: { $in: [courseObjId, courseId] },
+    }).lean(),
+    Enrollment.findOne({
+      userId: { $in: [userObjId, userId] },
+      courseId: { $in: [courseObjId, courseId] },
+    }),
+  ]);
+
+  if (!course) return 0;
+
+  const totalAssignments = assignments.length;
+  const totalExams = exams.length;
+
+  const completedAssignments = assignments.filter((assign: any) => {
+    const assignIdStr = assign._id.toString();
+    const sub = submissions.find((s: any) => {
+      const sAssignId = s.assignmentId?._id ? s.assignmentId._id.toString() : s.assignmentId?.toString();
+      const sStudentId = s.studentId?._id ? s.studentId._id.toString() : s.studentId?.toString();
+      return sAssignId === assignIdStr && sStudentId === uIdStr;
+    });
+    return (
+      sub &&
+      (sub.status === "submitted" ||
+        sub.status === "graded" ||
+        sub.status === "late" ||
+        (sub.files && sub.files.length > 0) ||
+        sub.content)
+    );
+  });
+
+  const completedExams = exams.filter((ex: any) => {
+    const res = (ex.results || []).find(
+      (r: any) => (r.studentId?._id ? r.studentId._id.toString() : r.studentId?.toString()) === uIdStr
+    );
+    return (
+      (res && res.marks !== null && res.marks !== undefined) ||
+      ex.status === "completed" ||
+      ex.status === "graded"
+    );
+  });
+
+  let calculatedProgress = 0;
+
+  if (course.assessmentItems && Array.isArray(course.assessmentItems) && course.assessmentItems.length > 0) {
+    let totalWeight = 0;
+    let earnedWeight = 0;
+
+    for (const item of course.assessmentItems) {
+      const weight = Number(item.weight) || 0;
+      if (weight <= 0) continue;
+      totalWeight += weight;
+
+      if (item.type === "attendance") {
+        if (
+          enrollment &&
+          (enrollment as any).attendanceMarks !== undefined &&
+          (enrollment as any).attendanceMarks !== null &&
+          Number((enrollment as any).attendanceMarks) > 0
+        ) {
+          earnedWeight += weight;
+        }
+      } else if (item.type === "exam") {
+        if (completedExams.length > 0) {
+          earnedWeight += weight;
+        }
+      } else {
+        const matchedAssignment = assignments.find(
+          (a: any) =>
+            a.title.trim().toLowerCase() === (item.name || "").trim().toLowerCase() ||
+            (item.type && a.category?.toLowerCase() === item.type.toLowerCase())
+        );
+        if (matchedAssignment) {
+          const isDone = completedAssignments.some(
+            (ca: any) => ca._id.toString() === matchedAssignment._id.toString()
+          );
+          if (isDone) {
+            earnedWeight += weight;
+          }
+        } else if (completedAssignments.length > 0) {
+          const ratio = totalAssignments > 0 ? completedAssignments.length / totalAssignments : 0;
+          earnedWeight += weight * ratio;
+        }
+      }
+    }
+
+    if (totalWeight > 0) {
+      calculatedProgress = Math.round((earnedWeight / totalWeight) * 100);
+    }
+  }
+
+  if (calculatedProgress === 0) {
+    const totalDeliverables = totalAssignments + totalExams;
+    const completedDeliverables = completedAssignments.length + completedExams.length;
+
+    if (totalDeliverables > 0) {
+      calculatedProgress = Math.round((completedDeliverables / totalDeliverables) * 100);
+    }
+  }
+
+  if (
+    enrollment &&
+    typeof enrollment.progress === "number" &&
+    enrollment.progress > calculatedProgress &&
+    totalAssignments === 0 &&
+    totalExams === 0
+  ) {
+    calculatedProgress = enrollment.progress;
+  }
+
+  const finalProgress = Math.min(100, Math.max(0, calculatedProgress));
+
+  if (enrollment && enrollment.progress !== finalProgress) {
+    await Enrollment.updateOne({ _id: enrollment._id }, { $set: { progress: finalProgress } });
+  }
+
+  return finalProgress;
+}
+

@@ -18,6 +18,7 @@ import {
   GradeSubmissionInput,
   SubmitAssignmentInput,
 } from "@/types/dtos/assignment.dto";
+import { calculateStudentCourseProgress } from "./enrollment.service";
 
 // Ensure User is registered
 User;
@@ -437,6 +438,17 @@ export async function gradeSubmission(input: GradeSubmissionInput) {
     link: `/assignments`,
   });
 
+  // Recalculate enrollment progress for the student
+  try {
+    const studentIdStr = existingSub.studentId?.toString() || "";
+    const courseIdStr = existingSub.courseId?.toString() || (assignmentDoc as any)?.courseId?.toString() || "";
+    if (studentIdStr && courseIdStr) {
+      await calculateStudentCourseProgress(studentIdStr, courseIdStr);
+    }
+  } catch (err) {
+    console.warn("Failed to recalculate course progress after grading:", err);
+  }
+
   return existingSub;
 }
 
@@ -571,6 +583,8 @@ export async function getStudentAssignments(
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     const isOverdue = diffMs < 0;
 
+    const isClosed = a.status === "closed";
+
     let state = "Pending";
     if (sub) {
       if (sub.grade !== null && sub.grade !== undefined) {
@@ -578,12 +592,16 @@ export async function getStudentAssignments(
       } else {
         state = "Submitted";
       }
+    } else if (isClosed) {
+      state = "Closed";
     } else if (isOverdue) {
       state = "Overdue";
     }
 
     let timeLeft = "";
-    if (isOverdue) {
+    if (isClosed) {
+      timeLeft = "Submissions Closed";
+    } else if (isOverdue) {
       const absDays = Math.abs(diffDays);
       timeLeft = absDays === 0 ? "Overdue today" : `Overdue by ${absDays} day${absDays > 1 ? "s" : ""}`;
     } else if (diffDays === 0) {
@@ -597,7 +615,7 @@ export async function getStudentAssignments(
       timeLeft = `${weeks} Week${weeks > 1 ? "s" : ""} Left`;
     }
 
-    const isUrgent = !sub && diffDays <= 3 && diffDays >= 0;
+    const isUrgent = !sub && !isClosed && diffDays <= 3 && diffDays >= 0;
 
     let weight = 20;
     if (a.courseId?.assessmentItems && Array.isArray(a.courseId.assessmentItems)) {
@@ -637,6 +655,9 @@ export async function getStudentAssignments(
       category: a.category || "Homework",
       isOverdue,
       isUrgent,
+      isClosed,
+      allowSubmissions: !isClosed,
+      assignmentStatus: a.status || "open",
       timeLeft,
       status: state,
       submission: sub
@@ -668,6 +689,87 @@ export async function getStudentAssignments(
 }
 
 /**
+ * Updates an assignment (e.g., closing submissions, extending deadlines, updating details).
+ */
+export async function updateAssignment(
+  assignmentId: string,
+  userId: string,
+  userName: string,
+  input: UpdateAssignmentInput
+) {
+  await connectToDatabase();
+
+  const assignment = await Assignment.findById(assignmentId).populate("courseId");
+  if (!assignment) {
+    throw new NotFoundError("Assignment not found");
+  }
+
+  const course: any = assignment.courseId;
+  let deadlineExtended = false;
+  const oldDueDate = assignment.dueDate ? new Date(assignment.dueDate) : null;
+  let newDueDate: Date | null = null;
+
+  if (input.title) {
+    assignment.title = input.title.trim();
+  }
+  if (input.description !== undefined) {
+    assignment.description = input.description;
+  }
+  if (input.maxPoints !== undefined || input.points !== undefined) {
+    assignment.maxPoints = Number(input.maxPoints ?? input.points) || 100;
+  }
+  if (input.category) {
+    assignment.category = input.category;
+  }
+  if (input.attachmentUrl !== undefined) {
+    assignment.attachmentUrl = input.attachmentUrl;
+  }
+  if (input.attachmentName !== undefined) {
+    assignment.attachmentName = input.attachmentName;
+  }
+  if (input.attachmentSize !== undefined) {
+    assignment.attachmentSize = Number(input.attachmentSize) || 0;
+  }
+  if (input.fileKey !== undefined) {
+    assignment.fileKey = input.fileKey;
+  }
+  if (input.status) {
+    assignment.status = input.status === "closed" ? "closed" : input.status === "graded" ? "graded" : "open";
+  }
+
+  if (input.dueDate) {
+    const parsedDate = new Date(input.dueDate);
+    if (isNaN(parsedDate.getTime())) {
+      throw new BadRequestError("Invalid due date format");
+    }
+    if (oldDueDate && parsedDate.getTime() > oldDueDate.getTime()) {
+      deadlineExtended = true;
+    }
+    assignment.dueDate = parsedDate;
+    newDueDate = parsedDate;
+  }
+
+  await assignment.save();
+
+  // If deadline was extended, notify enrolled students
+  if (deadlineExtended && newDueDate && course?._id) {
+    const enrollments = await Enrollment.find({ courseId: course._id }).lean();
+    if (enrollments.length > 0) {
+      const courseTitle = course.title || "Course";
+      const notifications = enrollments.map((e) => ({
+        userId: e.userId,
+        type: "assignment",
+        message: `Deadline Extended: "${assignment.title}" in ${courseTitle} (New Due: ${newDueDate.toLocaleDateString()})`,
+        link: "/assignments",
+      }));
+      await Notification.insertMany(notifications);
+    }
+  }
+
+  return assignment;
+}
+
+/**
  * Creates or updates a student submission for an assignment.
  */
 export async function submitAssignment(
@@ -679,6 +781,10 @@ export async function submitAssignment(
   const assignment = await Assignment.findById(input.assignmentId);
   if (!assignment) {
     throw new NotFoundError("Assignment not found");
+  }
+
+  if (assignment.status === "closed") {
+    throw new BadRequestError("Submissions for this assignment have been closed. No further submissions or file uploads are accepted.");
   }
 
   const now = new Date();
@@ -714,6 +820,16 @@ export async function submitAssignment(
     await Assignment.findByIdAndUpdate(input.assignmentId, {
       $inc: { submissionsCount: 1 },
     });
+  }
+
+  // Recalculate enrollment progress for the student
+  try {
+    const courseIdStr = input.courseId?.toString() || assignment.courseId?.toString() || "";
+    if (courseIdStr) {
+      await calculateStudentCourseProgress(userId, courseIdStr);
+    }
+  } catch (err) {
+    console.warn("Failed to recalculate course progress after submission:", err);
   }
 
   return {

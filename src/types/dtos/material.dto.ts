@@ -5,6 +5,7 @@ export const generateUploadUrlSchema = z.object({
   fileType: z.string().min(1, "fileType is required").trim(),
   fileSize: z.number().positive("fileSize must be positive").optional(),
   courseId: z.string().min(1, "courseId is required").trim(),
+  assignmentId: z.string().optional(),
 });
 
 export const createMaterialSchema = z.object({
