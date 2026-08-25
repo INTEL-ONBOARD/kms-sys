@@ -7,6 +7,7 @@ export interface CourseGradeItem {
   code: string;
   credits?: number;
   qualityPoints?: number;
+  gpaPoint?: number;
   assignments: string;
   courseWork: string;
   finalExam: string;
@@ -46,13 +47,14 @@ export function generateCSVReport(reportData: StudentReportData): string {
   lines.push(``); // Empty row separator
 
   // Table headers
-  lines.push(`"Course Title","Course Code","Credits","Assignments","Course Work 1","Final Exam","Attendance","Grade"`);
+  lines.push(`"Course Title","Course Code","Credits","Module GPA","Assignments","Course Work 1","Final Exam","Attendance","Grade"`);
 
   // Data rows
   reportData.grades.forEach((item) => {
     const cleanTitle = item.title.replace(/"/g, '""');
     const cleanCode = item.code.replace(/"/g, '""');
     const cleanCredits = String(item.credits || 3);
+    const cleanModuleGPA = typeof item.gpaPoint === 'number' ? item.gpaPoint.toFixed(1) : '--';
     const cleanAssignments = item.assignments.replace(/"/g, '""');
     const cleanCourseWork = item.courseWork.replace(/"/g, '""');
     const cleanFinalExam = item.finalExam.replace(/"/g, '""');
@@ -60,7 +62,7 @@ export function generateCSVReport(reportData: StudentReportData): string {
     const cleanGrade = item.grade.replace(/"/g, '""');
 
     lines.push(
-      `"${cleanTitle}","${cleanCode}","${cleanCredits}","${cleanAssignments}","${cleanCourseWork}","${cleanFinalExam}","${cleanAttendance}","${cleanGrade}"`
+      `"${cleanTitle}","${cleanCode}","${cleanCredits}","${cleanModuleGPA}","${cleanAssignments}","${cleanCourseWork}","${cleanFinalExam}","${cleanAttendance}","${cleanGrade}"`
     );
   });
 
@@ -114,6 +116,7 @@ export function generatePrintableHTML(reportData: StudentReportData): string {
         <div style="font-size: 10px; font-weight: 600; color: #64748B; margin-top: 2px; font-family: monospace;">CODE: ${course.code}</div>
       </td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 700; color: #1E293B; font-size: 12px;">${course.credits || 3}</td>
+      <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 800; color: #D97706; font-size: 12px;">${typeof course.gpaPoint === 'number' ? course.gpaPoint.toFixed(1) : '--'}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.assignments}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.courseWork}</td>
       <td style="padding: 9px 14px; border-bottom: 1px solid #E5E7EB; text-align: center; font-weight: 600; color: #334155; font-size: 12px;">${course.finalExam}</td>
@@ -502,6 +505,7 @@ export function generatePrintableHTML(reportData: StudentReportData): string {
               <tr>
                 <th>Course Details</th>
                 <th class="center">Credits</th>
+                <th class="center">GPA</th>
                 <th class="center">Assignments</th>
                 <th class="center">Coursework</th>
                 <th class="center">Final Exam</th>

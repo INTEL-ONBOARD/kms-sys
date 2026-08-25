@@ -117,7 +117,7 @@ export async function getStudentDashboard(userId: string) {
   const enrollments = await Enrollment.find({
     $or: [{ userId: userObjectId }, { userId }],
   })
-    .populate("courseId", "title instructor category schedule colorCode")
+    .populate("courseId", "title instructor category schedule colorCode credits")
     .sort({ createdAt: -1 })
     .lean();
 
@@ -211,15 +211,16 @@ export async function getStudentDashboard(userId: string) {
           .lean()
       : [];
 
-  // 7. Calculate dynamic Credits, Attendance, and GPA
+  // 7. Calculate dynamic Credits, Total Courses, Attendance, and GPA based on enrolled courses
   let credits = 0;
   let attendance = 0;
   let gpa = "0.0";
 
   if (validEnrollments.length > 0) {
+    // Total credits sum based on assigned course credits
     credits = validEnrollments.reduce((sum: number, e: any) => {
-      const prog = typeof e.progress === "number" ? e.progress : 0;
-      return sum + (prog >= 100 ? 4 : Math.floor((prog / 100) * 4));
+      const courseCr = typeof e.courseId?.credits === "number" ? e.courseId.credits : 3;
+      return sum + courseCr;
     }, 0);
 
     const totalProgress = validEnrollments.reduce(
@@ -242,6 +243,7 @@ export async function getStudentDashboard(userId: string) {
 
   return {
     enrollments: validEnrollments,
+    totalCourses: validEnrollments.length,
     assignments,
     exams,
     liveClasses,
