@@ -47,12 +47,34 @@ export async function PATCH(req: NextRequest) {
 
     const liveClass = await ScheduleService.updateLiveClass(classId, updateFields);
 
+    const isReschedule = updateFields.date || updateFields.time || updateFields.startTime || updateFields.location;
+
     return successResponse(
       { liveClass },
-      "Lecture recording & session materials updated successfully",
+      isReschedule
+        ? "Class session rescheduled successfully! Enrolled students notified."
+        : "Class details updated successfully",
       200
     );
   } catch (error) {
     return handleApiError(error, "PATCH /api/lecturer/schedule");
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await requireRole(req, ["lecturer", "super_admin", "admin"]);
+    const { searchParams } = new URL(req.url);
+    const classId = searchParams.get("classId") || searchParams.get("id");
+
+    if (!classId) {
+      return successResponse(undefined, "Missing class ID", 400);
+    }
+
+    const result = await ScheduleService.deleteLiveClass(classId);
+
+    return successResponse(result, "Class session cancelled successfully", 200);
+  } catch (error) {
+    return handleApiError(error, "DELETE /api/lecturer/schedule");
   }
 }

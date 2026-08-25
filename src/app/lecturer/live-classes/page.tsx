@@ -13,19 +13,24 @@ import {
   FiCheck, 
   FiExternalLink, 
   FiFileText,
-  FiRefreshCw
+  FiRefreshCw,
+  FiMapPin,
+  FiEdit3
 } from "react-icons/fi";
 import { MdVideoLibrary } from "react-icons/md";
 import QuickActionModal from "@/Components/lecturer/QuickActionModal";
+import RescheduleClassModal from "@/Components/lecturer/RescheduleClassModal";
 import { useToast } from "@/Components/ToastProvider";
 
 interface LiveClassItem {
   _id: string;
   title: string;
   description?: string;
-  courseId?: { title: string; category?: string };
+  courseId?: { _id?: string; title: string; category?: string };
   startTime: string;
   endTime: string;
+  classType?: "online" | "physical";
+  location?: string;
   meetingLink?: string;
   recordingUrl?: string;
   materialId?: { _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string };
@@ -37,6 +42,7 @@ interface LiveClassItem {
 export default function LecturerLiveClassesPage() {
   const toast = useToast();
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [reschedulingClass, setReschedulingClass] = useState<LiveClassItem | null>(null);
   const [liveClasses, setLiveClasses] = useState<LiveClassItem[]>([]);
   const [hasCourses, setHasCourses] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
@@ -254,6 +260,7 @@ export default function LecturerLiveClassesPage() {
             const hasRecording = !!c.recordingUrl;
             const isLive = c.status === 'live';
             const isEnded = c.status === 'ended';
+            const isPhysical = c.classType === 'physical';
 
             return (
               <div
@@ -267,15 +274,26 @@ export default function LecturerLiveClassesPage() {
                         ? "bg-red-50 text-red-600"
                         : hasRecording
                         ? "bg-purple-50 text-purple-600"
+                        : isPhysical
+                        ? "bg-teal-50 text-teal-600"
                         : "bg-[#EEF2FF] text-[#5A67D8]"
                     }`}
                   >
-                    {hasRecording ? <MdVideoLibrary /> : <FiVideo />}
+                    {hasRecording ? <MdVideoLibrary /> : isPhysical ? <FiMapPin /> : <FiVideo />}
                   </div>
 
                   <div>
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <h3 className="font-bold text-[#2D3748] text-base">{c.title}</h3>
+                      
+                      {/* Delivery Mode Badge */}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 ${
+                        isPhysical ? "bg-teal-100 text-teal-800" : "bg-blue-100 text-blue-800"
+                      }`}>
+                        {isPhysical ? <FiMapPin className="text-[10px]" /> : <FiVideo className="text-[10px]" />}
+                        {isPhysical ? "Physical Classroom" : "Online Live"}
+                      </span>
+
                       {isLive && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-100 text-red-600 uppercase animate-pulse">
                           Live Now
@@ -284,6 +302,11 @@ export default function LecturerLiveClassesPage() {
                       {c.status === "upcoming" && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-[#EEF2FF] text-[#5A67D8] uppercase">
                           Upcoming
+                        </span>
+                      )}
+                      {c.status === "rescheduled" && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-800 uppercase">
+                          Rescheduled
                         </span>
                       )}
                       {isEnded && (
@@ -304,6 +327,14 @@ export default function LecturerLiveClassesPage() {
                       <span>{formatDate(c.startTime)}</span>
                       <span>&middot;</span>
                       <span><FiClock className="inline mr-1" /> {formatTime(c.startTime)} - {formatTime(c.endTime)}</span>
+                      {c.location && (
+                        <>
+                          <span>&middot;</span>
+                          <span className="text-gray-600 font-semibold flex items-center gap-1">
+                            <FiMapPin className="text-teal-600 text-xs" /> {c.location}
+                          </span>
+                        </>
+                      )}
                     </p>
 
                     {c.description && (
@@ -338,23 +369,32 @@ export default function LecturerLiveClassesPage() {
                 </div>
 
                 {/* Lecturer Action Buttons */}
-                <div className="flex flex-wrap items-center gap-3 self-end lg:self-center">
+                <div className="flex flex-wrap items-center gap-2.5 self-end lg:self-center">
+                  {/* Reschedule Button */}
+                  <button
+                    onClick={() => setReschedulingClass(c)}
+                    className="px-3.5 py-2 bg-gray-50 hover:bg-gray-100 text-[#1E293B] border border-gray-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <FiCalendar className="text-indigo-600" />
+                    <span>Reschedule Session</span>
+                  </button>
+
                   {/* Upload / Edit Missed Recording Button */}
                   <button
                     onClick={() => handleOpenUploadRecording(c)}
-                    className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm"
+                    className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
                     <FiUploadCloud className="text-sm" />
-                    {hasRecording ? "Update Recording & Slides" : "Upload Lecture Recording"}
+                    {hasRecording ? "Update Recording" : "Upload Recording"}
                   </button>
 
                   {/* Join Room */}
-                  {c.meetingLink && (
+                  {c.meetingLink && !isPhysical && (
                     <a
                       href={c.meetingLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] transition flex items-center gap-1.5 shadow-sm"
+                      className="px-4 py-2 bg-[#5A67D8] text-white font-bold text-xs rounded-xl hover:bg-[#434190] transition flex items-center gap-1.5 shadow-xs"
                     >
                       <FiVideo /> Host / Join Meeting
                     </a>
@@ -366,11 +406,20 @@ export default function LecturerLiveClassesPage() {
         )}
       </div>
 
-      {/* SCHEDULE MODAL */}
+      {/* SCHEDULE NEW MODAL */}
       {showScheduleModal && (
         <QuickActionModal
           type="class"
           onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => fetchClasses()}
+        />
+      )}
+
+      {/* RESCHEDULE EXISTING CLASS MODAL */}
+      {reschedulingClass && (
+        <RescheduleClassModal
+          initialClass={reschedulingClass}
+          onClose={() => setReschedulingClass(null)}
           onSuccess={() => fetchClasses()}
         />
       )}

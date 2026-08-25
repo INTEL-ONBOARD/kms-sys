@@ -12,12 +12,13 @@ import {
   FiExternalLink, 
   FiRefreshCw, 
   FiSearch,
-  FiChevronDown,
+  FiChevronDown, 
   FiAlertCircle,
   FiBookOpen,
   FiArrowRight,
   FiDownload,
-  FiFileText
+  FiFileText,
+  FiMapPin
 } from 'react-icons/fi';
 import { MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
 import Sidebar from '@/Components/Sidebar';
@@ -37,12 +38,14 @@ interface LiveSession {
   endTimeFormatted: string;
   dateFormatted: string;
   dayOfWeek: string;
+  classType?: "online" | "physical";
+  location?: string;
   meetingLink: string;
   recordingUrl: string;
   material?: { _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string };
   materials?: Array<{ _id: string; title: string; fileName: string; fileUrl: string; fileSize?: number; materialType?: string }>;
   resources: string[];
-  status: "live" | "upcoming" | "ended" | "cancelled";
+  status: "live" | "upcoming" | "ended" | "cancelled" | "rescheduled";
   isLiveNow: boolean;
   isPast: boolean;
 }
@@ -343,16 +346,28 @@ function LiveClassesContent() {
                     className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 transition hover:bg-[#F7FAFC]"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#5A67D8] flex items-center justify-center text-xl flex-shrink-0 mt-0.5">
-                        <FiVideo />
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 mt-0.5 ${
+                        session.classType === "physical" ? "bg-teal-50 text-teal-600" : "bg-indigo-50 text-[#5A67D8]"
+                      }`}>
+                        {session.classType === "physical" ? <FiMapPin /> : <FiVideo />}
                       </div>
 
                       <div>
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 ${
+                            session.classType === "physical" ? "bg-teal-100 text-teal-800" : "bg-blue-100 text-blue-800"
+                          }`}>
+                            {session.classType === "physical" ? "Physical Classroom" : "Online Live"}
+                          </span>
                           <span className="text-[10px] font-bold text-[#5A67D8] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full uppercase">
                             {session.courseCategory}
                           </span>
                           <span className="text-xs font-bold text-gray-700">{session.courseTitle}</span>
+                          {session.status === "rescheduled" && (
+                            <span className="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase">
+                              Rescheduled
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="font-bold text-[#111827] text-base">{session.title}</h3>
@@ -362,6 +377,14 @@ function LiveClassesContent() {
                           <span className="flex items-center gap-1"><FiCalendar className="text-gray-400" /> {session.dateFormatted}</span>
                           <span>&bull;</span>
                           <span className="flex items-center gap-1"><FiClock className="text-gray-400" /> {session.startTimeFormatted} - {session.endTimeFormatted}</span>
+                          {session.location && (
+                            <>
+                              <span>&bull;</span>
+                              <span className="flex items-center gap-1 font-semibold text-gray-700">
+                                <FiMapPin className="text-teal-600 text-xs" /> {session.location}
+                              </span>
+                            </>
+                          )}
                         </p>
 
                         {(session.material || (session.materials && session.materials.length > 0)) && (
