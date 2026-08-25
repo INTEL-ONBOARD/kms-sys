@@ -23,7 +23,7 @@ const userSchema = new Schema(
     // --- User Account Status ---
     status: { 
       type: String, 
-      enum: ["active", "inactive", "suspended"], 
+      enum: ["active", "inactive", "suspended", "pending"], 
       default: "active" 
     },
 

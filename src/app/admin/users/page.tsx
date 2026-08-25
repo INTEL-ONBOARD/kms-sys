@@ -274,6 +274,25 @@ export default function UserAdminPage() {
     }
   };
 
+  // Handle Approve Lecturer
+  const handleApproveLecturer = async (user: UserData) => {
+    try {
+      const res = await fetch(`/api/admin/users/${user._id}/approve-lecturer`, {
+        method: 'PUT',
+      });
+      if (res.ok) {
+        toast.success(`Lecturer ${user.name} approved successfully`);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        toast.error(`Failed to approve lecturer: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network error while approving lecturer");
+    }
+  };
+
   // Helper Functions
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
@@ -285,6 +304,7 @@ export default function UserAdminPage() {
       case 'active': return 'bg-green-100 text-green-700';
       case 'suspended': return 'bg-red-100 text-red-700';
       case 'inactive': return 'bg-gray-100 text-gray-700';
+      case 'pending': return 'bg-amber-100 text-amber-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -386,6 +406,7 @@ export default function UserAdminPage() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
               </select>
             </div>
           </div>
@@ -434,7 +455,7 @@ export default function UserAdminPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize flex w-max items-center ${getStatusBadge(user.status || 'inactive')}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'active' ? 'bg-green-500' : user.status === 'suspended' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'active' ? 'bg-green-500' : user.status === 'suspended' ? 'bg-red-500' : user.status === 'pending' ? 'bg-amber-500' : 'bg-gray-500'}`}></span>
                             {user.status || 'inactive'}
                           </span>
                         </td>
@@ -459,6 +480,15 @@ export default function UserAdminPage() {
                         <td className="px-6 py-4 text-gray-500">{formatDate(user.createdAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end space-x-2">
+                            {user.role === 'lecturer' && user.status === 'pending' && (
+                              <button 
+                                onClick={() => handleApproveLecturer(user)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                title="Approve Lecturer"
+                              >
+                                <FiCheck className="text-base" />
+                              </button>
+                            )}
                             <button 
                               onClick={() => {
                                 setSelectedUser(user);
@@ -667,6 +697,7 @@ export default function UserAdminPage() {
                   <option value="active">Active</option>
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
                 </select>
               </div>
 
