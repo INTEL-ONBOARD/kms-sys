@@ -15,7 +15,7 @@ const examSchema = new Schema(
     maxMarks: { type: Number, default: 100 },
     status: {
       type: String,
-      enum: ["scheduled", "ongoing", "completed", "cancelled"],
+      enum: ["scheduled", "ongoing", "completed", "cancelled", "rescheduled"],
       default: "scheduled",
     },
     results: [
