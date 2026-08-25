@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import DashHeader from '@/Components/DashHeader'; 
 import AdminSidebar from '@/Components/AdminSidebar';
-import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail } from 'react-icons/fi';
+import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail, FiCheck } from 'react-icons/fi';
 import { useToast } from '@/Components/ToastProvider';
 
 interface UserData {
@@ -57,6 +57,33 @@ export default function UserAdminPage() {
     role: 'student',
   });
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batches, setBatches] = useState<{ _id: string; name: string }[]>([]);
+  const [batchFormData, setBatchFormData] = useState({
+    batchId: '',
+    accessStatus: 'Approved'
+  });
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch('/api/admin/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data.batches || []);
+        if (data.batches && data.batches.length > 0) {
+          setBatchFormData(prev => ({ ...prev, batchId: data.batches[0]._id }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBatches();
+  }, []);
 
   // Fetch Users Function
   const fetchUsers = async () => {
@@ -156,6 +183,32 @@ export default function UserAdminPage() {
       toast.error('Network Error: Unable to send invitation.');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  // Handle Edit User Submit
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBatchLoading(true);
+    try {
+      const res = await fetch('/api/admin/users/bulk-report-access', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsBatchModalOpen(false);
+        fetchUsers();
+        toast.success(data.message || 'Batch access updated successfully');
+      } else {
+        toast.error('Failed to update batch access: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Network Error: Unable to update batch access.');
+    } finally {
+      setBatchLoading(false);
     }
   };
 
@@ -262,6 +315,13 @@ export default function UserAdminPage() {
             </div>
             {/* Main Add New User Button - Updated Color to match image */}
             <div className="flex gap-3 mt-4 md:mt-0">
+              <button 
+                onClick={() => setIsBatchModalOpen(true)}
+                className="bg-white border border-green-500 text-green-600 hover:bg-green-50 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiCheck className="mr-2 text-lg" />
+                Batch Access
+              </button>
               <button 
                 onClick={() => setIsInviteModalOpen(true)}
                 className="bg-white border border-[#5551FF] text-[#5551FF] hover:bg-[#5551FF]/5 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
@@ -516,6 +576,69 @@ export default function UserAdminPage() {
               <button type="submit" disabled={inviteLoading} className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
                 {inviteLoading ? 'Sending...' : 'Send Invitation'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Access Modal */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Batch Report Access</h2>
+              <button onClick={() => setIsBatchModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
+                <select 
+                  required
+                  value={batchFormData.batchId} 
+                  onChange={(e) => setBatchFormData({...batchFormData, batchId: e.target.value})} 
+                  className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Select a batch</option>
+                  {batches.map((batch) => (
+                    <option key={batch._id} value={batch._id}>{batch.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="accessStatus" 
+                      value="Approved" 
+                      checked={batchFormData.accessStatus === 'Approved'} 
+                      onChange={(e) => setBatchFormData({...batchFormData, accessStatus: e.target.value})}
+                      className="text-green-600 focus:ring-green-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Approve Access</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="accessStatus" 
+                      value="Locked" 
+                      checked={batchFormData.accessStatus === 'Locked'} 
+                      onChange={(e) => setBatchFormData({...batchFormData, accessStatus: e.target.value})}
+                      className="text-red-600 focus:ring-red-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Lock Access</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsBatchModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-2.5 font-bold transition">Cancel</button>
+                <button type="submit" disabled={batchLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
+                  {batchLoading ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
