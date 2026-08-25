@@ -32,3 +32,26 @@ export async function sendOTP(email: string, otp: string) {
     throw new Error("Failed to send OTP email");
   }
 }
+
+export async function sendLecturerApprovalEmail(email: string) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Account Approved - Wise East University",
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2 style="color: #333;">Account Approved</h2>
+        <p>Your lecturer account at Wise East University has been approved.</p>
+        <p>You can now log in and access your dashboard.</p>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Approval email sent to ${email}`);
+  } catch (error) {
+    console.error("Error sending approval email:", error);
+    // Don't throw to prevent blocking the approval flow if email fails
+  }
+}

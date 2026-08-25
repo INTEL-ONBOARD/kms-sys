@@ -37,7 +37,7 @@ export async function signup(input: SignupInput) {
     email: input.email.toLowerCase(),
     password: hashedPassword,
     role: input.role || "student",
-    status: "active",
+    status: input.role === "lecturer" ? "pending" : "active",
     isActivated: true, // Direct signup accounts are auto-activated
   });
 

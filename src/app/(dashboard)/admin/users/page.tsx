@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import DashHeader from '@/components/shared/DashHeader'; 
+import DashHeader from '@/components/shared/DashHeader';
 import AdminSidebar from '@/components/shared/AdminSidebar';
-import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail } from 'react-icons/fi';
+import { FiSearch, FiEdit2, FiTrash2, FiMoreVertical, FiUserPlus, FiFilter, FiX, FiMail, FiCheck } from 'react-icons/fi';
 import { useToast } from '@/contexts/ToastContext';
 
 interface UserData {
@@ -21,7 +21,7 @@ export default function UserAdminPage() {
   const toast = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -38,15 +38,15 @@ export default function UserAdminPage() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
+
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
   // Form States for Add/Edit (Added Demo Password here)
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    email: '', 
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
     password: 'Demo@1234', // Default Demo Password
-    role: 'student', 
+    role: 'student',
     status: 'active',
     reportApproved: false,
   });
@@ -57,6 +57,33 @@ export default function UserAdminPage() {
     role: 'student',
   });
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batches, setBatches] = useState<{ _id: string; name: string }[]>([]);
+  const [batchFormData, setBatchFormData] = useState({
+    batchId: '',
+    accessStatus: 'Approved'
+  });
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch('/api/admin/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data.batches || []);
+        if (data.batches && data.batches.length > 0) {
+          setBatchFormData(prev => ({ ...prev, batchId: data.batches[0]._id }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBatches();
+  }, []);
 
   // Fetch Users Function
   const fetchUsers = async () => {
@@ -104,7 +131,7 @@ export default function UserAdminPage() {
   };
 
   // --- Action Handlers ---
-  
+
   // Handle Add User Submit
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,14 +141,14 @@ export default function UserAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      
+
       const data = await res.json(); // Read backend response
 
       if (res.ok) {
         setIsAddModalOpen(false);
         // Reset form data and re-apply Demo Password
         setFormData({ name: '', email: '', password: 'Demo@1234', role: 'student', status: 'active', reportApproved: false });
-        fetchUsers(); 
+        fetchUsers();
         toast.success(`User "${formData.name}" added successfully! Demo password: Demo@1234`);
       } else {
         toast.error("Failed to add user: " + (data.message || "Unknown error occurred"));
@@ -160,6 +187,32 @@ export default function UserAdminPage() {
   };
 
   // Handle Edit User Submit
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBatchLoading(true);
+    try {
+      const res = await fetch('/api/admin/users/bulk-report-access', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsBatchModalOpen(false);
+        fetchUsers();
+        toast.success(data.message || 'Batch access updated successfully');
+      } else {
+        toast.error('Failed to update batch access: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Network Error: Unable to update batch access.');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // Handle Edit User Submit
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
@@ -171,7 +224,7 @@ export default function UserAdminPage() {
       });
       if (res.ok) {
         setIsEditModalOpen(false);
-        fetchUsers(); 
+        fetchUsers();
         toast.success("User updated successfully");
       } else {
         toast.error("Failed to update user");
@@ -191,7 +244,7 @@ export default function UserAdminPage() {
       });
       if (res.ok) {
         setIsDeleteModalOpen(false);
-        fetchUsers(); 
+        fetchUsers();
         toast.success("User deleted successfully");
       } else {
         toast.error("Failed to delete user");
@@ -221,10 +274,29 @@ export default function UserAdminPage() {
     }
   };
 
+  // Handle Approve Lecturer
+  const handleApproveLecturer = async (user: UserData) => {
+    try {
+      const res = await fetch(`/api/admin/users/${user._id}/approve-lecturer`, {
+        method: 'PUT',
+      });
+      if (res.ok) {
+        toast.success(`Lecturer ${user.name} approved successfully`);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        toast.error(`Failed to approve lecturer: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Network error while approving lecturer");
+    }
+  };
+
   // Helper Functions
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toISOString().split('T')[0]; 
+    return new Date(dateString).toISOString().split('T')[0];
   };
 
   const getStatusBadge = (status: string) => {
@@ -232,6 +304,7 @@ export default function UserAdminPage() {
       case 'active': return 'bg-green-100 text-green-700';
       case 'suspended': return 'bg-red-100 text-red-700';
       case 'inactive': return 'bg-gray-100 text-gray-700';
+      case 'pending': return 'bg-amber-100 text-amber-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -239,7 +312,7 @@ export default function UserAdminPage() {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'super_admin': return 'bg-purple-100 text-purple-700';
-      case 'instructor': 
+      case 'instructor':
       case 'lecturer': return 'bg-blue-100 text-blue-700';
       case 'student': return 'bg-indigo-100 text-indigo-700';
       default: return 'bg-gray-100 text-gray-700';
@@ -254,7 +327,7 @@ export default function UserAdminPage() {
         <DashHeader />
 
         <div className="flex-1 overflow-y-auto px-8 pb-12 pt-6 relative">
-          
+
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-widest">User Administration</h1>
@@ -262,14 +335,21 @@ export default function UserAdminPage() {
             </div>
             {/* Main Add New User Button - Updated Color to match image */}
             <div className="flex gap-3 mt-4 md:mt-0">
-              <button 
+              <button
+                onClick={() => setIsBatchModalOpen(true)}
+                className="bg-white border border-green-500 text-green-600 hover:bg-green-50 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
+              >
+                <FiCheck className="mr-2 text-lg" />
+                Batch Access
+              </button>
+              <button
                 onClick={() => setIsInviteModalOpen(true)}
                 className="bg-white border border-[#5551FF] text-[#5551FF] hover:bg-[#5551FF]/5 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
               >
                 <FiMail className="mr-2 text-lg" />
                 Invite User
               </button>
-              <button 
+              <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-[#5551FF] hover:bg-[#423ee0] text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center transition duration-300"
               >
@@ -282,9 +362,9 @@ export default function UserAdminPage() {
           <div className="bg-white p-4 rounded-t-xl border border-gray-200 border-b-0 flex flex-col sm:flex-row justify-between gap-4">
             <div className="relative w-full sm:max-w-md">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search users by name or email..." 
+              <input
+                type="text"
+                placeholder="Search users by name or email..."
                 className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -293,7 +373,7 @@ export default function UserAdminPage() {
 
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <FiFilter className="text-gray-400" />
-              <select 
+              <select
                 className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
@@ -306,7 +386,7 @@ export default function UserAdminPage() {
                 <option value="Art">Art</option>
               </select>
 
-              <select 
+              <select
                 className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
@@ -317,7 +397,7 @@ export default function UserAdminPage() {
                 <option value="super_admin">Admin</option>
               </select>
 
-              <select 
+              <select
                 className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none cursor-pointer"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -326,6 +406,7 @@ export default function UserAdminPage() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
               </select>
             </div>
           </div>
@@ -345,7 +426,7 @@ export default function UserAdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  
+
                   {loading ? (
                     <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>
                   ) : users.length === 0 ? (
@@ -374,7 +455,7 @@ export default function UserAdminPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize flex w-max items-center ${getStatusBadge(user.status || 'inactive')}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'active' ? 'bg-green-500' : user.status === 'suspended' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.status === 'active' ? 'bg-green-500' : user.status === 'suspended' ? 'bg-red-500' : user.status === 'pending' ? 'bg-amber-500' : 'bg-gray-500'}`}></span>
                             {user.status || 'inactive'}
                           </span>
                         </td>
@@ -382,11 +463,10 @@ export default function UserAdminPage() {
                           {user.role === 'student' ? (
                             <button
                               onClick={() => handleToggleReportApproval(user)}
-                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                                user.reportApproved
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                              }`}
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${user.reportApproved
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                }`}
                               title="Click to toggle official report download permission"
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${user.reportApproved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
@@ -399,7 +479,16 @@ export default function UserAdminPage() {
                         <td className="px-6 py-4 text-gray-500">{formatDate(user.createdAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end space-x-2">
-                            <button 
+                            {user.role === 'lecturer' && user.status === 'pending' && (
+                              <button
+                                onClick={() => handleApproveLecturer(user)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                title="Approve Lecturer"
+                              >
+                                <FiCheck className="text-base" />
+                              </button>
+                            )}
+                            <button
                               onClick={() => {
                                 setSelectedUser(user);
                                 setFormData({
@@ -414,7 +503,7 @@ export default function UserAdminPage() {
                             >
                               <FiEdit2 className="text-base" />
                             </button>
-                            <button 
+                            <button
                               onClick={() => {
                                 setSelectedUser(user);
                                 setIsDeleteModalOpen(true);
@@ -446,7 +535,7 @@ export default function UserAdminPage() {
       </main>
 
       {/* --- MODALS --- */}
-      
+
       {/* Add User Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -458,29 +547,29 @@ export default function UserAdminPage() {
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <input required type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
-              
+
               {/* Password Field: Auto-filled with Demo Password */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password (Demo)</label>
-                <input required type="text" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full border rounded-lg p-2 bg-gray-50 text-gray-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <input required type="text" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full border rounded-lg p-2 bg-gray-50 text-gray-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
                 <p className="text-xs text-orange-600 mt-1 font-medium">* Instruct user to change this from their profile after first login.</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="super_admin">Admin</option>
                 </select>
               </div>
-              
+
               {/* Modal Button - Updated Color to match image */}
               <button type="submit" className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition">Create User</button>
             </form>
@@ -499,15 +588,15 @@ export default function UserAdminPage() {
             <form onSubmit={handleInviteSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input required type="text" value={inviteFormData.name} onChange={(e) => setInviteFormData({...inviteFormData, name: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <input required type="text" value={inviteFormData.name} onChange={(e) => setInviteFormData({ ...inviteFormData, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input required type="email" value={inviteFormData.email} onChange={(e) => setInviteFormData({...inviteFormData, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <input required type="email" value={inviteFormData.email} onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={inviteFormData.role} onChange={(e) => setInviteFormData({...inviteFormData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                <select value={inviteFormData.role} onChange={(e) => setInviteFormData({ ...inviteFormData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="super_admin">Admin</option>
@@ -516,6 +605,69 @@ export default function UserAdminPage() {
               <button type="submit" disabled={inviteLoading} className="w-full bg-[#5551FF] hover:bg-[#423ee0] text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
                 {inviteLoading ? 'Sending...' : 'Send Invitation'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Access Modal */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Batch Report Access</h2>
+              <button onClick={() => setIsBatchModalOpen(false)} className="text-gray-400 hover:text-gray-600"><FiX size={24} /></button>
+            </div>
+            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
+                <select
+                  required
+                  value={batchFormData.batchId}
+                  onChange={(e) => setBatchFormData({ ...batchFormData, batchId: e.target.value })}
+                  className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Select a batch</option>
+                  {batches.map((batch) => (
+                    <option key={batch._id} value={batch._id}>{batch.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accessStatus"
+                      value="Approved"
+                      checked={batchFormData.accessStatus === 'Approved'}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, accessStatus: e.target.value })}
+                      className="text-green-600 focus:ring-green-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Approve Access</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accessStatus"
+                      value="Locked"
+                      checked={batchFormData.accessStatus === 'Locked'}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, accessStatus: e.target.value })}
+                      className="text-red-600 focus:ring-red-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Lock Access</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsBatchModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-2.5 font-bold transition">Cancel</button>
+                <button type="submit" disabled={batchLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg p-2.5 font-bold transition disabled:opacity-70">
+                  {batchLoading ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -532,7 +684,7 @@ export default function UserAdminPage() {
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="super_admin">Admin</option>
@@ -540,10 +692,11 @@ export default function UserAdminPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   <option value="active">Active</option>
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
                 </select>
               </div>
 
