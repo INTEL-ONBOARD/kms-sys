@@ -216,15 +216,28 @@ export default function LecturerStudentsPage() {
                     </td>
                     <td className="px-6 py-4 font-semibold text-gray-700">{s.course}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#5A67D8] rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(0, s.progress))}%` }}
-                          />
-                        </div>
-                        <span className="font-bold text-[#5A67D8]">{s.progress}%</span>
-                      </div>
+                      {(() => {
+                        const progressVal = Math.min(100, Math.max(0, typeof s.progress === "number" ? s.progress : Number(s.progress) || 0));
+                        return (
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  progressVal >= 100
+                                    ? "bg-emerald-500"
+                                    : progressVal > 0
+                                    ? "bg-[#5A67D8]"
+                                    : "bg-gray-300"
+                                }`}
+                                style={{ width: `${progressVal}%` }}
+                              />
+                            </div>
+                            <span className={`font-bold ${progressVal >= 100 ? "text-emerald-600" : progressVal > 0 ? "text-[#5A67D8]" : "text-gray-400"}`}>
+                              {progressVal}%
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <span

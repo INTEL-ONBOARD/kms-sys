@@ -11,6 +11,7 @@ import {
   createSafeSearchRegex,
 } from "@/lib/core/pagination";
 import { resolveGradeFromScale } from "@/lib/grading";
+import { calculateStudentCourseProgress } from "./enrollment.service";
 
 interface PopulatedExamDoc extends Omit<ExamDoc, "courseId"> {
   courseId: {
@@ -561,6 +562,20 @@ export async function saveExamGrades(
   }
 
   await exam.save();
+
+  // Recalculate enrollment course progress for all graded students
+  try {
+    const courseIdStr = (exam.courseId as any)?._id?.toString() || exam.courseId?.toString() || "";
+    if (courseIdStr) {
+      await Promise.all(
+        processedResults.map((r) =>
+          calculateStudentCourseProgress(r.studentId.toString(), courseIdStr).catch(() => {})
+        )
+      );
+    }
+  } catch (err) {
+    console.warn("Failed to recalculate course progress after exam grading:", err);
+  }
 
   return {
     exam,

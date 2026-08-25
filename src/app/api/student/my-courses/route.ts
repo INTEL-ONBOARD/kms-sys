@@ -9,6 +9,7 @@ import LiveClass from "@/lib/models/LiveClass";
 import Exam from "@/lib/models/Exam";
 import Announcement from "@/lib/models/Announcement";
 import CourseMaterial from "@/lib/models/CourseMaterial";
+import Submission from "@/lib/models/Submission";
 import mongoose from "mongoose";
 
 export async function GET(req: NextRequest) {
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
     const validCourses = validEnrollments.map((e: any) => e.courseId);
     const validCourseIds = validCourses.map((c: any) => c._id);
 
-    const [assignmentsList, liveClassesList, examsList, announcementsList, materialsList] =
+    const [assignmentsList, liveClassesList, examsList, announcementsList, materialsList, submissionsList] =
       await Promise.all([
         Assignment.find({ courseId: { $in: validCourseIds } }).sort({ dueDate: 1 }).lean(),
         LiveClass.find({ courseId: { $in: validCourseIds } }).sort({ startTime: 1 }).lean(),
@@ -42,12 +43,100 @@ export async function GET(req: NextRequest) {
         CourseMaterial.find({ courseId: { $in: validCourseIds }, isPublished: true })
           .sort({ createdAt: -1 })
           .lean(),
+        Submission.find({
+          studentId: { $in: [userObjectId, userId] },
+          courseId: { $in: validCourseIds },
+        }).lean(),
       ]);
 
     const myCourses = validEnrollments.map((enrollment: any) => {
       const course = enrollment.courseId;
       const cIdStr = course._id ? course._id.toString() : "";
-      const progress = typeof enrollment.progress === "number" ? enrollment.progress : 0;
+      
+      const courseAssignments = assignmentsList.filter((a: any) => a.courseId?.toString() === cIdStr);
+      const courseExams = examsList.filter((ex: any) => ex.courseId?.toString() === cIdStr);
+      const studentSubmissions = submissionsList.filter((s: any) => {
+        const sCourseId = s.courseId?._id ? s.courseId._id.toString() : s.courseId?.toString();
+        return (
+          sCourseId === cIdStr &&
+          (s.status === "submitted" ||
+            s.status === "graded" ||
+            s.status === "late" ||
+            (s.files && s.files.length > 0) ||
+            s.content)
+        );
+      });
+      const completedExams = courseExams.filter((ex: any) => {
+        const res = (ex.results || []).find(
+          (r: any) => (r.studentId?._id ? r.studentId._id.toString() : r.studentId?.toString()) === userId.toString()
+        );
+        return (
+          (res && res.marks !== null && res.marks !== undefined) ||
+          ex.status === "completed" ||
+          ex.status === "graded"
+        );
+      });
+
+      let calculatedProgress = 0;
+      if (course?.assessmentItems && Array.isArray(course.assessmentItems) && course.assessmentItems.length > 0) {
+        let totalWeight = 0;
+        let earnedWeight = 0;
+        for (const item of course.assessmentItems) {
+          const weight = Number(item.weight) || 0;
+          if (weight <= 0) continue;
+          totalWeight += weight;
+          if (item.type === "attendance") {
+            if (
+              enrollment.attendanceMarks !== undefined &&
+              enrollment.attendanceMarks !== null &&
+              Number(enrollment.attendanceMarks) > 0
+            ) {
+              earnedWeight += weight;
+            }
+          } else if (item.type === "exam") {
+            if (completedExams.length > 0) earnedWeight += weight;
+          } else {
+            const matchedAssignment = courseAssignments.find(
+              (a: any) =>
+                a.title.trim().toLowerCase() === (item.name || "").trim().toLowerCase() ||
+                (item.type && a.category?.toLowerCase() === item.type.toLowerCase())
+            );
+            if (matchedAssignment) {
+              const isDone = studentSubmissions.some(
+                (cs: any) =>
+                  (cs.assignmentId?._id ? cs.assignmentId._id.toString() : cs.assignmentId?.toString()) ===
+                  matchedAssignment._id.toString()
+              );
+              if (isDone) earnedWeight += weight;
+            } else if (studentSubmissions.length > 0) {
+              const ratio = courseAssignments.length > 0 ? studentSubmissions.length / courseAssignments.length : 0;
+              earnedWeight += weight * ratio;
+            }
+          }
+        }
+        if (totalWeight > 0) {
+          calculatedProgress = Math.round((earnedWeight / totalWeight) * 100);
+        }
+      }
+
+      if (calculatedProgress === 0) {
+        const totalDeliverables = courseAssignments.length + courseExams.length;
+        const completedDeliverables = studentSubmissions.length + completedExams.length;
+        if (totalDeliverables > 0) {
+          calculatedProgress = Math.round((completedDeliverables / totalDeliverables) * 100);
+        }
+      }
+
+      if (
+        typeof enrollment.progress === "number" &&
+        enrollment.progress > calculatedProgress &&
+        courseAssignments.length === 0 &&
+        courseExams.length === 0
+      ) {
+        calculatedProgress = enrollment.progress;
+      }
+
+      const progress = Math.min(100, Math.max(0, calculatedProgress));
       const isCourseMaterialsVisible = course.published !== false;
 
       const courseMaterials = isCourseMaterialsVisible
@@ -72,7 +161,7 @@ export async function GET(req: NextRequest) {
             }))
         : [];
 
-      const courseAssignments = assignmentsList
+      const formattedAssignments = assignmentsList
         .filter((a: any) => a.courseId?.toString() === cIdStr)
         .map((a: any) => ({
           _id: a._id.toString(),
@@ -107,7 +196,7 @@ export async function GET(req: NextRequest) {
           status: lc.status || "upcoming",
         }));
 
-      const courseExams = examsList
+      const formattedExams = examsList
         .filter((ex: any) => ex.courseId?.toString() === cIdStr)
         .map((ex: any) => ({
           _id: ex._id.toString(),
@@ -220,14 +309,14 @@ export async function GET(req: NextRequest) {
             })
           : "Active",
         modules,
-        assignments: courseAssignments,
-        assignmentCount: courseAssignments.length,
+        assignments: formattedAssignments,
+        assignmentCount: formattedAssignments.length,
         materials: courseMaterials,
         materialCount: courseMaterials.length,
         liveClasses: courseLiveClasses,
         liveClassCount: courseLiveClasses.length,
-        exams: courseExams,
-        examCount: courseExams.length,
+        exams: formattedExams,
+        examCount: formattedExams.length,
         announcements: courseAnnouncements,
         announcementCount: courseAnnouncements.length,
       };
