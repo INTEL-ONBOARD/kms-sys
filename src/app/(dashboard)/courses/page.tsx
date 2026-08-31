@@ -186,7 +186,7 @@ export default function CoursesPage() {
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-[#2D3748] uppercase tracking-wide">
-                  Enrolled Courses & Modules
+                  My Courses & Modules
                 </h1>
                 <span className="bg-[#EEF2FF] text-[#5A67D8] text-xs font-bold px-2.5 py-0.5 rounded-full">
                   {courses.length} Enrolled
@@ -197,14 +197,22 @@ export default function CoursesPage() {
               </p>
             </div>
 
-            <button
-              onClick={() => fetchCourses()}
-              title="Refresh courses"
-              className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:border-[#5A67D8] hover:text-[#5A67D8] rounded-xl shadow-sm transition"
-            >
-              <FiRefreshCw className={`text-sm ${isLoading ? "animate-spin text-[#5A67D8]" : ""}`} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Link
+                href="/student/courses"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#5A67D8] hover:bg-[#434190] rounded-xl shadow-xs transition"
+              >
+                <FiBookOpen className="text-xs" /> Explore New Courses
+              </Link>
+              <button
+                onClick={() => fetchCourses()}
+                title="Refresh courses"
+                className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:border-[#5A67D8] hover:text-[#5A67D8] rounded-xl shadow-sm transition"
+              >
+                <FiRefreshCw className={`text-sm ${isLoading ? "animate-spin text-[#5A67D8]" : ""}`} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* Filters Row */}
@@ -299,16 +307,16 @@ export default function CoursesPage() {
                 ) : (
                   <>
                     <Link
-                      href="/calendar"
+                      href="/student/courses"
                       className="px-5 py-2.5 bg-[#5A67D8] hover:bg-[#434190] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
                     >
-                      <FiCalendar className="text-xs" /> Check Academic Calendar
+                      <FiBookOpen className="text-xs" /> Browse & Enroll in New Courses
                     </Link>
                     <Link
-                      href="/assignments"
+                      href="/calendar"
                       className="px-5 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
                     >
-                      <MdOutlineAssignment className="text-sm text-[#5A67D8]" /> View Coursework & Tasks
+                      <FiCalendar className="text-xs" /> Check Academic Calendar
                     </Link>
                   </>
                 )}

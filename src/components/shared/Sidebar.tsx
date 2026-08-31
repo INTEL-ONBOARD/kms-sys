@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { FiBook, FiCalendar, FiBarChart2, FiVideo, FiFileText, FiLock, FiMenu, FiX } from 'react-icons/fi';
-import { MdDashboard, MdOutlineAssignment, MdOutlineLiveTv, MdVideoLibrary } from 'react-icons/md';
+import { MdDashboard, MdOutlineAssignment, MdOutlineLiveTv, MdVideoLibrary, MdOutlineExplore } from 'react-icons/md';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function Sidebar() {
@@ -38,7 +38,8 @@ export default function Sidebar() {
 
   const navItems = [
     { label: "Dashboard", href: "/student", icon: MdDashboard, locked: false },
-    { label: "Courses", href: "/courses", icon: FiBook, locked: !hasAssignedCourses },
+    { label: "New Courses", href: "/student/courses", icon: MdOutlineExplore, locked: false },
+    { label: "My Courses", href: "/courses", icon: FiBook, locked: !hasAssignedCourses },
     { label: "Assignments", href: "/assignments", icon: MdOutlineAssignment, locked: !hasAssignedCourses },
     { label: "Live Classes", href: "/live-classes", icon: MdOutlineLiveTv, locked: !hasAssignedCourses },
     { label: "Recordings & Playback", href: "/recordings", icon: MdVideoLibrary, locked: !hasAssignedCourses },
@@ -102,7 +103,11 @@ export default function Sidebar() {
             const isActive =
               item.href === "/student"
                 ? pathname === "/student"
-                : pathname.startsWith(item.href);
+                : item.href === "/student/courses"
+                ? pathname === "/student/courses" || pathname.startsWith("/student/courses/")
+                : item.href === "/courses"
+                ? pathname === "/courses" || pathname.startsWith("/courses/")
+                : pathname === item.href || pathname.startsWith(item.href + "/");
 
             if (item.locked) {
               return (
@@ -175,7 +180,11 @@ export default function Sidebar() {
             const isActive =
               item.href === "/student"
                 ? pathname === "/student"
-                : pathname.startsWith(item.href);
+                : item.href === "/student/courses"
+                ? pathname === "/student/courses" || pathname.startsWith("/student/courses/")
+                : item.href === "/courses"
+                ? pathname === "/courses" || pathname.startsWith("/courses/")
+                : pathname === item.href || pathname.startsWith(item.href + "/");
 
             if (item.locked) {
               return (
