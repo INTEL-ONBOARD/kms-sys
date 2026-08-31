@@ -8,7 +8,8 @@ import {
   FiUsers, 
   FiShield, 
   FiSettings, 
-  FiBookOpen
+  FiBookOpen,
+  FiFileText,
 } from 'react-icons/fi';
 
 export default function AdminSidebar() {
@@ -20,6 +21,7 @@ export default function AdminSidebar() {
     { name: 'Dashboard', href: '/admin', icon: <FiHome className="mr-4 text-xl" /> },
     { name: 'User Admin', href: '/admin/users', icon: <FiUsers className="mr-4 text-xl" /> },
     { name: 'Enrollments', href: '/admin/moderation', icon: <FiShield className="mr-4 text-xl" /> },
+    { name: 'Enrollment Requests', href: '/admin/enroll-requests', icon: <FiFileText className="mr-4 text-xl" /> },
     { name: 'Courses', href: '/admin/courses', icon: <FiBookOpen className="mr-4 text-xl" /> },
     { name: 'Settings', href: '/admin/settings', icon: <FiSettings className="mr-4 text-xl" /> },
   ];
