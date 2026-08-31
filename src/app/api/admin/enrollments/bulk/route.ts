@@ -50,7 +50,9 @@ export async function POST(req: NextRequest) {
     
     // Create a Set of existing student IDs for fast lookup
     const existingStudentIdSet = new Set(
-      existingEnrollments.map((e) => e.userId.toString())
+      existingEnrollments
+        .map((e) => (e.userId || (e as any).studentId)?.toString())
+        .filter(Boolean)
     );
 
     // 6. Filter to find only new students who need to be enrolled

@@ -11,11 +11,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || undefined;
     const status = searchParams.get("status") || undefined;
+    const publishedParam = searchParams.get("published");
+    const published = publishedParam !== null ? publishedParam === "true" : undefined;
+    const upcomingOnly = searchParams.get("upcomingOnly") === "true";
     const pagination = parsePaginationParams(req, 20, 100);
 
     const result = await CourseService.getCourses(pagination, {
       category,
       status,
+      published,
+      upcomingOnly,
     });
     return successResponse(result.courses, undefined, 200, {
       pagination: result.pagination,

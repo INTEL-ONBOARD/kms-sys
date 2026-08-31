@@ -226,64 +226,84 @@ export async function GET(req: NextRequest) {
             : "Recent",
         }));
 
-      const modules = [
-        {
-          moduleNumber: "01",
-          title: `Module 1: Foundations & Theoretical Frameworks in ${course.title}`,
-          description: "Introduction to fundamental principles, domain concepts, history, and core terminology.",
-          lessonsCount: 6,
-          duration: "12 Hours",
-          status: progress >= 25 ? "Completed" : "In Progress",
-          topics: [
-            "Overview and Course Prerequisites",
-            "Theoretical Foundation & Framework Analysis",
-            "Key Concepts, Standards & Best Practices",
-            "Introductory Practical Workshop",
-          ],
-        },
-        {
-          moduleNumber: "02",
-          title: `Module 2: Practical Techniques, Tools & Implementation`,
-          description: "Deep dive into hands-on methodologies, essential software tools, workflows, and lab exercises.",
-          lessonsCount: 8,
-          duration: "18 Hours",
-          status: progress >= 50 ? "Completed" : progress >= 25 ? "In Progress" : "Upcoming",
-          topics: [
-            "Core Technical Architecture & Tooling",
-            "Guided Hands-on Lab Demonstrations",
-            "Problem Solving & Optimization Strategies",
-            "Intermediate Implementation Review",
-          ],
-        },
-        {
-          moduleNumber: "03",
-          title: `Module 3: Advanced Applications, Architecture & Case Studies`,
-          description: "Industry standard workflows, advanced architectures, real-world case analysis, and group tasks.",
-          lessonsCount: 8,
-          duration: "20 Hours",
-          status: progress >= 75 ? "Completed" : progress >= 50 ? "In Progress" : "Upcoming",
-          topics: [
-            "Advanced Industry Best Practices",
-            "Real-World Case Study Investigations",
-            "Design Patterns, Scaling & Compliance",
-            "Pre-Assessment Peer Reviews",
-          ],
-        },
-        {
-          moduleNumber: "04",
-          title: `Module 4: Capstone Evaluation & Comprehensive Assessment`,
-          description: "Final coursework delivery, project synthesis, portfolio development, and exam preparation.",
-          lessonsCount: 4,
-          duration: "14 Hours",
-          status: progress >= 100 ? "Completed" : progress >= 75 ? "In Progress" : "Upcoming",
-          topics: [
-            "Project Synthesis & Deliverables Refinement",
-            "Submission Review & Quality Assurance",
-            "Final Portfolio & Examination Prep",
-            "Course Feedback & Next Steps",
-          ],
-        },
-      ];
+      const modules = Array.isArray(course.modules) && course.modules.length > 0
+        ? course.modules.map((m: any, idx: number) => {
+            const totalModules = course.modules.length;
+            const threshold = Math.round(((idx + 1) / totalModules) * 100);
+            const prevThreshold = Math.round((idx / totalModules) * 100);
+            const modStatus = progress >= threshold ? "Completed" : progress >= prevThreshold ? "In Progress" : "Upcoming";
+            return {
+              moduleNumber: m.moduleNumber || `0${idx + 1}`,
+              title: m.title || `Module ${idx + 1}`,
+              description: m.description || `Comprehensive exploration of ${m.title || "the module"} syllabus.`,
+              lessonsCount: Number(m.lessonsCount) || 4,
+              duration: m.duration || "12 Hours",
+              status: modStatus,
+              topics: Array.isArray(m.topics) && m.topics.length > 0 ? m.topics : [
+                "Fundamental Principles & Foundations",
+                "Practical Workshop & Applications",
+                "Review & Assessment Preparation"
+              ],
+            };
+          })
+        : [
+            {
+              moduleNumber: "01",
+              title: `Module 1: Foundations & Theoretical Frameworks in ${course.title}`,
+              description: "Introduction to fundamental principles, domain concepts, history, and core terminology.",
+              lessonsCount: 6,
+              duration: "12 Hours",
+              status: progress >= 25 ? "Completed" : "In Progress",
+              topics: [
+                "Overview and Course Prerequisites",
+                "Theoretical Foundation & Framework Analysis",
+                "Key Concepts, Standards & Best Practices",
+                "Introductory Practical Workshop",
+              ],
+            },
+            {
+              moduleNumber: "02",
+              title: `Module 2: Practical Techniques, Tools & Implementation`,
+              description: "Deep dive into hands-on methodologies, essential software tools, workflows, and lab exercises.",
+              lessonsCount: 8,
+              duration: "18 Hours",
+              status: progress >= 50 ? "Completed" : progress >= 25 ? "In Progress" : "Upcoming",
+              topics: [
+                "Core Technical Architecture & Tooling",
+                "Guided Hands-on Lab Demonstrations",
+                "Problem Solving & Optimization Strategies",
+                "Intermediate Implementation Review",
+              ],
+            },
+            {
+              moduleNumber: "03",
+              title: `Module 3: Advanced Applications, Architecture & Case Studies`,
+              description: "Industry standard workflows, advanced architectures, real-world case analysis, and group tasks.",
+              lessonsCount: 8,
+              duration: "20 Hours",
+              status: progress >= 75 ? "Completed" : progress >= 50 ? "In Progress" : "Upcoming",
+              topics: [
+                "Advanced Industry Best Practices",
+                "Real-World Case Study Investigations",
+                "Design Patterns, Scaling & Compliance",
+                "Pre-Assessment Peer Reviews",
+              ],
+            },
+            {
+              moduleNumber: "04",
+              title: `Module 4: Capstone Evaluation & Comprehensive Assessment`,
+              description: "Final coursework delivery, project synthesis, portfolio development, and exam preparation.",
+              lessonsCount: 4,
+              duration: "14 Hours",
+              status: progress >= 100 ? "Completed" : progress >= 75 ? "In Progress" : "Upcoming",
+              topics: [
+                "Project Synthesis & Deliverables Refinement",
+                "Submission Review & Quality Assurance",
+                "Final Portfolio & Examination Prep",
+                "Course Feedback & Next Steps",
+              ],
+            },
+          ];
 
       return {
         _id: cIdStr,

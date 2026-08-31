@@ -60,15 +60,17 @@ export async function getEnrollments(pagination?: PaginationParams, filters?: { 
   return { enrollments };
 }
 
-/**
- * Enrolls a student in a course.
- */
-export async function enrollStudent(input: EnrollCourseInput) {
+export async function enrollStudent(input: { userId?: string; studentId?: string; courseId: string; batchStartDate?: Date | string | null }) {
   await connectToDatabase();
 
-  const userObjectId = mongoose.Types.ObjectId.isValid(input.userId)
-    ? new mongoose.Types.ObjectId(input.userId)
-    : input.userId;
+  const rawUserId = input.studentId || input.userId;
+  if (!rawUserId) {
+    throw new BadRequestError("Student ID is required for enrollment");
+  }
+
+  const userObjectId = mongoose.Types.ObjectId.isValid(rawUserId)
+    ? new mongoose.Types.ObjectId(rawUserId)
+    : rawUserId;
   const courseObjectId = mongoose.Types.ObjectId.isValid(input.courseId)
     ? new mongoose.Types.ObjectId(input.courseId)
     : input.courseId;
@@ -79,21 +81,41 @@ export async function enrollStudent(input: EnrollCourseInput) {
     throw new NotFoundError("Course not found");
   }
 
-  // Check if already enrolled
+  // Check if student is already actively enrolled
   const existing = await Enrollment.findOne({
     $or: [
-      { userId: userObjectId, courseId: courseObjectId },
-      { userId: input.userId, courseId: input.courseId },
+      { studentId: userObjectId, courseId: courseObjectId, status: { $ne: "cancelled" } },
+      { userId: userObjectId, courseId: courseObjectId, status: { $ne: "cancelled" } },
+      { studentId: rawUserId, courseId: input.courseId, status: { $ne: "cancelled" } },
+      { userId: rawUserId, courseId: input.courseId, status: { $ne: "cancelled" } },
     ],
   });
 
   if (existing) {
-    throw new ConflictError("User is already enrolled in this course");
+    throw new ConflictError("You are already enrolled in this course");
   }
 
+  // Verify that the upcoming batch has not exceeded its capacity
+  const courseCapacity = typeof course.capacity === "number" && course.capacity > 0 ? course.capacity : 50;
+  const activeEnrollmentsCount = await Enrollment.countDocuments({
+    courseId: courseObjectId,
+    status: "active",
+  });
+
+  if (activeEnrollmentsCount >= courseCapacity) {
+    throw new BadRequestError(`The upcoming batch is full. Maximum capacity of ${courseCapacity} students reached.`);
+  }
+
+  const batchStartDate = input.batchStartDate 
+    ? new Date(input.batchStartDate) 
+    : (course.nextBatchStartDate ? new Date(course.nextBatchStartDate) : new Date());
+
   const newEnrollment = await Enrollment.create({
+    studentId: userObjectId,
     userId: userObjectId,
     courseId: courseObjectId,
+    batchStartDate,
+    status: "active",
     progress: 0,
   });
 

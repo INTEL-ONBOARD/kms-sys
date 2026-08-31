@@ -19,7 +19,7 @@ import { CreateCourseInput, UpdateCourseInput } from "@/types/dtos/course.dto";
  */
 export async function getCourses(
   pagination?: PaginationParams,
-  filters?: { category?: string; published?: boolean; status?: string }
+  filters?: { category?: string; published?: boolean; status?: string; upcomingOnly?: boolean }
 ) {
   await connectToDatabase();
 
@@ -33,6 +33,11 @@ export async function getCourses(
   }
   if (filters?.status) {
     query.status = filters.status;
+  }
+  if (filters?.upcomingOnly) {
+    // Strictly exclude past batches: batch start date must be today or in the future
+    const now = new Date();
+    query.nextBatchStartDate = { $gte: now };
   }
   if (pagination?.search) {
     const searchRegex = createSafeSearchRegex(pagination.search);
@@ -90,9 +95,20 @@ export async function createCourse(input: CreateCourseInput, creatorId?: string)
     status: input.status || "draft",
     published: input.published ?? false,
     colorCode: input.colorCode?.trim() || "#5A67D8",
+    capacity: typeof input.capacity === "number" ? Math.max(1, input.capacity) : 50,
+    nextBatchStartDate: input.nextBatchStartDate ? new Date(input.nextBatchStartDate) : null,
     schedule: (input.schedule || []).filter(
       (s: any) => s.dayOfWeek && s.startTime && s.endTime
     ),
+    modules: (input.modules || []).map((m: any, idx: number) => ({
+      moduleNumber: m.moduleNumber || `0${idx + 1}`,
+      title: m.title || `Module ${idx + 1}`,
+      description: m.description || "",
+      lessonsCount: Number(m.lessonsCount) || 4,
+      duration: m.duration || "10 Hours",
+      status: m.status || "Upcoming",
+      topics: Array.isArray(m.topics) ? m.topics : typeof m.topics === "string" ? (m.topics as string).split(",").map(t => t.trim()).filter(Boolean) : [],
+    })),
     assessmentItems: input.assessmentItems,
     gradingBreakdown: input.gradingBreakdown,
     credits: typeof input.credits === "number" ? input.credits : 3,
@@ -116,6 +132,21 @@ export async function updateCourse(id: string, input: UpdateCourseInput) {
   if (input.category !== undefined) updatePayload.category = input.category.trim();
   if (input.price !== undefined) updatePayload.price = input.price.trim();
   if (input.status !== undefined) updatePayload.status = input.status;
+  if (input.capacity !== undefined) updatePayload.capacity = Math.max(1, Number(input.capacity) || 50);
+  if (input.nextBatchStartDate !== undefined) {
+    updatePayload.nextBatchStartDate = input.nextBatchStartDate ? new Date(input.nextBatchStartDate) : null;
+  }
+  if (input.modules !== undefined && Array.isArray(input.modules)) {
+    updatePayload.modules = input.modules.map((m: any, idx: number) => ({
+      moduleNumber: m.moduleNumber || `0${idx + 1}`,
+      title: m.title || `Module ${idx + 1}`,
+      description: m.description || "",
+      lessonsCount: Number(m.lessonsCount) || 4,
+      duration: m.duration || "10 Hours",
+      status: m.status || "Upcoming",
+      topics: Array.isArray(m.topics) ? m.topics : typeof m.topics === "string" ? (m.topics as string).split(",").map(t => t.trim()).filter(Boolean) : [],
+    }));
+  }
   if (input.published !== undefined) {
     updatePayload.published = input.published;
     if (input.status === undefined) {
