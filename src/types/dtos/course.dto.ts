@@ -29,6 +29,17 @@ export const gradeBoundarySchema = z.object({
   color: z.string().optional().default("emerald"),
 });
 
+export const moduleTopicSchema = z.object({
+  _id: z.string().optional(),
+  moduleNumber: z.string().min(1, "Module number is required").trim(),
+  title: z.string().min(1, "Module title is required").trim(),
+  description: z.string().optional().default(""),
+  lessonsCount: z.number().min(1).optional().default(4),
+  duration: z.string().optional().default("10 Hours"),
+  status: z.string().optional().default("Upcoming"),
+  topics: z.array(z.string()).optional().default([]),
+});
+
 export const createCourseSchema = z.object({
   title: z.string().min(1, "Title is required").trim(),
   description: z.string().trim().optional().default(""),
@@ -40,10 +51,13 @@ export const createCourseSchema = z.object({
   published: z.boolean().optional().default(false),
   colorCode: z.string().trim().optional().default("#5A67D8"),
   schedule: z.array(scheduleSlotSchema).optional().default([]),
+  modules: z.array(moduleTopicSchema).optional().default([]),
   assessmentItems: z.array(assessmentItemSchema).optional(),
   gradingBreakdown: gradingBreakdownSchema.optional(),
   gradingScale: z.array(gradeBoundarySchema).optional(),
   credits: z.number().min(1).max(30).optional().default(3),
+  capacity: z.number().min(1).optional().default(50),
+  nextBatchStartDate: z.string().or(z.date()).optional().nullable(),
 });
 
 export const updateCourseSchema = z.object({
@@ -57,17 +71,27 @@ export const updateCourseSchema = z.object({
   published: z.boolean().optional(),
   colorCode: z.string().trim().optional(),
   schedule: z.array(scheduleSlotSchema).optional(),
+  modules: z.array(moduleTopicSchema).optional(),
   assessmentItems: z.array(assessmentItemSchema).optional(),
   gradingBreakdown: gradingBreakdownSchema.optional(),
   gradingScale: z.array(gradeBoundarySchema).optional(),
   credits: z.number().min(1).max(30).optional(),
+  capacity: z.number().min(1).optional(),
+  nextBatchStartDate: z.string().or(z.date()).optional().nullable(),
 });
 
 export const enrollCourseSchema = z.object({
   userId: z.string().min(1, "userId is required"),
   courseId: z.string().min(1, "courseId is required"),
+  batchStartDate: z.string().or(z.date()).optional().nullable(),
+});
+
+export const studentEnrollmentSchema = z.object({
+  courseId: z.string().min(1, "courseId is required"),
+  studentId: z.string().optional(),
 });
 
 export type CreateCourseInput = z.infer<typeof createCourseSchema>;
 export type UpdateCourseInput = z.infer<typeof updateCourseSchema>;
 export type EnrollCourseInput = z.infer<typeof enrollCourseSchema>;
+export type StudentEnrollmentInput = z.infer<typeof studentEnrollmentSchema>;

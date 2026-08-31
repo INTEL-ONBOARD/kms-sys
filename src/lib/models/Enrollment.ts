@@ -5,11 +5,23 @@ import mongoose, { InferSchemaType, Model, models, Schema } from "mongoose";
 const enrollmentSchema = new Schema(
   {
     // Reference to the User (Student) who is being enrolled
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    studentId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     
     // Reference to the Course they are enrolled in
     courseId: { type: Schema.Types.ObjectId, ref: "Course", required: true, index: true },
     
+    // Batch intake start date
+    batchStartDate: { type: Date, default: null },
+
+    // Enrollment status - defaults to 'active' for instant access
+    status: {
+      type: String,
+      enum: ["active", "completed", "cancelled", "pending"],
+      default: "active",
+      index: true,
+    },
+
     // Track the student's learning progress (percentage from 0 to 100)
     progress: { type: Number, min: 0, max: 100, default: 0 },
 
@@ -24,9 +36,14 @@ const enrollmentSchema = new Schema(
   }
 );
 
-// Compound Index: Ensure a student can only be enrolled in the exact same course once
-// This prevents duplicate enrollments in the database
-enrollmentSchema.index({ userId: 1, courseId: 1 }, { unique: true });
+// Synchronize studentId and userId before validation
+enrollmentSchema.pre("validate", function (this: any) {
+  if (this.studentId && !this.userId) {
+    this.userId = this.studentId;
+  } else if (this.userId && !this.studentId) {
+    this.studentId = this.userId;
+  }
+});
 
 // Automatically infer the TypeScript type directly from the Schema definition
 // We also explicitly add the '_id' field type

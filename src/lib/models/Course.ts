@@ -53,6 +53,20 @@ const gradeBoundarySchema = new Schema(
   { _id: false }
 );
 
+// Sub-schema: Dynamic course curriculum modules configured when creating or editing a course
+const moduleSchema = new Schema(
+  {
+    moduleNumber: { type: String, required: true, trim: true }, // e.g. "01", "Module 1"
+    title:        { type: String, required: true, trim: true },
+    description:  { type: String, default: "", trim: true },
+    lessonsCount: { type: Number, default: 4, min: 1 },
+    duration:     { type: String, default: "10 Hours", trim: true },
+    status:       { type: String, default: "Upcoming", trim: true },
+    topics:       { type: [String], default: [] },
+  },
+  { _id: true }
+);
+
 const courseSchema = new Schema(
   {
     title:       { type: String, required: true, trim: true },
@@ -65,6 +79,11 @@ const courseSchema = new Schema(
     published:   { type: Boolean, default: false },
     credits:     { type: Number, default: 3, min: 1, max: 30 },
     enrollments: { type: Number, default: 0 },
+    capacity:    { type: Number, default: 50, min: 1 },
+    nextBatchStartDate: { type: Date, default: null },
+
+    // Dynamic curriculum modules configured by admin/lecturer
+    modules: { type: [moduleSchema], default: [] },
 
     // Lecturer-configured dynamic assessment items & assignments
     assessmentItems: {
@@ -134,6 +153,17 @@ export type ScheduleSlot = {
   endTime: string;
   location: string;
   type?: "physical" | "online";
+};
+
+export type CourseModule = {
+  _id?: mongoose.Types.ObjectId;
+  moduleNumber: string;
+  title: string;
+  description?: string;
+  lessonsCount?: number;
+  duration?: string;
+  status?: string;
+  topics?: string[];
 };
 
 export type CourseDoc = InferSchemaType<typeof courseSchema> & { _id: mongoose.Types.ObjectId };
